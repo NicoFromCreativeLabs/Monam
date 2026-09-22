@@ -1,0 +1,119 @@
+{
+  "lang": "es",
+  "announcement": "Ahora abierto · Lunes a sábado, 9–6 · Reserva por WhatsApp",
+  "nav": {
+    "estudio": "Estudio",
+    "philosophy": "Filosofía",
+    "treatments": "Tratamientos",
+    "standard": "El Estándar",
+    "visit": "Visítanos",
+    "bookNow": "Reservar"
+  },
+  "hero": {
+    "subtitle": "Skin Studio",
+    "eyebrow": "Wellness Hub · Skincare Studio",
+    "headline": "Brilla desde adentro.",
+    "script": "el bienestar es el estado natural de mi cuerpo y mente",
+    "body": "Tu piel tiene memoria, y nosotros también. Registramos tu tipo de piel, sensibilidades y tratamientos anteriores, así que cada visita continúa exactamente donde quedó la última.",
+    "ctaPrimary": "Reserva tu facial",
+    "ctaSecondary": "Ver tratamientos"
+  },
+  "featured": {
+    "eyebrow": "Signature",
+    "heading": "Faciales & Tratamientos",
+    "description": "Faciales de alta performance adaptados a las necesidades únicas de tu piel. Resultados visibles, relajación profunda.",
+    "items": [
+      { "protocol": "Glow+", "label": "El Glow Signature", "icon": "sunburst" },
+      { "protocol": "Lift", "label": "Sculpt & Lift", "icon": "arches" },
+      { "protocol": "Reset", "label": "Clear Reset", "icon": "ring" }
+    ]
+  },
+  "philosophy": {
+    "eyebrow": "Nuestra filosofía",
+    "heading": "Ciencia y calma, un mismo sistema",
+    "pillars": [
+      {
+        "icon": "organico",
+        "title": "Orgánico",
+        "description": "Ingredientes suaves y naturales que respetan el equilibrio de tu piel, nunca químicos agresivos."
+      },
+      {
+        "icon": "serenidad",
+        "title": "Serenidad",
+        "description": "Una experiencia en cabina construida para ti: silencio o conversación, aromaterapia, tu música."
+      },
+      {
+        "icon": "balance",
+        "title": "Balance",
+        "description": "Skincare y nutrición como un mismo sistema, así lo que tomas y lo que aplicas trabajan juntos."
+      }
+    ]
+  },
+  "treatments": {
+    "eyebrow": "Menú · Faciales",
+    "heading": "Tratamientos",
+    "tagline": "Tu salud es una inversión, no un gasto.",
+    "note": "Reservas por duración, Express o Signature. Tu protocolo se asigna tras una valoración de piel en persona.",
+    "items": [
+      { "name": "Reset", "tier": "Express", "duration": "30 min", "price": 850, "description": "Un reinicio rápido para piel cansada: limpieza profunda y luminosidad inmediata." },
+      { "name": "Calm", "tier": "Express", "duration": "30 min", "price": 850, "description": "Calma la piel sensible o irritada con ingredientes suaves y una textura fresca." },
+      { "name": "Purify", "tier": "Express", "duration": "30 min", "price": 850, "description": "Destapa los poros y equilibra la piel grasa sin resecarla." },
+      { "name": "Glow", "tier": "Express", "duration": "30 min", "price": 850, "description": "Un boost de luminosidad antes de cualquier ocasión especial." },
+      { "name": "Glow+", "tier": "Signature", "duration": "60 min", "price": 1900, "description": "El ritual completo de luminosidad: exfoliación, hidratación profunda y masaje facial." },
+      { "name": "Purify+", "tier": "Signature", "duration": "60 min", "price": 1900, "description": "Limpieza profunda y extracciones cuidadosas para congestión persistente." },
+      { "name": "Lift", "tier": "Signature", "duration": "60 min", "price": 1900, "description": "Masaje de esculpido facial que tensa, define y relaja en una sola sesión." },
+      { "name": "Calm+", "tier": "Signature", "duration": "60 min", "price": 1900, "description": "El ritual de calma total: fortalece la barrera de tu piel y baja el estrés visible." }
+    ],
+    "currency": "MXN",
+    "cta": "Reservar un tratamiento"
+  },
+  "stripe": {
+    "quote": "Cada día es un nuevo comienzo. Respira profundo, sonríe y empieza de nuevo.",
+    "cta": "Reservar ahora"
+  },
+  "circle": {
+    "corner1": "El bienestar es más que una tendencia. Es un estilo de vida que abraza el autocuidado, el equilibrio y la salud integral.",
+    "corner2": "En Monâm creemos que la verdadera belleza empieza por sentirte bien por dentro.",
+    "heading1": "DONDE LA PIEL",
+    "heading2": "ENCUENTRA CALMA",
+    "ring": "Ciencia gentil, cuidado personal y resultados que se sienten desde la primera sesión, para que tu piel refleje bienestar real · "
+  },
+  "booking": {
+    "heading": "Reserva en segundos. Recordamos tu piel.",
+    "body": "Tipo de piel, sensibilidades, preferencias e historial, listos antes de que llegues.",
+    "ctaWhatsapp": "Reservar por WhatsApp",
+    "ctaOnline": "Reservar en línea",
+    "skinIdCard": {
+      "label": "Skin ID",
+      "skinType": "Mixta",
+      "allergies": "Sin alergias registradas",
+      "preferences": "Aromaterapia · Silencio",
+      "lastTreatment": "Glow, hace 3 semanas"
+    }
+  },
+  "social": {
+    "handle": "@monam.wellness",
+    "cta": "Síguenos",
+    "quotes": [
+      "Experimenta la mezcla perfecta entre ciencia y relajación, y deja que tu piel refleje la versión más sana de ti.",
+      "Cada día es un nuevo comienzo. Respira profundo, sonríe y empieza de nuevo.",
+      "Skincare gentil y saludable. Cuidar tu piel no tiene que ser complicado ni invasivo."
+    ]
+  },
+  "location": {
+    "heading": "Visítanos",
+    "hours": "Lunes a sábado, 9–6",
+    "locations": [
+      { "name": "Roma Norte", "address": "[PLACEHOLDER: Durango 258, Roma Norte, CDMX]" },
+      { "name": "Lomas de Chapultepec", "address": "[PLACEHOLDER: Av. Prado Norte 440, Lomas de Chapultepec, CDMX]" }
+    ],
+    "ctaDirections": "Cómo llegar",
+    "ctaVisit": "Reservar una visita"
+  },
+  "footer": {
+    "script": "brilla desde adentro",
+    "explore": { "heading": "Explorar", "links": ["Filosofía", "Tratamientos", "Visítanos"] },
+    "connect": { "heading": "Conecta", "links": ["Instagram", "Sitio web", "Reservar"] },
+    "copyright": "© 2026 Monâm Skin Studio."
+  }
+}

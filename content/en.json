@@ -1,0 +1,119 @@
+{
+  "lang": "en",
+  "announcement": "Now open · Monday–Saturday, 9–6 · Book by WhatsApp",
+  "nav": {
+    "estudio": "Studio",
+    "philosophy": "Philosophy",
+    "treatments": "Treatments",
+    "standard": "The Standard",
+    "visit": "Visit",
+    "bookNow": "Book Now"
+  },
+  "hero": {
+    "subtitle": "Skin Studio",
+    "eyebrow": "Wellness Hub · Skincare Studio",
+    "headline": "Glow from within.",
+    "script": "wellness is the natural state of my body and mind",
+    "body": "Your skin has a memory, and so do we. We track your skin type, sensitivities, and past treatments, so every visit picks up exactly where the last one left off.",
+    "ctaPrimary": "Book Your Facial",
+    "ctaSecondary": "View Treatments"
+  },
+  "featured": {
+    "eyebrow": "Signature",
+    "heading": "Facials & Treatments",
+    "description": "High-performance facials tailored to your skin's unique needs. Visible results, deep relaxation.",
+    "items": [
+      { "protocol": "Glow+", "label": "The Glow Signature", "icon": "sunburst" },
+      { "protocol": "Lift", "label": "Sculpt & Lift", "icon": "arches" },
+      { "protocol": "Reset", "label": "Clear Reset", "icon": "ring" }
+    ]
+  },
+  "philosophy": {
+    "eyebrow": "Our Philosophy",
+    "heading": "Science and calm, one system",
+    "pillars": [
+      {
+        "icon": "organico",
+        "title": "Organic",
+        "description": "Gentle, natural ingredients that respect your skin's balance, never harsh chemicals."
+      },
+      {
+        "icon": "serenidad",
+        "title": "Serenity",
+        "description": "An in-cabin experience built around you: silence or conversation, aromatherapy, your music."
+      },
+      {
+        "icon": "balance",
+        "title": "Balance",
+        "description": "Skincare and nutrition as one system, so what you take in and what you apply work together."
+      }
+    ]
+  },
+  "treatments": {
+    "eyebrow": "Menú · Faciales",
+    "heading": "Treatments",
+    "tagline": "Your health is an investment, not an expense.",
+    "note": "Booked by duration, Express or Signature. Your protocol is assigned after an in-person skin assessment.",
+    "items": [
+      { "name": "Reset", "tier": "Express", "duration": "30 min", "price": 850, "description": "A quick reset for tired skin: deep cleanse, instant glow." },
+      { "name": "Calm", "tier": "Express", "duration": "30 min", "price": 850, "description": "Soothes sensitive or reactive skin with gentle ingredients and a cooling touch." },
+      { "name": "Purify", "tier": "Express", "duration": "30 min", "price": 850, "description": "Clears congestion and balances oily skin without stripping it." },
+      { "name": "Glow", "tier": "Express", "duration": "30 min", "price": 850, "description": "A luminosity boost before any occasion." },
+      { "name": "Glow+", "tier": "Signature", "duration": "60 min", "price": 1900, "description": "The full glow ritual: exfoliation, deep hydration, and facial massage." },
+      { "name": "Purify+", "tier": "Signature", "duration": "60 min", "price": 1900, "description": "Deep cleansing and careful extractions for persistent congestion." },
+      { "name": "Lift", "tier": "Signature", "duration": "60 min", "price": 1900, "description": "A sculpting facial massage that lifts, defines, and relaxes in one session." },
+      { "name": "Calm+", "tier": "Signature", "duration": "60 min", "price": 1900, "description": "The total calm ritual: strengthens your skin barrier and eases visible stress." }
+    ],
+    "currency": "MXN",
+    "cta": "Book a Treatment"
+  },
+  "stripe": {
+    "quote": "Every day is a new beginning. Take a deep breath, smile, and start again.",
+    "cta": "Book Now"
+  },
+  "circle": {
+    "corner1": "Wellness is more than a trend. It's a lifestyle that embraces self care, balance, and whole health.",
+    "corner2": "At Monâm, we believe true beauty starts with feeling good from within.",
+    "heading1": "WHERE SKIN",
+    "heading2": "MEETS CALM",
+    "ring": "Gentle science, personal care, and results you can feel from the first session, so your skin reflects real wellness · "
+  },
+  "booking": {
+    "heading": "Book in seconds. We remember your skin.",
+    "body": "Skin type, sensitivities, preferences, and history, ready before you arrive.",
+    "ctaWhatsapp": "Book via WhatsApp",
+    "ctaOnline": "Book Online",
+    "skinIdCard": {
+      "label": "Skin ID",
+      "skinType": "Combination",
+      "allergies": "No allergies on file",
+      "preferences": "Aromatherapy · Silence",
+      "lastTreatment": "Glow, 3 weeks ago"
+    }
+  },
+  "social": {
+    "handle": "@monam.wellness",
+    "cta": "Follow along",
+    "quotes": [
+      "Experience the perfect blend of science and relaxation, and let your skin reflect the healthiest version of you.",
+      "Every day is a new beginning. Take a deep breath, smile, and start again.",
+      "Gentle, healthy skincare. Taking care of your skin doesn't have to be complicated or invasive."
+    ]
+  },
+  "location": {
+    "heading": "Visit",
+    "hours": "Monday to Saturday, 9–6",
+    "locations": [
+      { "name": "Roma Norte", "address": "[PLACEHOLDER: Durango 258, Roma Norte, Mexico City]" },
+      { "name": "Lomas de Chapultepec", "address": "[PLACEHOLDER: Av. Prado Norte 440, Lomas de Chapultepec, Mexico City]" }
+    ],
+    "ctaDirections": "Get Directions",
+    "ctaVisit": "Book a Visit"
+  },
+  "footer": {
+    "script": "glow from within",
+    "explore": { "heading": "Explore", "links": ["Philosophy", "Treatments", "Visit"] },
+    "connect": { "heading": "Connect", "links": ["Instagram", "Website", "Book Now"] },
+    "copyright": "© 2026 Monâm Skin Studio."
+  }
+}

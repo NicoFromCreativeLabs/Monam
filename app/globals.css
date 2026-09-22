@@ -1,0 +1,38 @@
+@import "tailwindcss";
+
+/* MONÂM brand tokens — see MONAM_Landing_Page_Build_Spec.md §2-3 (source of truth) */
+:root {
+  --monam-hueso: #f1eae5;
+  --monam-hueso-deep: #eadfd6;
+  --monam-ciruela: #3f0215;
+  --monam-neutro: #a4b3be;
+  --monam-crepe: #d59bac;
+  --monam-oliva: #847c37;
+  --monam-pastel: #d5d7ff;
+
+  --background: var(--monam-hueso);
+  --foreground: var(--monam-ciruela);
+}
+
+@theme inline {
+  --color-hueso: var(--monam-hueso);
+  --color-hueso-deep: var(--monam-hueso-deep);
+  --color-ciruela: var(--monam-ciruela);
+  --color-neutro: var(--monam-neutro);
+  --color-crepe: var(--monam-crepe);
+  --color-oliva: var(--monam-oliva);
+  --color-pastel: var(--monam-pastel);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+
+  --font-display: var(--font-fraunces); /* Riccione stand-in */
+  --font-body: var(--font-inter); /* real brand font */
+  --font-accent: var(--font-prata); /* Donatello stand-in */
+  --font-script: var(--font-beau-rivage); /* Respondent stand-in */
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-body), sans-serif;
+}

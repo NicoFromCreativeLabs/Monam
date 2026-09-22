@@ -1,0 +1,16 @@
+// MONAM OS data model.
+// Models intentionally left unwritten pending plan approval — see the
+// shared data model design in the implementation plan (§5 of
+// MONAM_OS_System_Specification.md: Client Record/Skin ID, Booking Engine,
+// Inventory ledgers, Commission logic, CFDI/Payments).
+
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = []
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
