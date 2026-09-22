@@ -19,7 +19,9 @@ import { useEffect } from "react";
 //      eases back to zero (bounce-back) and normal free scroll resumes.
 //
 // Disabled entirely under prefers-reduced-motion — this is a scroll-jacking
-// effect, and that preference means "don't".
+// effect, and that preference means "don't" — and on touch/mobile devices,
+// where native scroll momentum already feels right and this effect (tuned
+// for wheel input) just gets in the way.
 
 type Boundary = { top: number; bottom: number; el: HTMLElement };
 type Wall = "up" | "down" | null;
@@ -46,6 +48,7 @@ function easeOutBackOvershoot(t: number, overshoot = 0.95) {
 export function useHybridScrollSnap(selector = "[data-snap-section]") {
   useEffect(() => {
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    if (window.matchMedia("(pointer: coarse)").matches) return;
 
     const boundaries: Boundary[] = [];
     let currentIndex = 0;

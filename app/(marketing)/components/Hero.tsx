@@ -1,15 +1,25 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { Content } from "@/lib/content";
 import { Button } from "./Button";
 
 const MASK_GRADIENT =
   "radial-gradient(ellipse 50% 50% at 50% 50%, #000 0%, #000 64%, transparent 100%)";
+const MOBILE_REVEAL_DELAY_MS = 1500;
 
 export function Hero({ content }: { content: Content }) {
   const { hero } = content;
   const [revealed, setRevealed] = useState(false);
+
+  useEffect(() => {
+    // Hover doesn't exist on touch — reveal it on its own after a beat
+    // instead of leaving it permanently hidden on mobile.
+    if (!window.matchMedia("(pointer: coarse)").matches) return;
+    const timer = setTimeout(() => setRevealed(true), MOBILE_REVEAL_DELAY_MS);
+    return () => clearTimeout(timer);
+  }, []);
+
   return (
     <>
       {/* Full-bleed dark opener — wordmark-led, per the redesign reference. */}
