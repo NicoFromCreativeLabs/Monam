@@ -98,6 +98,12 @@ export default function AdminSettings() {
     cancellationWindowHours: SETTINGS.cancellationWindowHours,
     discountApprovalThresholdPct: SETTINGS.discountApprovalThresholdPct,
   });
+  const [commissionRules, setCommissionRules] = useState({
+    commissionServicePct: BUSINESS_RULES_EXTRA.commissionServicePct,
+    commissionRetailPct: BUSINESS_RULES_EXTRA.commissionRetailPct,
+    anomalyDiscountThresholdPct: BUSINESS_RULES_EXTRA.anomalyDiscountThresholdPct,
+    anomalyRefundThresholdMXN: BUSINESS_RULES_EXTRA.anomalyRefundThresholdMXN,
+  });
 
   function startEdit(l: LocationRecord) {
     setEditingId(l.id);
@@ -691,25 +697,92 @@ export default function AdminSettings() {
           <dl className="grid grid-cols-1 gap-4 min-[700px]:grid-cols-2">
             <div className="flex items-center justify-between border-b border-ciruela/8 pb-2 font-body text-sm text-ciruela">
               <dt>Comisión — servicio</dt>
-              <dd className="text-ciruela/60">{BUSINESS_RULES_EXTRA.commissionServicePct}%</dd>
+              <dd>
+                <span className="flex items-center gap-1 text-ciruela/60">
+                  <input
+                    type="number"
+                    min={0}
+                    max={100}
+                    value={commissionRules.commissionServicePct}
+                    onChange={(e) =>
+                      setCommissionRules((r) => ({
+                        ...r,
+                        commissionServicePct: Number(e.target.value) || 0,
+                      }))
+                    }
+                    className="w-16 rounded border border-ciruela/25 bg-hueso px-1.5 py-1 text-right font-body text-sm text-ciruela focus:outline-none focus:ring-1 focus:ring-ciruela/40"
+                  />
+                  %
+                </span>
+              </dd>
             </div>
             <div className="flex items-center justify-between border-b border-ciruela/8 pb-2 font-body text-sm text-ciruela">
               <dt>Comisión — retail</dt>
-              <dd className="text-ciruela/60">{BUSINESS_RULES_EXTRA.commissionRetailPct}%</dd>
+              <dd>
+                <span className="flex items-center gap-1 text-ciruela/60">
+                  <input
+                    type="number"
+                    min={0}
+                    max={100}
+                    value={commissionRules.commissionRetailPct}
+                    onChange={(e) =>
+                      setCommissionRules((r) => ({
+                        ...r,
+                        commissionRetailPct: Number(e.target.value) || 0,
+                      }))
+                    }
+                    className="w-16 rounded border border-ciruela/25 bg-hueso px-1.5 py-1 text-right font-body text-sm text-ciruela focus:outline-none focus:ring-1 focus:ring-ciruela/40"
+                  />
+                  %
+                </span>
+              </dd>
             </div>
             <div className="flex items-center justify-between font-body text-sm text-ciruela">
               <dt>Umbral de anomalía — descuento</dt>
-              <dd className="text-ciruela/60">{BUSINESS_RULES_EXTRA.anomalyDiscountThresholdPct}%</dd>
+              <dd>
+                <span className="flex items-center gap-1 text-ciruela/60">
+                  <input
+                    type="number"
+                    min={0}
+                    max={100}
+                    value={commissionRules.anomalyDiscountThresholdPct}
+                    onChange={(e) =>
+                      setCommissionRules((r) => ({
+                        ...r,
+                        anomalyDiscountThresholdPct: Number(e.target.value) || 0,
+                      }))
+                    }
+                    className="w-16 rounded border border-ciruela/25 bg-hueso px-1.5 py-1 text-right font-body text-sm text-ciruela focus:outline-none focus:ring-1 focus:ring-ciruela/40"
+                  />
+                  %
+                </span>
+              </dd>
             </div>
             <div className="flex items-center justify-between font-body text-sm text-ciruela">
               <dt>Umbral de anomalía — reembolso</dt>
-              <dd className="text-ciruela/60">
-                ${BUSINESS_RULES_EXTRA.anomalyRefundThresholdMXN.toLocaleString()} MXN
+              <dd>
+                <span className="flex items-center gap-1 text-ciruela/60">
+                  $
+                  <input
+                    type="number"
+                    min={0}
+                    value={commissionRules.anomalyRefundThresholdMXN}
+                    onChange={(e) =>
+                      setCommissionRules((r) => ({
+                        ...r,
+                        anomalyRefundThresholdMXN: Number(e.target.value) || 0,
+                      }))
+                    }
+                    className="w-20 rounded border border-ciruela/25 bg-hueso px-1.5 py-1 text-right font-body text-sm text-ciruela focus:outline-none focus:ring-1 focus:ring-ciruela/40"
+                  />
+                  MXN
+                </span>
               </dd>
             </div>
           </dl>
           <p className="mt-4 font-body text-xs text-ciruela/40">
-            Valores de referencia — la edición en vivo de reglas de comisión es Fase 2.
+            Los cambios aplican de inmediato en este panel — el cálculo real de comisiones y
+            anomalías contra ventas/transacciones sigue pendiente del backend (Fase 2).
           </p>
         </Card>
 
