@@ -1,9 +1,22 @@
+"use client";
+
+import { useState } from "react";
 import { Card } from "@/components/panel/Card";
-import { CLIENT_PACKAGE_BALANCE, PACKAGE_OPTIONS } from "@/lib/mock-data";
+import { useClientBooking } from "@/components/panel/ClientBookingContext";
+import { PACKAGE_OPTIONS } from "@/lib/mock-data";
 
 // Sessions remaining, expiry, which location redeemed each session (spec §8.1).
 export default function ClientPackages() {
-  const pack = CLIENT_PACKAGE_BALANCE;
+  const { packageBalance: pack, purchasePackage } = useClientBooking();
+  const [pendingPurchase, setPendingPurchase] = useState<(typeof PACKAGE_OPTIONS)[number] | null>(
+    null,
+  );
+
+  function confirmPurchase() {
+    if (!pendingPurchase) return;
+    purchasePackage(pendingPurchase);
+    setPendingPurchase(null);
+  }
 
   return (
     <div className="space-y-6">
@@ -50,7 +63,10 @@ export default function ClientPackages() {
                     ${p.listPrice.toLocaleString()} MXN
                   </p>
                 </div>
-                <button className="rounded-full bg-ciruela px-3 py-1.5 font-body text-xs text-hueso">
+                <button
+                  onClick={() => setPendingPurchase(p)}
+                  className="rounded-full bg-ciruela px-3 py-1.5 font-body text-xs text-hueso"
+                >
                   Comprar
                 </button>
               </div>
@@ -58,6 +74,41 @@ export default function ClientPackages() {
           ))}
         </ul>
       </Card>
+
+      {pendingPurchase && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-ciruela/40 px-4"
+          onClick={() => setPendingPurchase(null)}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-xs rounded-2xl bg-hueso p-5 shadow-xl"
+          >
+            <p className="font-display text-sm text-ciruela">Confirmar compra</p>
+            <p className="mt-2 font-body text-sm text-ciruela/70">
+              {pendingPurchase.name} — {pendingPurchase.sessions} sesiones por $
+              {pendingPurchase.price.toLocaleString()} MXN.
+            </p>
+            <p className="mt-2 font-body text-xs text-ciruela/50">
+              Se cobrará a tu método de pago guardado. Reemplaza tu paquete activo actual.
+            </p>
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                onClick={() => setPendingPurchase(null)}
+                className="rounded-full border border-ciruela px-4 py-1.5 font-body text-xs text-ciruela hover:bg-ciruela hover:text-hueso"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={confirmPurchase}
+                className="rounded-full bg-ciruela px-4 py-1.5 font-body text-xs text-hueso"
+              >
+                Comprar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

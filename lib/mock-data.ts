@@ -186,14 +186,6 @@ export const CLIENT_SKIN_ID_PREVIEW = {
   lastTreatment: "Targeted — hace 3 semanas",
 };
 
-export const CLIENT_UPCOMING_APPOINTMENT = {
-  date: "2026-09-28",
-  time: "11:00",
-  location: "Roma Norte",
-  protocolTier: "Signature (60 min)",
-  depositPaid: true,
-};
-
 export const CLIENT_PACKAGE_BALANCE = {
   name: "Pack Targeted x5",
   sessionsRemaining: 2,

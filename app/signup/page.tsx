@@ -3,6 +3,7 @@
 import { useActionState } from "react";
 import Link from "next/link";
 import { signUpClient, type ActionState } from "@/lib/actions/auth";
+import { PasswordField } from "@/components/panel/PasswordField";
 
 // Client self-registration (spec §8.2: "account creation happens at the
 // point of confirming a slot" — this is the standalone entry point for it;
@@ -61,19 +62,12 @@ export default function SignupPage() {
                 className="w-full rounded-lg border border-ciruela/20 bg-hueso px-3 py-2 font-body text-sm text-ciruela focus:outline-none focus:ring-1 focus:ring-ciruela/40"
               />
             </div>
-            <div>
-              <label className="mb-1 block font-body text-xs uppercase tracking-[0.14em] text-ciruela/50">
-                Contraseña
-              </label>
-              <input
-                required
-                name="password"
-                type="password"
-                minLength={8}
-                autoComplete="new-password"
-                className="w-full rounded-lg border border-ciruela/20 bg-hueso px-3 py-2 font-body text-sm text-ciruela focus:outline-none focus:ring-1 focus:ring-ciruela/40"
-              />
-            </div>
+            <PasswordField
+              label="Contraseña"
+              name="password"
+              autoComplete="new-password"
+              minLength={8}
+            />
 
             {state?.error && (
               <p className="rounded-lg bg-[#b3392f]/10 px-3 py-2 font-body text-xs text-[#b3392f]">

@@ -5,7 +5,12 @@ import { TopBar } from "@/components/panel/TopBar";
 import { Card } from "@/components/panel/Card";
 import { staffIdentity, useStaffRole } from "@/components/panel/StaffRoleContext";
 import { useProtocols } from "@/components/panel/ProtocolsContext";
-import { TODAY_APPOINTMENTS, BACKBAR_INVENTORY, ADD_ONS } from "@/lib/mock-data";
+import {
+  TODAY_APPOINTMENTS,
+  BACKBAR_INVENTORY,
+  ADD_ONS,
+  CLIENT_SKIN_ID_PREVIEW,
+} from "@/lib/mock-data";
 
 type UsedProduct = { sku: string; amountMl: string };
 
@@ -23,6 +28,8 @@ export default function StaffTreatmentRecord() {
   const backbarAtLocation = BACKBAR_INVENTORY.filter((b) => b.location === identity.location);
   const [usedProducts, setUsedProducts] = useState<UsedProduct[]>([{ sku: "", amountMl: "" }]);
   const [selectedAddOns, setSelectedAddOns] = useState<string[]>([]);
+  const [clinicalNotes, setClinicalNotes] = useState("");
+  const [completed, setCompleted] = useState(false);
   const availableAddOns = ADD_ONS.filter((a) => a.availableOn.includes(protocol));
 
   function toggleAddOn(id: string) {
@@ -33,11 +40,30 @@ export default function StaffTreatmentRecord() {
     setUsedProducts((prev) => prev.map((p, i) => (i === index ? { ...p, ...patch } : p)));
   }
 
+  // Minimum bar for a real clinical/inventory record — found missing
+  // entirely in a pentest pass: a treatment could be marked complete fully
+  // blank, with no notes and no backbar product logged. Doesn't require
+  // every add-on/product slot filled, just that at least one backbar
+  // product was actually recorded and notes aren't empty.
+  const hasLoggedProduct = usedProducts.some((p) => p.sku && Number(p.amountMl) > 0);
+  const hasNotes = clinicalNotes.trim().length > 0;
+  const canComplete = hasLoggedProduct && hasNotes;
+
   return (
     <>
       <TopBar title="Registro de tratamiento" userName={identity.name} userRole={identity.role} />
       <div className="flex-1 px-8 py-6">
-        <div className="mx-auto max-w-xl">
+        <div className="mx-auto max-w-xl space-y-4">
+          {CLIENT_SKIN_ID_PREVIEW.allergies.length > 0 && (
+            <div className="rounded-[18px] border-2 border-crepe bg-crepe/15 px-6 py-4">
+              <p className="font-body text-xs font-semibold uppercase tracking-[0.14em] text-ciruela">
+                Alerta de alergia
+              </p>
+              <p className="mt-1 font-body text-sm text-ciruela">
+                {CLIENT_SKIN_ID_PREVIEW.allergies.join(", ")}
+              </p>
+            </div>
+          )}
           <Card title={client.client}>
             <div>
               <p className="mb-2 font-body text-xs uppercase tracking-[0.14em] text-ciruela/50">
@@ -148,6 +174,9 @@ export default function StaffTreatmentRecord() {
               </p>
               <textarea
                 rows={3}
+                required
+                value={clinicalNotes}
+                onChange={(e) => setClinicalNotes(e.target.value)}
                 placeholder="Notas clínicas…"
                 className="w-full rounded-lg border border-ciruela/20 bg-hueso px-3 py-2 font-body text-sm text-ciruela placeholder:text-ciruela/40 focus:outline-none focus:ring-1 focus:ring-ciruela/40"
               />
@@ -164,9 +193,30 @@ export default function StaffTreatmentRecord() {
               </select>
             </div>
 
-            <button className="mt-6 w-full rounded-full bg-ciruela px-5 py-3 font-body text-sm text-hueso">
-              Completar tratamiento
-            </button>
+            {completed ? (
+              <p className="mt-6 rounded-lg bg-oliva/10 px-3 py-2 text-center font-body text-sm text-oliva">
+                Tratamiento completado y registrado.
+              </p>
+            ) : (
+              <>
+                <button
+                  onClick={() => setCompleted(true)}
+                  disabled={!canComplete}
+                  className="mt-6 w-full rounded-full bg-ciruela px-5 py-3 font-body text-sm text-hueso disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  Completar tratamiento
+                </button>
+                {!canComplete && (
+                  <p className="mt-2 font-body text-xs text-ciruela/50">
+                    {!hasLoggedProduct && !hasNotes
+                      ? "Registra al menos un producto backbar y las notas clínicas para completar."
+                      : !hasLoggedProduct
+                        ? "Registra al menos un producto backbar (con cantidad en ml) para completar."
+                        : "Agrega notas clínicas para completar."}
+                  </p>
+                )}
+              </>
+            )}
           </Card>
         </div>
       </div>

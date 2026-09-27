@@ -94,7 +94,7 @@ export function UserMenu({
               setOpen(false);
               signOut();
             }}
-            className="block w-full rounded-lg px-3 py-2 text-left font-body text-sm text-crepe hover:bg-crepe/10"
+            className="block w-full rounded-lg px-3 py-2 text-left font-body text-sm text-[#b3392f] hover:bg-[#b3392f]/10"
           >
             Cerrar sesión
           </button>

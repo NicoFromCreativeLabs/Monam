@@ -4,6 +4,7 @@ import { useState } from "react";
 import { TopBar } from "@/components/panel/TopBar";
 import { Card } from "@/components/panel/Card";
 import { staffIdentity, useStaffRole } from "@/components/panel/StaffRoleContext";
+import { usePanelAlerts } from "@/components/panel/PanelAlertsContext";
 import {
   RETAIL_INVENTORY,
   BACKBAR_INVENTORY,
@@ -47,15 +48,33 @@ function InventoryCard({
   items: (RetailInventoryItem | BackbarInventoryItem)[];
   showPao?: boolean;
 }) {
+  const { addAlert } = usePanelAlerts();
   const [list, setList] = useState(items);
   const [editingSku, setEditingSku] = useState<string | null>(null);
   const [draftQty, setDraftQty] = useState("");
+  const [draftReason, setDraftReason] = useState("");
+
+  const editingItem = list.find((i) => i.sku === editingSku);
+  const newQty = Math.max(0, Number(draftQty) || 0);
+  // Only a decrease needs a reason — receiving stock or correcting a typo
+  // upward isn't the shrinkage-relevant case a pentest flagged: silently
+  // "fixing" a count down with zero note or trail is the easiest way to
+  // cover unlogged usage or theft.
+  const isDecrease = editingItem ? newQty < editingItem.qty : false;
+  const canSave = !isDecrease || draftReason.trim().length > 0;
 
   function save(sku: string) {
-    setList((prev) =>
-      prev.map((i) => (i.sku === sku ? { ...i, qty: Math.max(0, Number(draftQty) || 0) } : i))
-    );
+    const item = list.find((i) => i.sku === sku);
+    if (!item || !canSave) return;
+    const qty = Math.max(0, Number(draftQty) || 0);
+    if (qty < item.qty) {
+      addAlert(
+        `Inventario ${item.product} (SKU ${item.sku}) ajustado de ${item.qty} a ${qty} — motivo: ${draftReason.trim()}.`,
+      );
+    }
+    setList((prev) => prev.map((i) => (i.sku === sku ? { ...i, qty } : i)));
     setEditingSku(null);
+    setDraftReason("");
   }
 
   return (
@@ -81,21 +100,33 @@ function InventoryCard({
                   </span>
                 )}
                 {isEditing ? (
-                  <>
-                    <input
-                      type="number"
-                      autoFocus
-                      value={draftQty}
-                      onChange={(e) => setDraftQty(e.target.value)}
-                      className="w-16 rounded-lg border border-ciruela/20 bg-hueso px-2 py-1 text-right font-body text-sm text-ciruela focus:outline-none focus:ring-1 focus:ring-ciruela/40"
-                    />
-                    <button
-                      onClick={() => save(item.sku)}
-                      className="rounded-full bg-ciruela px-3 py-1 font-body text-xs text-hueso"
-                    >
-                      Guardar
-                    </button>
-                  </>
+                  <div className="flex flex-col items-end gap-1.5">
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="number"
+                        autoFocus
+                        value={draftQty}
+                        onChange={(e) => setDraftQty(e.target.value)}
+                        className="w-16 rounded-lg border border-ciruela/20 bg-hueso px-2 py-1 text-right font-body text-sm text-ciruela focus:outline-none focus:ring-1 focus:ring-ciruela/40"
+                      />
+                      <button
+                        onClick={() => save(item.sku)}
+                        disabled={!canSave}
+                        className="rounded-full bg-ciruela px-3 py-1 font-body text-xs text-hueso disabled:cursor-not-allowed disabled:opacity-40"
+                      >
+                        Guardar
+                      </button>
+                    </div>
+                    {isDecrease && (
+                      <input
+                        type="text"
+                        value={draftReason}
+                        onChange={(e) => setDraftReason(e.target.value)}
+                        placeholder="Motivo de la baja (requerido)"
+                        className="w-48 rounded-lg border border-ciruela/20 bg-hueso px-2 py-1 text-right font-body text-xs text-ciruela placeholder:text-ciruela/40 focus:outline-none focus:ring-1 focus:ring-ciruela/40"
+                      />
+                    )}
+                  </div>
                 ) : (
                   <>
                     <span className="w-8 text-right">{item.qty}</span>
@@ -103,6 +134,7 @@ function InventoryCard({
                       onClick={() => {
                         setEditingSku(item.sku);
                         setDraftQty(String(item.qty));
+                        setDraftReason("");
                       }}
                       className="rounded-full border border-ciruela/20 px-3 py-1 font-body text-xs text-ciruela hover:bg-ciruela/5"
                     >

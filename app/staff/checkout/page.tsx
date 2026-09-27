@@ -28,9 +28,39 @@ export default function StaffCheckout() {
   const [pickerOpen, setPickerOpen] = useState(false);
   const [search, setSearch] = useState("");
   const [pendingRemove, setPendingRemove] = useState<(typeof t.retailItems)[number] | null>(null);
+  // Products whose recommendation tag was removed this session — re-adding
+  // one of these needs the same warning removal got, closing the two-step
+  // gap a front-desk-persona pentest found: removal was guarded, but
+  // re-adding the identical product afterward silently dropped attribution
+  // with zero confirmation, moving the commission off whoever recommended it.
+  const [removedRecommendations, setRemovedRecommendations] = useState<
+    (typeof t.retailItems)[number][]
+  >([]);
+  const [pendingReAdd, setPendingReAdd] = useState<{ product: string; price: number } | null>(
+    null,
+  );
 
   const addToSale = (item: { product: string; price: number }) => {
     setAddedItems((prev) => [...prev, { ...item, qty: 1 }]);
+  };
+  const requestAddToSale = (item: { product: string; price: number }) => {
+    const removed = removedRecommendations.find((r) => r.name === item.product);
+    if (removed) {
+      setPendingReAdd(item);
+      return;
+    }
+    addToSale(item);
+  };
+  const confirmReAdd = () => {
+    if (!pendingReAdd) return;
+    const removed = removedRecommendations.find((r) => r.name === pendingReAdd.product);
+    addToSale(pendingReAdd);
+    if (removed) {
+      addAlert(
+        `"${pendingReAdd.product}" fue re-agregado al ticket de ${t.client} después de quitarse la recomendación de ${removed.recommendedBy} — confirmar a quién se atribuye la comisión.`,
+      );
+    }
+    setPendingReAdd(null);
   };
   const addFromWishlist = (item: { product: string; price: number }) => {
     addToSale(item);
@@ -56,6 +86,7 @@ export default function StaffCheckout() {
   const confirmRemoveRecommended = () => {
     if (!pendingRemove) return;
     setRecommendedItems((prev) => prev.filter((r) => r.name !== pendingRemove.name));
+    setRemovedRecommendations((prev) => [...prev, pendingRemove]);
     addAlert(
       `"${pendingRemove.name}" (recomendado por ${pendingRemove.recommendedBy}) fue quitado del ticket de ${t.client} — revisar atribución de comisión.`
     );
@@ -270,7 +301,7 @@ export default function StaffCheckout() {
                     ) : (
                       <button
                         disabled={outOfStock}
-                        onClick={() => addToSale({ product: item.product, price: item.price })}
+                        onClick={() => requestAddToSale({ product: item.product, price: item.price })}
                         className="rounded-full border border-ciruela px-3 py-1.5 font-body text-xs text-ciruela hover:bg-ciruela hover:text-hueso disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-ciruela"
                       >
                         Agregar
@@ -312,6 +343,42 @@ export default function StaffCheckout() {
                 className="rounded-full bg-[#b3392f] px-4 py-1.5 font-body text-xs text-hueso"
               >
                 Quitar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {pendingReAdd && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-ciruela/40 px-4"
+          onClick={() => setPendingReAdd(null)}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-xs rounded-2xl bg-hueso p-5 shadow-xl"
+          >
+            <p className="font-display text-sm text-ciruela">¿Agregar de nuevo?</p>
+            <p className="mt-2 font-body text-sm text-ciruela/70">
+              {pendingReAdd.product} se quitó antes de la recomendación de{" "}
+              {removedRecommendations.find((r) => r.name === pendingReAdd.product)?.recommendedBy}.
+              Si lo agregas ahora, la comisión NO se atribuye automáticamente a esa persona.
+            </p>
+            <p className="mt-2 font-body text-xs text-ciruela/50">
+              Se notificará en el panel de administración.
+            </p>
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                onClick={() => setPendingReAdd(null)}
+                className="rounded-full border border-ciruela px-4 py-1.5 font-body text-xs text-ciruela hover:bg-ciruela hover:text-hueso"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={confirmReAdd}
+                className="rounded-full bg-[#b3392f] px-4 py-1.5 font-body text-xs text-hueso"
+              >
+                Agregar de todos modos
               </button>
             </div>
           </div>

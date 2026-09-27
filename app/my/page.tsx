@@ -1,9 +1,13 @@
+"use client";
+
+import Link from "next/link";
 import { Card } from "@/components/panel/Card";
-import { CLIENT, CLIENT_UPCOMING_APPOINTMENT, CLIENT_PACKAGE_BALANCE } from "@/lib/mock-data";
+import { useClientBooking } from "@/components/panel/ClientBookingContext";
+import { CLIENT } from "@/lib/mock-data";
 
 export default function ClientHome() {
-  const apt = CLIENT_UPCOMING_APPOINTMENT;
-  const pack = CLIENT_PACKAGE_BALANCE;
+  const { upcoming, packageBalance: pack } = useClientBooking();
+  const apt = upcoming[0];
 
   return (
     <div className="space-y-6">
@@ -13,34 +17,55 @@ export default function ClientHome() {
       </div>
 
       <Card title="Próxima cita">
-        <div className="flex items-center justify-between">
-          <div>
-            <p className="font-display text-lg text-ciruela">{apt.protocolTier}</p>
-            <p className="font-body text-sm text-ciruela/60">
-              {apt.date} · {apt.time} · {apt.location}
-            </p>
-            <p className="mt-1 font-body text-xs text-oliva">
-              {apt.depositPaid ? "Depósito pagado" : "Depósito pendiente"}
-            </p>
+        {apt ? (
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="font-display text-lg text-ciruela">{apt.protocolTier}</p>
+              <p className="font-body text-sm text-ciruela/60">
+                {apt.date} · {apt.time} · {apt.location}
+              </p>
+              <p className="mt-1 font-body text-xs text-oliva">
+                {apt.depositPaid ? "Depósito pagado" : "Depósito pendiente"}
+              </p>
+            </div>
+            <div className="flex gap-2">
+              <Link
+                href="/my/appointments"
+                className="rounded-full border border-ciruela px-4 py-2 font-body text-xs text-ciruela hover:bg-ciruela hover:text-hueso"
+              >
+                Reagendar
+              </Link>
+              <Link
+                href="/my/appointments"
+                className="rounded-full bg-ciruela px-4 py-2 font-body text-xs text-hueso"
+              >
+                Detalles
+              </Link>
+            </div>
           </div>
-          <div className="flex gap-2">
-            <button className="rounded-full border border-ciruela px-4 py-2 font-body text-xs text-ciruela">
-              Reagendar
-            </button>
-            <button className="rounded-full bg-ciruela px-4 py-2 font-body text-xs text-hueso">
-              Detalles
-            </button>
+        ) : (
+          <div className="flex items-center justify-between">
+            <p className="font-body text-sm text-ciruela/60">No tienes citas próximas.</p>
+            <Link
+              href="/my/book"
+              className="rounded-full bg-ciruela px-4 py-2 font-body text-xs text-hueso"
+            >
+              Reservar
+            </Link>
           </div>
-        </div>
+        )}
       </Card>
 
       <Card title="Reagenda rápida">
         <p className="font-body text-sm text-ciruela/70">
           Repite tu protocolo y elige tu próximo horario.
         </p>
-        <button className="mt-4 rounded-full bg-ciruela px-5 py-2.5 font-body text-sm text-hueso">
+        <Link
+          href="/my/book"
+          className="mt-4 inline-block rounded-full bg-ciruela px-5 py-2.5 font-body text-sm text-hueso"
+        >
           Reagendar Glow
-        </button>
+        </Link>
       </Card>
 
       <Card title="Saldo de paquete">

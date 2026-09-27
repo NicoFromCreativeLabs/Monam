@@ -3,6 +3,7 @@
 import { useActionState } from "react";
 import Link from "next/link";
 import { signIn, type ActionState } from "@/lib/actions/auth";
+import { PasswordField } from "@/components/panel/PasswordField";
 
 // Real Supabase Auth sign-in — one form for every role. Where it lands
 // (/admin, /staff, or /my) is decided server-side in the signIn action from
@@ -41,13 +42,7 @@ export default function LoginPage() {
                 ¿Contraseña olvidada?
               </Link>
             </div>
-            <input
-              required
-              name="password"
-              type="password"
-              autoComplete="current-password"
-              className="w-full rounded-lg border border-ciruela/20 bg-hueso px-3 py-2 font-body text-sm text-ciruela focus:outline-none focus:ring-1 focus:ring-ciruela/40"
-            />
+            <PasswordField name="password" autoComplete="current-password" />
           </div>
 
           {state?.error && (

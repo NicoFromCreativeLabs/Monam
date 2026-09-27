@@ -3,7 +3,9 @@
 import { useMemo, useState } from "react";
 import { Card } from "@/components/panel/Card";
 import { useLocations } from "@/components/panel/LocationsContext";
-import { BUSINESS_HOURS, PROTOCOLS, ADD_ONS, type DayHours } from "@/lib/mock-data";
+import { useClientBooking } from "@/components/panel/ClientBookingContext";
+import { useScrollEdgeFade } from "@/components/panel/useScrollEdgeFade";
+import { BUSINESS_HOURS, PROTOCOLS, ADD_ONS, CLIENT_PAYMENT_METHODS, type DayHours } from "@/lib/mock-data";
 
 const SIGNATURE_PROTOCOLS = PROTOCOLS.filter((p) => p.tier === "Signature");
 
@@ -67,6 +69,7 @@ type Step = "location" | "duration" | "facial" | "addons" | "schedule" | "deposi
 
 export default function ClientBook() {
   const { locations } = useLocations();
+  const { addAppointment } = useClientBooking();
   const [step, setStep] = useState<Step>("location");
   const [location, setLocation] = useState<string | null>(null);
   const [duration, setDuration] = useState<"Targeted" | "Signature" | null>(null);
@@ -77,6 +80,8 @@ export default function ClientBook() {
 
   const dayOptions = useMemo(() => buildDayOptions(), []);
   const selectedDay = dayOptions[dayIndex];
+  const { ref: dayScrollRef, showLeft: showDayLeft, showRight: showDayRight } =
+    useScrollEdgeFade<HTMLDivElement>();
 
   const requiresDeposit = duration === "Signature";
 
@@ -121,6 +126,20 @@ export default function ClientBook() {
   }
 
   const daySlots = duration ? generateSlots(selectedDay.hours, duration) : [];
+
+  // Writes the booking into ClientBookingContext the moment the client
+  // actually reaches the confirmation screen — from either transition into
+  // "confirm" (with or without a deposit step in between) — so it shows up
+  // in "Próxima cita" and "Mi rutina" immediately, not just on this screen.
+  function confirmBooking(chosenSlot: string) {
+    addAppointment({
+      date: selectedDay.date.toISOString().slice(0, 10),
+      time: chosenSlot,
+      location: location!,
+      protocolTier: `${protocol ?? duration} (${duration === "Signature" ? 60 : 30} min)`,
+      depositPaid: requiresDeposit,
+    });
+  }
 
   return (
     <div className="mx-auto max-w-lg">
@@ -213,7 +232,8 @@ export default function ClientBook() {
       {step === "addons" && (
         <Card title="Agrega un add-on">
           <p className="mb-4 font-body text-xs text-ciruela/50">
-            Compatibles con {protocolForAddOns} · opcional, se suman a tu cita.
+            Compatibles con {protocolForAddOns} · opcionales, sin costo adicional — solo suman
+            tiempo a tu cita.
           </p>
           <div className="space-y-2">
             {availableAddOns.map((a) => (
@@ -248,24 +268,32 @@ export default function ClientBook() {
 
       {step === "schedule" && (
         <Card title="Elige un horario">
-          <div className="mb-4 flex gap-2 overflow-x-auto">
-            {dayOptions.map((d, i) => (
-              <button
-                key={d.dateLabel + d.dayName}
-                onClick={() => {
-                  setDayIndex(i);
-                  setSlot(null);
-                }}
-                className={`shrink-0 rounded-lg border px-3 py-2 text-center font-body text-xs ${
-                  dayIndex === i
-                    ? "border-ciruela bg-ciruela text-hueso"
-                    : "border-ciruela/20 text-ciruela hover:bg-ciruela/5"
-                }`}
-              >
-                <p className="font-medium">{d.label}</p>
-                <p className="opacity-70">{d.dateLabel}</p>
-              </button>
-            ))}
+          <div className="relative mb-4">
+            <div ref={dayScrollRef} className="flex gap-2 overflow-x-auto">
+              {dayOptions.map((d, i) => (
+                <button
+                  key={d.dateLabel + d.dayName}
+                  onClick={() => {
+                    setDayIndex(i);
+                    setSlot(null);
+                  }}
+                  className={`shrink-0 rounded-lg border px-3 py-2 text-center font-body text-xs ${
+                    dayIndex === i
+                      ? "border-ciruela bg-ciruela text-hueso"
+                      : "border-ciruela/20 text-ciruela hover:bg-ciruela/5"
+                  }`}
+                >
+                  <p className="font-medium">{d.label}</p>
+                  <p className="opacity-70">{d.dateLabel}</p>
+                </button>
+              ))}
+            </div>
+            {showDayLeft && (
+              <div className="pointer-events-none absolute inset-y-0 left-0 w-8 bg-gradient-to-r from-hueso to-transparent" />
+            )}
+            {showDayRight && (
+              <div className="pointer-events-none absolute inset-y-0 right-0 w-8 bg-gradient-to-l from-hueso to-transparent" />
+            )}
           </div>
           <p className="mb-3 font-body text-xs text-ciruela/50">
             {selectedDay.dayName} · {selectedDay.hours.open}–{selectedDay.hours.close} · te
@@ -282,7 +310,12 @@ export default function ClientBook() {
                   key={s}
                   onClick={() => {
                     setSlot(s);
-                    setStep(requiresDeposit ? "deposit" : "confirm");
+                    if (requiresDeposit) {
+                      setStep("deposit");
+                    } else {
+                      confirmBooking(s);
+                      setStep("confirm");
+                    }
                   }}
                   className="rounded-lg border border-ciruela/20 px-3 py-2 font-body text-sm text-ciruela hover:bg-ciruela hover:text-hueso"
                 >
@@ -304,8 +337,19 @@ export default function ClientBook() {
             <span>Depósito</span>
             <span>$500 MXN</span>
           </div>
+          {CLIENT_PAYMENT_METHODS[0] && (
+            <div className="mt-2 flex justify-between font-body text-xs text-ciruela/50">
+              <span>Se cobrará a</span>
+              <span>
+                {CLIENT_PAYMENT_METHODS[0].brand} •••• {CLIENT_PAYMENT_METHODS[0].last4}
+              </span>
+            </div>
+          )}
           <button
-            onClick={() => setStep("confirm")}
+            onClick={() => {
+              confirmBooking(slot!);
+              setStep("confirm");
+            }}
             className="mt-6 w-full rounded-full bg-ciruela px-5 py-3 font-body text-sm text-hueso"
           >
             Pagar depósito y confirmar
@@ -322,6 +366,12 @@ export default function ClientBook() {
           {chosenAddOns.length > 0 && (
             <p className="mt-2 font-body text-xs text-ciruela/60">
               Add-ons: {chosenAddOns.map((a) => a.name).join(", ")} (+{extraMinutesTotal} min)
+            </p>
+          )}
+          {requiresDeposit && CLIENT_PAYMENT_METHODS[0] && (
+            <p className="mt-2 font-body text-xs text-ciruela/60">
+              Depósito de $500 MXN cobrado a {CLIENT_PAYMENT_METHODS[0].brand} ••••{" "}
+              {CLIENT_PAYMENT_METHODS[0].last4}.
             </p>
           )}
           <p className="mt-4 font-body text-xs text-ciruela/50">
