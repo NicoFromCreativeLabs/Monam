@@ -8,6 +8,9 @@ const nextConfig: NextConfig = {
   turbopack: {
     root: path.join(__dirname),
   },
+  // Drop the "X-Powered-By: Next.js" response header — free framework
+  // fingerprinting removed for attackers, no functional cost.
+  poweredByHeader: false,
 };
 
 export default nextConfig;

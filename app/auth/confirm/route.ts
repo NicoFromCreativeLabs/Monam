@@ -11,7 +11,13 @@ export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const token_hash = searchParams.get("token_hash");
   const type = searchParams.get("type") as EmailOtpType | null;
-  const next = searchParams.get("next") ?? "/";
+  const rawNext = searchParams.get("next") ?? "/";
+  // Only a same-origin relative path is safe to redirect to — `next` comes
+  // straight from the query string of an otherwise-legitimate Supabase email
+  // link, so an unvalidated value here is an open redirect: a real token_hash
+  // plus `next=https://evil.example` reads as a trustworthy link but bounces
+  // the verified session to an attacker-controlled page.
+  const next = rawNext.startsWith("/") && !rawNext.startsWith("//") ? rawNext : "/";
 
   if (token_hash && type) {
     const supabase = await createClient();
