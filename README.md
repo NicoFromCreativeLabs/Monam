@@ -27,8 +27,11 @@ app/
   login/           role-aware auth entry, redirects by role
 lib/
   supabase/        browser / server / admin (service-role) clients
+  prisma.ts        app-runtime PrismaClient singleton (pooled DATABASE_URL via @prisma/adapter-pg)
 prisma/
-  schema.prisma    connection config only — no models yet, backend deferred (see Status)
+  schema.prisma    full data model, written and validated (see Status) — not yet migrated
+                   against a live database or wired into any page
+prisma.config.ts   Prisma 7 CLI config (migrations use the direct, non-pooled DIRECT_URL)
 content/
   en.json, es.json, mixed.json   i18n content strings — mixed.json is the brand-authentic
                                   default (English marketing copy + Spanish structural
@@ -101,9 +104,14 @@ Center, retail tagging) update local state on click so the flows feel real.
   `ProfileForm.tsx` — pre-filled from mock identity data, with a password section) and
   "Cerrar sesión" (routes back to `/login`).
 
-Not built: auth, the data model, and any of it actually persisting — every screen is a
-static read of `lib/mock-data.ts`. See `../MONAM_OS_System_Specification.md` and the
-implementation plan for the backend build order once this UI pass is approved.
+- **Data model** (`prisma/schema.prisma`) — written and validated (`npx prisma validate`),
+  connected to a Supabase project (`lib/prisma.ts` singleton over `@prisma/adapter-pg`,
+  `prisma.config.ts` for CLI/migrations). Not yet migrated against the live database, and no
+  page reads from it yet — every screen still reads `lib/mock-data.ts`.
+
+Not built: auth, and any of it actually persisting — every screen is still a static read of
+`lib/mock-data.ts`. See `../MONAM_OS_System_Specification.md` and the architecture plan for
+the migration/seed/page-cutover order once the Supabase connection is live.
 
 ## Setup
 

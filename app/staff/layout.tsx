@@ -1,18 +1,8 @@
-"use client";
+import { requireStaffRole } from "@/lib/auth/dal";
+import { StaffPanelShell } from "./StaffPanelShell";
 
-import { Suspense } from "react";
-import { StaffRoleProvider } from "@/components/panel/StaffRoleContext";
-import { PanelNavProvider } from "@/components/panel/PanelNavContext";
-import { StaffSidebarShell } from "@/components/panel/StaffShell";
+export default async function StaffLayout({ children }: LayoutProps<"/staff">) {
+  await requireStaffRole(["FRONT_DESK", "ESTHETICIAN"]);
 
-export default function StaffLayout({ children }: LayoutProps<"/staff">) {
-  return (
-    <Suspense>
-      <StaffRoleProvider>
-        <PanelNavProvider>
-          <StaffSidebarShell>{children}</StaffSidebarShell>
-        </PanelNavProvider>
-      </StaffRoleProvider>
-    </Suspense>
-  );
+  return <StaffPanelShell>{children}</StaffPanelShell>;
 }

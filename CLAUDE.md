@@ -11,8 +11,16 @@ this codebase and those specs disagree, re-read the spec, don't guess.
   currently resolves to an `8.0.0-rc` prerelease whose dependency graph crashes npm's
   arborist (`Cannot read properties of null (reading 'edgesOut')`). Keep it pinned until
   8.x is out of RC, or re-verify before bumping.
-- Data model (prisma/schema.prisma) is intentionally unwritten — design it from spec §5
-  and get it reviewed before generating migrations; it underpins RBAC, audit logging, and
-  the two-ledger inventory split, so getting it wrong is expensive to unwind.
+- Data model (`prisma/schema.prisma`) is written and validated (`npx prisma validate`) —
+  full domain-by-domain design rationale lives in the architecture plan (ask for it: covers
+  why the booking conflict check is a raw-SQL `EXCLUDE` constraint, why ARCO deletion
+  anonymizes in place instead of hard-deleting, and the spec-vs-shipped-UI commission
+  discrepancy `CommissionRule.calcType` resolves). Not yet migrated against the live
+  Supabase project or wired into any page — every screen still reads `lib/mock-data.ts`.
+- Prisma 7 requires a driver adapter (no engine-binary mode) and moved connection URLs out
+  of `schema.prisma` into `prisma.config.ts` (CLI/migrations, using `DIRECT_URL`) and
+  `lib/prisma.ts` (app runtime, using the pooled `DATABASE_URL` via `@prisma/adapter-pg`) —
+  don't add `url`/`directUrl` back into the `datasource` block, that's pre-v7 syntax and
+  Prisma will refuse to load the config.
 - Brand fonts are Google Fonts stand-ins (see README). Don't ship to production without
   swapping in the licensed Riccione/Donatello/Respondent files per spec §12.

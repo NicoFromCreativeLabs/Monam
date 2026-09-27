@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { signOut } from "@/lib/actions/auth";
 
 export function UserMenu({
   userName,
@@ -91,7 +92,7 @@ export function UserMenu({
             role="menuitem"
             onClick={() => {
               setOpen(false);
-              router.push("/login");
+              signOut();
             }}
             className="block w-full rounded-lg px-3 py-2 text-left font-body text-sm text-crepe hover:bg-crepe/10"
           >

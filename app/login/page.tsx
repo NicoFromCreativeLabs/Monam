@@ -1,32 +1,15 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
-import { OWNER, FRONT_DESK_STAFF, ESTHETICIAN_STAFF, CLIENT } from "@/lib/mock-data";
+import { useActionState } from "react";
+import Link from "next/link";
+import { signIn, type ActionState } from "@/lib/actions/auth";
 
-// Role-aware login — redirects to /admin, /staff, or /my per role (spec §4).
-// No real auth yet (Supabase Auth wiring is backend work, not this pass) —
-// this is a UI-accurate stand-in: real logins will be individually named and
-// location-scoped (spec §2/§10), never a role picker like this.
-// Front Desk and Esteticista are both "staff", landing on the same /staff
-// shell — the query param just sets which of the two views it opens on.
-const ROLES = [
-  { role: "admin" as const, label: "Administración", who: OWNER.name, href: "/admin" },
-  { role: "staff" as const, label: "Personal (Recepción)", who: FRONT_DESK_STAFF.name, href: "/staff" },
-  {
-    role: "esthetician" as const,
-    label: "Personal (Esteticista)",
-    who: ESTHETICIAN_STAFF.name,
-    href: "/staff?role=esthetician",
-  },
-  { role: "client" as const, label: "Cliente", who: CLIENT.name, href: "/my" },
-];
-
+// Real Supabase Auth sign-in — one form for every role. Where it lands
+// (/admin, /staff, or /my) is decided server-side in the signIn action from
+// the AppUser/Client row, never from anything the client chooses (spec §2:
+// individual named logins, never a role picker).
 export default function LoginPage() {
-  const router = useRouter();
-  const [selected, setSelected] = useState<(typeof ROLES)[number]["role"]>("client");
-
-  const current = ROLES.find((r) => r.role === selected)!;
+  const [state, formAction, pending] = useActionState<ActionState, FormData>(signIn, undefined);
 
   return (
     <main className="flex-1 flex items-center justify-center p-8">
@@ -36,35 +19,57 @@ export default function LoginPage() {
           <p className="mt-1 font-body text-sm text-ciruela/60">Iniciar sesión</p>
         </div>
 
-        <div className="space-y-2">
-          {ROLES.map((r) => (
-            <button
-              key={r.role}
-              onClick={() => setSelected(r.role)}
-              className={`flex w-full items-center justify-between rounded-lg border px-4 py-3 text-left font-body text-sm transition-colors ${
-                selected === r.role
-                  ? "border-ciruela bg-ciruela text-hueso"
-                  : "border-ciruela/20 text-ciruela hover:bg-ciruela/5"
-              }`}
-            >
-              <span>{r.label}</span>
-              <span className={selected === r.role ? "text-hueso/70" : "text-ciruela/40"}>
-                {r.who.split(" ")[0]}
-              </span>
-            </button>
-          ))}
-        </div>
+        <form action={formAction} className="space-y-4">
+          <div>
+            <label className="mb-1 block font-body text-xs uppercase tracking-[0.14em] text-ciruela/50">
+              Correo
+            </label>
+            <input
+              required
+              name="email"
+              type="email"
+              autoComplete="email"
+              className="w-full rounded-lg border border-ciruela/20 bg-hueso px-3 py-2 font-body text-sm text-ciruela focus:outline-none focus:ring-1 focus:ring-ciruela/40"
+            />
+          </div>
+          <div>
+            <div className="mb-1 flex items-center justify-between">
+              <label className="block font-body text-xs uppercase tracking-[0.14em] text-ciruela/50">
+                Contraseña
+              </label>
+              <Link href="/forgot-password" className="font-body text-xs text-ciruela/60 underline">
+                ¿Contraseña olvidada?
+              </Link>
+            </div>
+            <input
+              required
+              name="password"
+              type="password"
+              autoComplete="current-password"
+              className="w-full rounded-lg border border-ciruela/20 bg-hueso px-3 py-2 font-body text-sm text-ciruela focus:outline-none focus:ring-1 focus:ring-ciruela/40"
+            />
+          </div>
 
-        <button
-          onClick={() => router.push(current.href)}
-          className="mt-6 w-full rounded-full bg-ciruela px-5 py-3 font-body text-sm text-hueso"
-        >
-          Entrar como {current.who.split(" ")[0]}
-        </button>
+          {state?.error && (
+            <p className="rounded-lg bg-[#b3392f]/10 px-3 py-2 font-body text-xs text-[#b3392f]">
+              {state.error}
+            </p>
+          )}
 
-        <p className="mt-6 text-center font-body text-xs text-ciruela/40">
-          Vista previa sin autenticación real — la integración con Supabase Auth es trabajo de
-          backend pendiente.
+          <button
+            type="submit"
+            disabled={pending}
+            className="w-full rounded-full bg-ciruela px-5 py-3 font-body text-sm text-hueso disabled:opacity-50"
+          >
+            {pending ? "Entrando..." : "Entrar"}
+          </button>
+        </form>
+
+        <p className="mt-6 text-center font-body text-xs text-ciruela/50">
+          ¿Eres clienta nueva?{" "}
+          <Link href="/signup" className="text-ciruela underline">
+            Crea tu cuenta
+          </Link>
         </p>
       </div>
     </main>

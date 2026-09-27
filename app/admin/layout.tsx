@@ -1,5 +1,6 @@
 import { Sidebar, type NavSection } from "@/components/panel/Sidebar";
 import { PanelNavProvider } from "@/components/panel/PanelNavContext";
+import { requireStaffRole } from "@/lib/auth/dal";
 
 // Admin IA — rebuilt per client review (16-page spec, Sep 2026). See
 // MONAM_OS_System_Specification.md §6.1 for the original IA; this
@@ -56,7 +57,12 @@ const SECTIONS: NavSection[] = [
   },
 ];
 
-export default function AdminLayout({ children }: LayoutProps<"/admin">) {
+export default async function AdminLayout({ children }: LayoutProps<"/admin">) {
+  // Accountant is included per spec §9's row for this data, though its
+  // fully scoped read-only view (summary/export only, no client records) is
+  // future work — today it just gets the same panel as Owner/Clinic Manager.
+  await requireStaffRole(["OWNER", "CLINIC_MANAGER", "ACCOUNTANT"]);
+
   return (
     <PanelNavProvider>
       <div className="flex min-h-full flex-1">

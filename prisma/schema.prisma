@@ -1,16 +1,873 @@
-// MONAM OS data model.
-// Models intentionally left unwritten pending plan approval — see the
-// shared data model design in the implementation plan (§5 of
-// MONAM_OS_System_Specification.md: Client Record/Skin ID, Booking Engine,
-// Inventory ledgers, Commission logic, CFDI/Payments).
+// MONÂM OS data model.
+// Design rationale, domain grouping, and the "what's not a table" reporting
+// decisions live in the approved architecture plan (ask for it if you need
+// the why, not just the what). Source of truth for business rules:
+// ../MONAM_OS_System_Specification.md — where this schema and that spec
+// disagree, re-read the spec, don't guess (see CLAUDE.md).
+//
+// Prisma 7 note: driver adapters are mandatory (no "prisma-client-js"
+// engine-binary mode) and the datasource block no longer carries
+// url/directUrl — those live in prisma.config.ts (CLI/migrations) and in
+// the PrismaPg adapter instantiation in lib/prisma.ts (app runtime).
+// generator's `output` is required as of v7.
 
 generator client {
-  provider        = "prisma-client-js"
-  previewFeatures = []
+  provider = "prisma-client"
+  output   = "../lib/generated/prisma"
 }
 
 datasource db {
-  provider  = "postgresql"
-  url       = env("DATABASE_URL")
-  directUrl = env("DIRECT_URL")
+  provider = "postgresql"
+}
+
+// ---------------------------------------------------------------------------
+// Domain 0 — Identity & Access
+// ---------------------------------------------------------------------------
+
+enum Role {
+  OWNER
+  CLINIC_MANAGER
+  FRONT_DESK
+  ESTHETICIAN
+  ACCOUNTANT
+}
+
+enum StaffStatus {
+  INVITED
+  ACTIVE
+  INACTIVE
+}
+
+model Location {
+  id                 String   @id @default(uuid())
+  name               String
+  address            String
+  isActive           Boolean  @default(false)
+  rentCostMxn        Int      @default(0)
+  maintenanceCostMxn Int      @default(0)
+  createdAt          DateTime @default(now())
+
+  staffAssignments StaffLocationAssignment[]
+  rooms            Room[]
+  devices          Device[]
+  appointments     Appointment[]
+  inventoryItems   InventoryItem[]
+  sales            Sale[]
+  cashSessions     CashRegisterSession[]
+
+  @@map("locations")
+}
+
+// id == Supabase auth.users.id — never a separate PK (spec §2/§10: one
+// named login per person, AppUser is the authoritative role/location
+// source, not the JWT).
+model AppUser {
+  id        String      @id
+  name      String
+  email     String      @unique
+  role      Role
+  salaryMxn Int? // monthly gross; feeds P&L "Nómina base" rollup
+  status    StaffStatus @default(INVITED)
+  createdAt DateTime    @default(now())
+
+  locationAssignments       StaffLocationAssignment[]
+  appointmentsAsEsthetician Appointment[]             @relation("EstheticianAppointments")
+  treatmentRecords          TreatmentRecord[]
+  auditLogEntries           AuditLog[]
+  preferredByClients        ClientPreference[]
+  commissionEntries         CommissionEntry[]
+  salesClosed               Sale[]                    @relation("SaleClosedBy")
+  cashSessionsOpened        CashRegisterSession[]     @relation("CashSessionOpenedBy")
+  approvalRequestsMade      ApprovalRequest[]         @relation("ApprovalRequested")
+  approvalRequestsDecided   ApprovalRequest[]         @relation("ApprovalDecided")
+
+  @@map("app_users")
+}
+
+model StaffLocationAssignment {
+  id         String  @id @default(uuid())
+  userId     String
+  locationId String
+  isPrimary  Boolean @default(true)
+
+  user     AppUser  @relation(fields: [userId], references: [id])
+  location Location @relation(fields: [locationId], references: [id])
+
+  @@unique([userId, locationId])
+  @@map("staff_location_assignments")
+}
+
+model AuditLog {
+  id          String   @id @default(uuid())
+  actorUserId String?
+  actorRole   Role?
+  action      String // "VIEW_RECORD" | "EDIT_PREFERENCES" | "EXPORT_ATTEMPT" | "ANONYMIZE" | ...
+  entityType  String
+  entityId    String?
+  locationId  String?
+  metadata    Json?
+  reason      String?
+  createdAt   DateTime @default(now())
+
+  actor AppUser? @relation(fields: [actorUserId], references: [id])
+
+  @@index([entityType, entityId])
+  @@index([actorUserId])
+  @@map("audit_log")
+}
+
+enum AnomalyStatus {
+  OPEN
+  RESOLVED
+}
+
+model AnomalyFlag {
+  id            String        @id @default(uuid())
+  type          String // "Descuento inusual" | "Tratamiento sin cobro" | "Merma" | ...
+  detail        String
+  status        AnomalyStatus @default(OPEN)
+  relatedEntity String?
+  createdAt     DateTime      @default(now())
+  resolvedAt    DateTime?
+
+  @@index([status])
+  @@map("anomaly_flags")
+}
+
+// ---------------------------------------------------------------------------
+// Domain 1 — Catalog
+// ---------------------------------------------------------------------------
+
+enum ProtocolTier {
+  TARGETED
+  SIGNATURE
+}
+
+model Protocol {
+  id          String       @id @default(uuid())
+  name        String       @unique
+  tier        ProtocolTier
+  durationMin Int
+  priceMxn    Int
+  costMxn     Int // backbar COGS per treatment — excludes labor/commission/rent
+  isActive    Boolean      @default(true)
+
+  ingredients      ProtocolIngredient[]
+  addOns           AddOnProtocol[]
+  appointments     Appointment[]
+  treatmentRecords TreatmentRecord[]
+  retailLinks      ProtocolRetailLink[]
+
+  @@map("protocols")
+}
+
+model ProtocolIngredient {
+  id         String  @id @default(uuid())
+  protocolId String
+  ingredient String
+  dosageMl   Float? // captured now; Phase 2 auto-deduction is a logic change, not a migration
+  allergyTag String? // matches a ClientSkinId.allergies entry — drives the safety gate
+
+  protocol Protocol @relation(fields: [protocolId], references: [id])
+
+  @@index([protocolId])
+  @@map("protocol_ingredients")
+}
+
+model AddOn {
+  id           String @id @default(uuid())
+  name         String
+  function     String
+  extraMinutes Int
+
+  protocols     AddOnProtocol[]
+  saleLineItems SaleLineItem[]
+
+  @@map("add_ons")
+}
+
+model AddOnProtocol {
+  addOnId    String
+  protocolId String
+
+  addOn    AddOn    @relation(fields: [addOnId], references: [id])
+  protocol Protocol @relation(fields: [protocolId], references: [id])
+
+  @@id([addOnId, protocolId])
+  @@map("add_on_protocols")
+}
+
+model Room {
+  id         String @id @default(uuid())
+  locationId String
+  name       String
+
+  location     Location      @relation(fields: [locationId], references: [id])
+  appointments Appointment[]
+
+  @@map("rooms")
+}
+
+model Device {
+  id         String @id @default(uuid())
+  locationId String
+  name       String // e.g. "Panel LED"
+
+  location     Location      @relation(fields: [locationId], references: [id])
+  appointments Appointment[]
+
+  @@map("devices")
+}
+
+// ---------------------------------------------------------------------------
+// Domain 2 — Booking
+// The conflict check is a database constraint, not application logic (spec
+// §13: "the single highest-risk piece of business logic in the system").
+// Prisma cannot express Postgres EXCLUDE constraints — after the first
+// `prisma migrate dev --create-only` for this model, hand-edit the generated
+// SQL to add, before anything else touches this table:
+//
+//   CREATE EXTENSION IF NOT EXISTS btree_gist;
+//
+//   ALTER TABLE "appointments" ADD CONSTRAINT no_room_overlap
+//     EXCLUDE USING gist (room_id WITH =, tsrange(start_at, end_at) WITH &&)
+//     WHERE (status NOT IN ('CANCELLED', 'NO_SHOW'));
+//   ALTER TABLE "appointments" ADD CONSTRAINT no_esthetician_overlap
+//     EXCLUDE USING gist (esthetician_id WITH =, tsrange(start_at, end_at) WITH &&)
+//     WHERE (status NOT IN ('CANCELLED', 'NO_SHOW'));
+//   ALTER TABLE "appointments" ADD CONSTRAINT no_device_overlap
+//     EXCLUDE USING gist (device_id WITH =, tsrange(start_at, end_at) WITH &&)
+//     WHERE (status NOT IN ('CANCELLED', 'NO_SHOW'));
+//
+// (device_id is nullable — Postgres EXCLUDE constraints skip NULLs, so
+// appointments with no device simply aren't checked against each other.)
+// Because Appointment isn't partitioned per location, the esthetician
+// constraint also enforces "never booked at both locations at once" for
+// free. Every later migration touching this table must be reviewed for
+// whether Prisma's diff tried to drop these (it doesn't understand them).
+// Verify with a standalone concurrent-insert test before any calendar UI is
+// built on top of it.
+// ---------------------------------------------------------------------------
+
+enum AppointmentStatus {
+  REGISTERED
+  WAITING
+  LATE
+  CONFIRMED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+  NO_SHOW
+}
+
+model Appointment {
+  id            String            @id @default(uuid())
+  clientId      String
+  locationId    String
+  roomId        String
+  estheticianId String
+  deviceId      String?
+  protocolId    String? // assessed on arrival per spec §5.2 — null until then
+  durationTier  ProtocolTier // booked by duration, never by protocol name
+  startAt       DateTime
+  endAt         DateTime
+  status        AppointmentStatus @default(REGISTERED)
+  depositId     String?           @unique
+  createdAt     DateTime          @default(now())
+
+  client            Client             @relation(fields: [clientId], references: [id])
+  location          Location           @relation(fields: [locationId], references: [id])
+  room              Room               @relation(fields: [roomId], references: [id])
+  esthetician       AppUser            @relation("EstheticianAppointments", fields: [estheticianId], references: [id])
+  device            Device?            @relation(fields: [deviceId], references: [id])
+  protocol          Protocol?          @relation(fields: [protocolId], references: [id])
+  deposit           Deposit?           @relation(fields: [depositId], references: [id])
+  treatmentRecord   TreatmentRecord?
+  packageRedemption PackageRedemption?
+
+  @@index([locationId, startAt])
+  @@index([clientId])
+  @@index([estheticianId, startAt])
+  @@map("appointments")
+}
+
+// ---------------------------------------------------------------------------
+// Domain 3 — Client & Clinical
+// ---------------------------------------------------------------------------
+
+model Client {
+  id           String    @id @default(uuid())
+  authUserId   String?   @unique // Supabase auth.users.id, once the client creates a Cliente-panel login (spec §8) — a record can exist (e.g. entered from a WhatsApp booking) before any login does
+  name         String
+  phone        String    @unique // WhatsApp number — primary identifier, spec §5.1
+  email        String?
+  createdAt    DateTime  @default(now())
+  anonymizedAt DateTime? // ARCO deletion: PII nulled, row + relations kept (spec §5.6)
+
+  skinId           ClientSkinId?
+  preferences      ClientPreference?
+  photos           ClientPhoto[]
+  consents         Consent[]
+  appointments     Appointment[]
+  sales            Sale[]
+  deposits         Deposit[]
+  packagePurchases PackagePurchase[]
+  incidents        ClinicalIncident[]
+  approvalRequests ApprovalRequest[]
+
+  @@map("clients")
+}
+
+model ClientSkinId {
+  clientId                 String   @id
+  skinType                 String?
+  allergies                String[] // e.g. ["Compositae"]
+  medications              String[]
+  pregnancyOrBreastfeeding Boolean  @default(false)
+  isotretinoinOrRetinoid   Boolean  @default(false)
+  recentProcedures         String?
+  sunExposure              String?
+  visitObjective           String?
+  clinicalNotes            String? // staff-entered, client-viewable-only (spec §8.3)
+
+  client Client @relation(fields: [clientId], references: [id])
+
+  @@map("client_skin_ids")
+}
+
+model ClientPreference {
+  clientId               String   @id
+  preferredEstheticianId String?
+  beverage               String?
+  music                  String?
+  aromatherapy           String?
+  conversationStyle      String?
+  productsOwned          String[]
+  wishlist               String[]
+
+  client               Client   @relation(fields: [clientId], references: [id])
+  preferredEsthetician AppUser? @relation(fields: [preferredEstheticianId], references: [id])
+
+  @@map("client_preferences")
+}
+
+model ClientPhoto {
+  id          String   @id @default(uuid())
+  clientId    String
+  storagePath String // private Supabase Storage bucket path — never a public URL
+  takenAt     DateTime @default(now())
+  consentId   String? // must reference an ACTIVE photo-use consent
+
+  client  Client   @relation(fields: [clientId], references: [id])
+  consent Consent? @relation(fields: [consentId], references: [id])
+
+  @@index([clientId])
+  @@map("client_photos")
+}
+
+enum ConsentType {
+  TREATMENT
+  PHOTO_USE
+  PRIVACY_NOTICE
+}
+
+enum ConsentStatus {
+  ACTIVE
+  REVOKED
+}
+
+model ConsentDocumentVersion {
+  id          String      @id @default(uuid())
+  type        ConsentType
+  version     String
+  bodyUrl     String
+  publishedAt DateTime    @default(now())
+
+  consents Consent[]
+
+  @@unique([type, version])
+  @@map("consent_document_versions")
+}
+
+model Consent {
+  id         String        @id @default(uuid())
+  clientId   String
+  documentId String
+  status     ConsentStatus @default(ACTIVE)
+  acceptedAt DateTime      @default(now())
+  revokedAt  DateTime?
+
+  client   Client                 @relation(fields: [clientId], references: [id])
+  document ConsentDocumentVersion @relation(fields: [documentId], references: [id])
+  photos   ClientPhoto[]
+
+  @@unique([clientId, documentId])
+  @@map("consents")
+}
+
+// ---------------------------------------------------------------------------
+// Domain 4 — Treatment
+// RetailRecommendationTag is the one-feature-three-consumers piece the spec
+// calls out explicitly (§5.4/§7.3): it feeds Checkout's retail sale, the
+// commission-attribution rule, and the attach-rate metric. Referenced from
+// all three — never duplicate the tagging logic.
+// ---------------------------------------------------------------------------
+
+model TreatmentRecord {
+  id                     String   @id @default(uuid())
+  appointmentId          String   @unique
+  protocolId             String
+  estheticianId          String
+  notes                  String?
+  recommendedRevisitDays Int?
+  safetyOverrideReason   String? // set only if run despite a contraindication flag
+  completedAt            DateTime @default(now())
+
+  appointment Appointment               @relation(fields: [appointmentId], references: [id])
+  protocol    Protocol                  @relation(fields: [protocolId], references: [id])
+  esthetician AppUser                   @relation(fields: [estheticianId], references: [id])
+  retailTags  RetailRecommendationTag[]
+  incidents   ClinicalIncident[]
+
+  @@map("treatment_records")
+}
+
+model RetailRecommendationTag {
+  id                String   @id @default(uuid())
+  treatmentRecordId String
+  productId         String
+  taggedAt          DateTime @default(now())
+
+  treatmentRecord TreatmentRecord @relation(fields: [treatmentRecordId], references: [id])
+  product         Product         @relation(fields: [productId], references: [id])
+  saleLineItems   SaleLineItem[] // same-day match → commission attribution (spec §5.4)
+
+  @@map("retail_recommendation_tags")
+}
+
+enum IncidentStatus {
+  OPEN
+  RESOLVED
+}
+
+model ClinicalIncident {
+  id                String         @id @default(uuid())
+  clientId          String
+  treatmentRecordId String?
+  type              String
+  status            IncidentStatus @default(OPEN)
+  occurredAt        DateTime       @default(now())
+  resolvedAt        DateTime?
+
+  client          Client           @relation(fields: [clientId], references: [id])
+  treatmentRecord TreatmentRecord? @relation(fields: [treatmentRecordId], references: [id])
+
+  @@map("clinical_incidents")
+}
+
+// ---------------------------------------------------------------------------
+// Domain 5 — Commerce
+// ---------------------------------------------------------------------------
+
+enum Ledger {
+  RETAIL
+  BACKBAR
+}
+
+model Product {
+  id       String  @id @default(uuid())
+  sku      String  @unique
+  name     String
+  ledger   Ledger // structural never-merge rule, spec §5.3 — a backbar-only line simply never gets a RETAIL row
+  isActive Boolean @default(true)
+
+  inventoryItems InventoryItem[]
+  saleLineItems  SaleLineItem[]
+  retailTags     RetailRecommendationTag[]
+  retailLinks    ProtocolRetailLink[]
+
+  @@map("products")
+}
+
+// Documents which product a protocol tends to sell alongside — the actual
+// attach-rate NUMBER is a view over TreatmentRecord → RetailRecommendationTag
+// → SaleLineItem, never stored here, so it can't go stale.
+model ProtocolRetailLink {
+  protocolId String
+  productId  String
+
+  protocol Protocol @relation(fields: [protocolId], references: [id])
+  product  Product  @relation(fields: [productId], references: [id])
+
+  @@id([protocolId, productId])
+  @@map("protocol_retail_links")
+}
+
+model InventoryItem {
+  id         String    @id @default(uuid())
+  productId  String
+  locationId String
+  qty        Int       @default(0)
+  par        Int       @default(0)
+  priceMxn   Int? // retail only
+  costMxn    Int? // wholesale cost (retail) or backbar unit cost
+  expiresOn  DateTime? // retail — COFEPRIS-relevant, spec §5.3
+  openedOn   DateTime? // backbar
+  paoDays    Int? // period-after-opening, in days (mock had free-text "6 meses")
+
+  product      Product                @relation(fields: [productId], references: [id])
+  location     Location               @relation(fields: [locationId], references: [id])
+  transactions InventoryTransaction[]
+
+  @@unique([productId, locationId])
+  @@map("inventory_items")
+}
+
+enum InventoryTxnType {
+  RECEIVE
+  SALE_DEDUCTION
+  BACKBAR_USAGE
+  ADJUSTMENT
+}
+
+model InventoryTransaction {
+  id                String           @id @default(uuid())
+  inventoryItemId   String
+  type              InventoryTxnType
+  qtyDelta          Int
+  reason            String?
+  approvalRequestId String?
+  createdAt         DateTime         @default(now())
+
+  inventoryItem   InventoryItem    @relation(fields: [inventoryItemId], references: [id])
+  approvalRequest ApprovalRequest? @relation(fields: [approvalRequestId], references: [id])
+
+  @@index([inventoryItemId])
+  @@map("inventory_transactions")
+}
+
+model PackageOption {
+  id           String       @id @default(uuid())
+  name         String
+  sessions     Int
+  tier         ProtocolTier
+  listPriceMxn Int
+  priceMxn     Int
+  isActive     Boolean      @default(true)
+
+  purchases     PackagePurchase[]
+  saleLineItems SaleLineItem[]
+
+  @@map("package_options")
+}
+
+model PackagePurchase {
+  id              String    @id @default(uuid())
+  clientId        String
+  packageOptionId String
+  purchasedAt     DateTime  @default(now())
+  expiresOn       DateTime?
+  sessionsUsed    Int       @default(0)
+
+  client        Client              @relation(fields: [clientId], references: [id])
+  packageOption PackageOption       @relation(fields: [packageOptionId], references: [id])
+  redemptions   PackageRedemption[]
+
+  @@index([clientId])
+  @@map("package_purchases")
+}
+
+model PackageRedemption {
+  id                String   @id @default(uuid())
+  packagePurchaseId String
+  appointmentId     String   @unique
+  redeemedAt        DateTime @default(now())
+
+  packagePurchase PackagePurchase @relation(fields: [packagePurchaseId], references: [id])
+  appointment     Appointment     @relation(fields: [appointmentId], references: [id])
+
+  @@map("package_redemptions")
+}
+
+enum DepositStatus {
+  HELD
+  CREDITED
+  FORFEITED
+  REFUNDED
+}
+
+model Deposit {
+  id             String        @id @default(uuid())
+  clientId       String
+  amountMxn      Int
+  status         DepositStatus @default(HELD)
+  collectedAt    DateTime      @default(now())
+  creditedSaleId String?       @unique
+
+  client       Client       @relation(fields: [clientId], references: [id])
+  creditedSale Sale?        @relation(fields: [creditedSaleId], references: [id])
+  appointment  Appointment?
+
+  @@map("deposits")
+}
+
+enum PaymentMethod {
+  CASH
+  CARD
+  SPEI
+}
+
+model Sale {
+  id                    String        @id @default(uuid())
+  clientId              String
+  locationId            String
+  closedByUserId        String
+  cashRegisterSessionId String?
+  subtotalMxn           Int
+  discountMxn           Int           @default(0)
+  depositCreditMxn      Int           @default(0)
+  tipMxn                Int           @default(0) // reported separately from revenue, spec §5.5
+  totalMxn              Int
+  paymentMethod         PaymentMethod
+  createdAt             DateTime      @default(now())
+
+  client              Client               @relation(fields: [clientId], references: [id])
+  location            Location             @relation(fields: [locationId], references: [id])
+  closedBy            AppUser              @relation("SaleClosedBy", fields: [closedByUserId], references: [id])
+  cashRegisterSession CashRegisterSession? @relation(fields: [cashRegisterSessionId], references: [id])
+  lineItems           SaleLineItem[]
+  deposit             Deposit?
+  cfdiRequest         CfdiRequest?
+  commissionEntries   CommissionEntry[]
+  approvalRequests    ApprovalRequest[]
+
+  @@index([locationId, createdAt])
+  @@index([clientId])
+  @@map("sales")
+}
+
+enum SaleLineType {
+  SERVICE
+  ADD_ON
+  RETAIL
+  PACKAGE
+}
+
+model SaleLineItem {
+  id                  String       @id @default(uuid())
+  saleId              String
+  type                SaleLineType
+  productId           String? // RETAIL
+  protocolId          String? // SERVICE
+  addOnId             String? // ADD_ON
+  packageOptionId     String? // PACKAGE
+  recommendationTagId String? // same-day tag match → commission attribution
+  performedByUserId   String? // esthetician, for SERVICE/ADD_ON commission
+  priceMxn            Int
+
+  sale              Sale                     @relation(fields: [saleId], references: [id])
+  product           Product?                 @relation(fields: [productId], references: [id])
+  addOn             AddOn?                   @relation(fields: [addOnId], references: [id])
+  packageOption     PackageOption?           @relation(fields: [packageOptionId], references: [id])
+  recommendationTag RetailRecommendationTag? @relation(fields: [recommendationTagId], references: [id])
+  commissionEntry   CommissionEntry?
+
+  @@index([saleId])
+  @@map("sale_line_items")
+}
+
+enum CashSessionStatus {
+  OPEN
+  CLOSED
+}
+
+model CashRegisterSession {
+  id                String            @id @default(uuid())
+  locationId        String
+  openedByUserId    String
+  openingFloatMxn   Int
+  openedAt          DateTime          @default(now())
+  closedAt          DateTime?
+  closingCountedMxn Int?
+  status            CashSessionStatus @default(OPEN)
+
+  location Location @relation(fields: [locationId], references: [id])
+  openedBy AppUser  @relation("CashSessionOpenedBy", fields: [openedByUserId], references: [id])
+  sales    Sale[]
+
+  @@map("cash_register_sessions")
+}
+
+enum CfdiStatus {
+  PENDING
+  STAMPED
+  CANCELLED
+}
+
+model CfdiRequest {
+  id           String     @id @default(uuid())
+  saleId       String     @unique
+  status       CfdiStatus @default(PENDING)
+  pacReference String?
+  requestedAt  DateTime   @default(now())
+  stampedAt    DateTime?
+
+  sale Sale @relation(fields: [saleId], references: [id])
+
+  @@map("cfdi_requests")
+}
+
+enum ApprovalType {
+  DISCOUNT
+  REFUND
+  COMP
+  INVENTORY_ADJUSTMENT
+}
+
+enum ApprovalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+model ApprovalRequest {
+  id                String         @id @default(uuid())
+  type              ApprovalType
+  requestedByUserId String
+  approvedByUserId  String?
+  saleId            String?
+  clientId          String?
+  amountMxn         Int?
+  reason            String?
+  status            ApprovalStatus @default(PENDING)
+  createdAt         DateTime       @default(now())
+  decidedAt         DateTime?
+
+  requestedBy           AppUser                @relation("ApprovalRequested", fields: [requestedByUserId], references: [id])
+  approvedBy            AppUser?               @relation("ApprovalDecided", fields: [approvedByUserId], references: [id])
+  sale                  Sale?                  @relation(fields: [saleId], references: [id])
+  client                Client?                @relation(fields: [clientId], references: [id])
+  inventoryTransactions InventoryTransaction[]
+
+  @@index([status])
+  @@map("approval_requests")
+}
+
+// ---------------------------------------------------------------------------
+// Domain 6 — Commissions
+// Attribution mechanism (spec §5.4, build exactly this way): for each RETAIL
+// SaleLineItem, if recommendationTagId is set (same-day esthetician tag
+// match), commission goes to that esthetician; otherwise to whoever closed
+// the sale. SERVICE/ADD_ON/PACKAGE commissions attribute from
+// performedByUserId directly. A manual override always sets isOverride +
+// overriddenFromUserId + overrideReason — visible in the Admin attribution
+// log, never silent.
+// ---------------------------------------------------------------------------
+
+enum CommissionBasis {
+  SERVICE
+  ADD_ON
+  PACKAGE
+  RETAIL
+}
+
+enum CommissionCalcType {
+  FLAT_MXN
+  PERCENTAGE
+}
+
+// calcType supports both the spec's flat-MXN model (§5.4) and the shipped
+// mock UI's percentage model (COMMISSION_TRANSACTIONS) without a schema
+// change — confirm the real answer with the client, doesn't block building.
+model CommissionRule {
+  id           String             @id @default(uuid())
+  basis        CommissionBasis
+  calcType     CommissionCalcType
+  rateOrAmount Float // % (0-100) if PERCENTAGE, MXN if FLAT_MXN
+  role         Role? // null = applies regardless of role
+  isActive     Boolean            @default(true)
+
+  @@map("commission_rules")
+}
+
+model CommissionEntry {
+  id                   String          @id @default(uuid())
+  userId               String
+  saleLineItemId       String?         @unique
+  basis                CommissionBasis
+  baseAmountMxn        Int
+  ratePct              Float?
+  commissionMxn        Int
+  isOverride           Boolean         @default(false)
+  overriddenFromUserId String?
+  overrideReason       String?
+  payoutPeriodId       String?
+  createdAt            DateTime        @default(now())
+
+  user         AppUser                 @relation(fields: [userId], references: [id])
+  saleLineItem SaleLineItem?           @relation(fields: [saleLineItemId], references: [id])
+  payoutPeriod CommissionPayoutPeriod? @relation(fields: [payoutPeriodId], references: [id])
+  sale         Sale?                   @relation(fields: [saleId], references: [id])
+  saleId       String?
+
+  @@index([userId, payoutPeriodId])
+  @@map("commission_entries")
+}
+
+model CommissionPayoutPeriod {
+  id       String    @id @default(uuid())
+  startsOn DateTime
+  endsOn   DateTime
+  paidAt   DateTime?
+
+  entries CommissionEntry[]
+
+  @@map("commission_payout_periods")
+}
+
+// ---------------------------------------------------------------------------
+// Domain 7 — Config & cross-cutting
+// ---------------------------------------------------------------------------
+
+// Replaces the SETTINGS + BUSINESS_RULES_EXTRA mocks — one typed row per
+// config value (deposit rules, cancellation window, discount threshold,
+// anomaly thresholds) rather than a free-form blob, so each is
+// independently auditable via AuditLog and has one clear owner.
+model Setting {
+  key       String   @id // "deposit.requiredFirstTime" | "cancellation.windowHours" | ...
+  value     Json
+  updatedAt DateTime @updatedAt
+
+  @@map("settings")
+}
+
+model KpiTarget {
+  id           String @id @default(uuid())
+  kpi          String @unique
+  targetValue  Float
+  targetUnit   String // "MXN" | "pct" | "count"
+  vigenciaYear Int
+
+  @@map("kpi_targets")
+}
+
+enum AlertSeverity {
+  INFO
+  WARNING
+}
+
+// Replaces PanelAlertsContext's localStorage workaround — a real table so a
+// Staff-side action shows up on an open Admin session via Supabase Realtime,
+// not just the same browser's storage (that hack existed only because there
+// was no backend yet).
+model Alert {
+  id         String        @id @default(uuid())
+  text       String
+  severity   AlertSeverity @default(WARNING)
+  sourceType String? // "RETAIL_REMOVAL" | "LOW_STOCK" | ...
+  sourceId   String?
+  createdAt  DateTime      @default(now())
+  readAt     DateTime?
+
+  @@map("alerts")
 }

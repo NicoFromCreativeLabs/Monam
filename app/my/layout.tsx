@@ -1,6 +1,9 @@
 import { ClientNav } from "@/components/panel/ClientNav";
+import { requireClient } from "@/lib/auth/dal";
 
-export default function ClientLayout({ children }: LayoutProps<"/my">) {
+export default async function ClientLayout({ children }: LayoutProps<"/my">) {
+  await requireClient();
+
   return (
     <div className="flex min-h-full flex-1 flex-col">
       <ClientNav />
