@@ -4,7 +4,14 @@ import { useState } from "react";
 import { TopBar } from "@/components/panel/TopBar";
 import { Card } from "@/components/panel/Card";
 import { Badge } from "@/components/panel/Badge";
-import { OWNER, SETTINGS } from "@/lib/mock-data";
+import {
+  OWNER,
+  SETTINGS,
+  ADD_ONS,
+  KPI_TARGETS,
+  PERMISSIONS_MATRIX,
+  BUSINESS_RULES_EXTRA,
+} from "@/lib/mock-data";
 import { useLocations, type LocationRecord } from "@/components/panel/LocationsContext";
 import {
   useProtocols,
@@ -20,28 +27,37 @@ import {
 // once it actually opens — and the change is shared app-wide via
 // LocationsContext (location switcher, booking flow, staff assignment all
 // read the same state), not just this page's own copy.
-const emptyNewLocation = { name: "", address: "", isActive: false };
-const emptyNewProtocol = { name: "", tier: "Express" as ProtocolTier, duration: 30, price: 850, cost: 200 };
+const emptyNewLocation = { name: "", address: "", isActive: false, rentCost: "", maintenanceCost: "" };
+const emptyNewProtocol = { name: "", tier: "Targeted" as ProtocolTier, duration: 30, price: 850, cost: 200 };
 
 export default function AdminSettings() {
   const { locations, updateLocation, addLocation } = useLocations();
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [draft, setDraft] = useState<{ name: string; address: string; isActive: boolean }>({
+  const [draft, setDraft] = useState<{
+    name: string;
+    address: string;
+    isActive: boolean;
+    rentCost: string;
+    maintenanceCost: string;
+  }>({
     name: "",
     address: "",
     isActive: false,
+    rentCost: "",
+    maintenanceCost: "",
   });
   const [addOpen, setAddOpen] = useState(false);
   const [newLocation, setNewLocation] = useState(emptyNewLocation);
 
   const { protocols, updateProtocol, addProtocol, removeProtocol } = useProtocols();
-  const [editingProtocolId, setEditingProtocolId] = useState<string | null>(null);
-  const [protocolDraft, setProtocolDraft] = useState<{
+  const [protocolEditModal, setProtocolEditModal] = useState<{
+    id: string;
+    name: string;
     tier: ProtocolTier;
     duration: string;
     price: string;
     cost: string;
-  }>({ tier: "Express", duration: "", price: "", cost: "" });
+  } | null>(null);
   const [addProtocolOpen, setAddProtocolOpen] = useState(false);
   const [newProtocol, setNewProtocol] = useState(emptyNewProtocol);
 
@@ -54,11 +70,23 @@ export default function AdminSettings() {
 
   function startEdit(l: LocationRecord) {
     setEditingId(l.id);
-    setDraft({ name: l.name, address: l.address, isActive: l.isActive });
+    setDraft({
+      name: l.name,
+      address: l.address,
+      isActive: l.isActive,
+      rentCost: String(l.rentCost),
+      maintenanceCost: String(l.maintenanceCost),
+    });
   }
 
   function saveEdit(id: string) {
-    updateLocation(id, draft);
+    updateLocation(id, {
+      name: draft.name,
+      address: draft.address,
+      isActive: draft.isActive,
+      rentCost: Number(draft.rentCost) || 0,
+      maintenanceCost: Number(draft.maintenanceCost) || 0,
+    });
     setEditingId(null);
   }
 
@@ -69,14 +97,19 @@ export default function AdminSettings() {
       name: newLocation.name.trim(),
       address: newLocation.address.trim(),
       isActive: newLocation.isActive,
+      rentCost: Number(newLocation.rentCost) || 0,
+      maintenanceCost: Number(newLocation.maintenanceCost) || 0,
     });
     setNewLocation(emptyNewLocation);
     setAddOpen(false);
   }
 
-  function startEditProtocol(p: ProtocolRecord) {
-    setEditingProtocolId(p.id);
-    setProtocolDraft({
+  // Editing happens in a modal, not inline table inputs — a select plus
+  // three number inputs squeezed into one row breaks down on mobile widths.
+  function openEditProtocol(p: ProtocolRecord) {
+    setProtocolEditModal({
+      id: p.id,
+      name: p.name,
       tier: p.tier,
       duration: String(p.duration),
       price: String(p.price),
@@ -84,14 +117,16 @@ export default function AdminSettings() {
     });
   }
 
-  function saveEditProtocol(id: string) {
+  function saveEditProtocol() {
+    if (!protocolEditModal) return;
+    const { id, tier, duration, price, cost } = protocolEditModal;
     updateProtocol(id, {
-      tier: protocolDraft.tier,
-      duration: Number(protocolDraft.duration) || 0,
-      price: Number(protocolDraft.price) || 0,
-      cost: Number(protocolDraft.cost) || 0,
+      tier,
+      duration: Number(duration) || 0,
+      price: Number(price) || 0,
+      cost: Number(cost) || 0,
     });
-    setEditingProtocolId(null);
+    setProtocolEditModal(null);
   }
 
   function submitNewProtocol(e: React.FormEvent) {
@@ -142,6 +177,30 @@ export default function AdminSettings() {
                   value={newLocation.address}
                   onChange={(e) => setNewLocation((f) => ({ ...f, address: e.target.value }))}
                   placeholder="Calle, colonia, CDMX"
+                  className="w-full rounded-lg border border-ciruela/20 bg-hueso px-3 py-2 font-body text-sm text-ciruela placeholder:text-ciruela/40 focus:outline-none focus:ring-1 focus:ring-ciruela/40"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block font-body text-xs uppercase tracking-[0.14em] text-ciruela/50">
+                  Costo de renta (MXN/mes)
+                </label>
+                <input
+                  type="number"
+                  value={newLocation.rentCost}
+                  onChange={(e) => setNewLocation((f) => ({ ...f, rentCost: e.target.value }))}
+                  placeholder="0"
+                  className="w-full rounded-lg border border-ciruela/20 bg-hueso px-3 py-2 font-body text-sm text-ciruela placeholder:text-ciruela/40 focus:outline-none focus:ring-1 focus:ring-ciruela/40"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block font-body text-xs uppercase tracking-[0.14em] text-ciruela/50">
+                  Costo de mantenimiento (MXN/mes)
+                </label>
+                <input
+                  type="number"
+                  value={newLocation.maintenanceCost}
+                  onChange={(e) => setNewLocation((f) => ({ ...f, maintenanceCost: e.target.value }))}
+                  placeholder="0"
                   className="w-full rounded-lg border border-ciruela/20 bg-hueso px-3 py-2 font-body text-sm text-ciruela placeholder:text-ciruela/40 focus:outline-none focus:ring-1 focus:ring-ciruela/40"
                 />
               </div>
@@ -199,6 +258,32 @@ export default function AdminSettings() {
                           />
                         </div>
                       </div>
+                      <div className="grid grid-cols-1 gap-3 min-[700px]:grid-cols-2">
+                        <div>
+                          <label className="mb-1 block font-body text-xs uppercase tracking-[0.14em] text-ciruela/50">
+                            Costo de renta (MXN/mes)
+                          </label>
+                          <input
+                            type="number"
+                            value={draft.rentCost}
+                            onChange={(e) => setDraft((d) => ({ ...d, rentCost: e.target.value }))}
+                            className="w-full rounded-lg border border-ciruela/20 bg-hueso px-3 py-2 font-body text-sm text-ciruela focus:outline-none focus:ring-1 focus:ring-ciruela/40"
+                          />
+                        </div>
+                        <div>
+                          <label className="mb-1 block font-body text-xs uppercase tracking-[0.14em] text-ciruela/50">
+                            Costo de mantenimiento (MXN/mes)
+                          </label>
+                          <input
+                            type="number"
+                            value={draft.maintenanceCost}
+                            onChange={(e) =>
+                              setDraft((d) => ({ ...d, maintenanceCost: e.target.value }))
+                            }
+                            className="w-full rounded-lg border border-ciruela/20 bg-hueso px-3 py-2 font-body text-sm text-ciruela focus:outline-none focus:ring-1 focus:ring-ciruela/40"
+                          />
+                        </div>
+                      </div>
                       <label className="flex items-center gap-2 font-body text-sm text-ciruela">
                         <input
                           type="checkbox"
@@ -228,6 +313,10 @@ export default function AdminSettings() {
                       <div>
                         <p className="font-body text-sm text-ciruela">{l.name}</p>
                         <p className="font-body text-xs text-ciruela/50">{l.address}</p>
+                        <p className="mt-0.5 font-body text-xs text-ciruela/40">
+                          Renta ${l.rentCost.toLocaleString()} MXN · Mantenimiento $
+                          {l.maintenanceCost.toLocaleString()} MXN
+                        </p>
                       </div>
                       <div className="flex items-center gap-3">
                         <Badge tone={l.isActive ? "positive" : "neutral"}>
@@ -292,7 +381,7 @@ export default function AdminSettings() {
                   }
                   className="w-full rounded-lg border border-ciruela/20 bg-hueso px-3 py-2 font-body text-sm text-ciruela"
                 >
-                  <option value="Express">Express</option>
+                  <option value="Targeted">Targeted</option>
                   <option value="Signature">Signature</option>
                 </select>
               </div>
@@ -344,7 +433,8 @@ export default function AdminSettings() {
             </form>
           )}
 
-          <table className="w-full font-body text-sm text-ciruela">
+          <div className="overflow-x-auto">
+          <table className="w-full min-w-[560px] whitespace-nowrap font-body text-sm text-ciruela">
             <thead>
               <tr className="text-left text-xs uppercase tracking-wide text-ciruela/40">
                 <th className="pb-2">Protocolo</th>
@@ -355,110 +445,35 @@ export default function AdminSettings() {
               </tr>
             </thead>
             <tbody>
-              {protocols.map((p) => {
-                const isEditing = editingProtocolId === p.id;
-                return (
-                  <tr key={p.id} className="border-t border-ciruela/8">
-                    {isEditing ? (
-                      <>
-                        <td className="py-2">
-                          {p.name}{" "}
-                          <select
-                            value={protocolDraft.tier}
-                            onChange={(e) =>
-                              setProtocolDraft((d) => ({ ...d, tier: e.target.value as ProtocolTier }))
-                            }
-                            className="rounded-lg border border-ciruela/20 bg-hueso px-1.5 py-0.5 font-body text-xs text-ciruela"
-                          >
-                            <option value="Express">Express</option>
-                            <option value="Signature">Signature</option>
-                          </select>
-                        </td>
-                        <td className="py-2">
-                          <input
-                            type="number"
-                            value={protocolDraft.duration}
-                            onChange={(e) =>
-                              setProtocolDraft((d) => ({ ...d, duration: e.target.value }))
-                            }
-                            className="w-16 rounded border border-ciruela/25 bg-hueso px-1.5 py-1 font-body text-sm text-ciruela"
-                          />{" "}
-                          min
-                        </td>
-                        <td className="py-2 pr-3 text-right">
-                          <div className="flex items-center justify-end gap-1">
-                            $
-                            <input
-                              type="number"
-                              value={protocolDraft.price}
-                              onChange={(e) =>
-                                setProtocolDraft((d) => ({ ...d, price: e.target.value }))
-                              }
-                              className="w-20 rounded border border-ciruela/25 bg-hueso px-1.5 py-1 text-right font-body text-sm text-ciruela"
-                            />
-                          </div>
-                        </td>
-                        <td className="py-2 pr-6 text-right">
-                          <div className="flex items-center justify-end gap-1">
-                            $
-                            <input
-                              type="number"
-                              value={protocolDraft.cost}
-                              onChange={(e) =>
-                                setProtocolDraft((d) => ({ ...d, cost: e.target.value }))
-                              }
-                              className="w-20 rounded border border-ciruela/25 bg-hueso px-1.5 py-1 text-right font-body text-sm text-ciruela"
-                            />
-                          </div>
-                        </td>
-                        <td className="py-2 text-right">
-                          <div className="flex justify-end gap-2">
-                            <button
-                              onClick={() => saveEditProtocol(p.id)}
-                              className="rounded-full bg-ciruela px-2.5 py-1 font-body text-[11px] text-hueso"
-                            >
-                              Guardar
-                            </button>
-                            <button
-                              onClick={() => setEditingProtocolId(null)}
-                              className="rounded-full border border-ciruela/30 px-2.5 py-1 font-body text-[11px] text-ciruela/70"
-                            >
-                              Cancelar
-                            </button>
-                          </div>
-                        </td>
-                      </>
-                    ) : (
-                      <>
-                        <td className="py-2">
-                          {p.name} <span className="text-ciruela/40">· {p.tier}</span>
-                        </td>
-                        <td className="py-2 text-ciruela/60">{p.duration} min</td>
-                        <td className="py-2 pr-3 text-right">${p.price} MXN</td>
-                        <td className="py-2 pr-6 text-right text-ciruela/60">${p.cost} MXN</td>
-                        <td className="py-2 text-right">
-                          <div className="flex justify-end gap-3">
-                            <button
-                              onClick={() => startEditProtocol(p)}
-                              className="font-body text-[11px] text-ciruela underline"
-                            >
-                              Editar
-                            </button>
-                            <button
-                              onClick={() => removeProtocol(p.id)}
-                              className="font-body text-[11px] text-crepe underline"
-                            >
-                              Borrar
-                            </button>
-                          </div>
-                        </td>
-                      </>
-                    )}
-                  </tr>
-                );
-              })}
+              {protocols.map((p) => (
+                <tr key={p.id} className="border-t border-ciruela/8">
+                  <td className="py-2">
+                    {p.name} <span className="text-ciruela/40">· {p.tier}</span>
+                  </td>
+                  <td className="py-2 text-ciruela/60">{p.duration} min</td>
+                  <td className="py-2 pr-3 text-right">${p.price} MXN</td>
+                  <td className="py-2 pr-6 text-right text-ciruela/60">${p.cost} MXN</td>
+                  <td className="py-2 text-right">
+                    <div className="flex justify-end gap-3">
+                      <button
+                        onClick={() => openEditProtocol(p)}
+                        className="font-body text-[11px] text-ciruela underline"
+                      >
+                        Editar
+                      </button>
+                      <button
+                        onClick={() => removeProtocol(p.id)}
+                        className="font-body text-[11px] text-crepe underline"
+                      >
+                        Borrar
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
             </tbody>
           </table>
+          </div>
         </Card>
 
         <div className="grid grid-cols-1 gap-6 min-[1100px]:grid-cols-2">
@@ -527,7 +542,215 @@ export default function AdminSettings() {
             </label>
           </Card>
         </div>
+
+        <Card title="Add-ons">
+          <div className="overflow-x-auto">
+          <table className="w-full min-w-[520px] whitespace-nowrap font-body text-sm text-ciruela">
+            <thead>
+              <tr className="text-left text-xs uppercase tracking-wide text-ciruela/40">
+                <th className="pb-2">Add-on</th>
+                <th className="pb-2">Función</th>
+                <th className="pb-2 text-right">Minutos extra</th>
+                <th className="pb-2 text-right">Disponible en</th>
+              </tr>
+            </thead>
+            <tbody>
+              {ADD_ONS.map((a) => (
+                <tr key={a.id} className="border-t border-ciruela/8">
+                  <td className="py-2.5">{a.name}</td>
+                  <td className="py-2.5 text-ciruela/60">{a.function}</td>
+                  <td className="py-2.5 text-right text-ciruela/60">+{a.extraMinutes} min</td>
+                  <td className="py-2.5 text-right text-ciruela/50">{a.availableOn.join(", ")}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          </div>
+        </Card>
+
+        <Card title="Reglas de comisión y umbrales de anomalía">
+          <dl className="grid grid-cols-1 gap-4 min-[700px]:grid-cols-2">
+            <div className="flex items-center justify-between border-b border-ciruela/8 pb-2 font-body text-sm text-ciruela">
+              <dt>Comisión — servicio</dt>
+              <dd className="text-ciruela/60">{BUSINESS_RULES_EXTRA.commissionServicePct}%</dd>
+            </div>
+            <div className="flex items-center justify-between border-b border-ciruela/8 pb-2 font-body text-sm text-ciruela">
+              <dt>Comisión — retail</dt>
+              <dd className="text-ciruela/60">{BUSINESS_RULES_EXTRA.commissionRetailPct}%</dd>
+            </div>
+            <div className="flex items-center justify-between font-body text-sm text-ciruela">
+              <dt>Umbral de anomalía — descuento</dt>
+              <dd className="text-ciruela/60">{BUSINESS_RULES_EXTRA.anomalyDiscountThresholdPct}%</dd>
+            </div>
+            <div className="flex items-center justify-between font-body text-sm text-ciruela">
+              <dt>Umbral de anomalía — reembolso</dt>
+              <dd className="text-ciruela/60">
+                ${BUSINESS_RULES_EXTRA.anomalyRefundThresholdMXN.toLocaleString()} MXN
+              </dd>
+            </div>
+          </dl>
+          <p className="mt-4 font-body text-xs text-ciruela/40">
+            Valores de referencia — la edición en vivo de reglas de comisión es Fase 2.
+          </p>
+        </Card>
+
+        <Card title="Objetivos por KPI">
+          <div className="overflow-x-auto">
+          <table className="w-full min-w-[420px] whitespace-nowrap font-body text-sm text-ciruela">
+            <thead>
+              <tr className="text-left text-xs uppercase tracking-wide text-ciruela/40">
+                <th className="pb-2">KPI</th>
+                <th className="pb-2 text-right">Objetivo</th>
+                <th className="pb-2 text-right">Vigencia</th>
+              </tr>
+            </thead>
+            <tbody>
+              {KPI_TARGETS.map((k) => (
+                <tr key={k.kpi} className="border-t border-ciruela/8">
+                  <td className="py-2.5">{k.kpi}</td>
+                  <td className="py-2.5 text-right">{k.target}</td>
+                  <td className="py-2.5 text-right text-ciruela/50">{k.vigencia}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          </div>
+          <p className="mt-3 font-body text-xs text-ciruela/40">
+            Alimenta la columna &ldquo;Objetivo&rdquo; en Análisis → P&L y el avance mostrado en
+            cada tarjeta de KPI. Edición de objetivos es Fase 2.
+          </p>
+        </Card>
+
+        <Card title="Permisos por rol">
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[640px] whitespace-nowrap font-body text-sm text-ciruela">
+              <thead>
+                <tr className="text-left text-xs uppercase tracking-wide text-ciruela/40">
+                  <th className="pb-2 pr-4">Área</th>
+                  {PERMISSIONS_MATRIX.roles.map((r) => (
+                    <th key={r} className="pb-2 pr-4 text-left">
+                      {r}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {PERMISSIONS_MATRIX.rows.map((row) => (
+                  <tr key={row.area} className="border-t border-ciruela/8">
+                    <td className="py-2.5 pr-4">{row.area}</td>
+                    {row.access.map((val, i) => (
+                      <td key={i} className="py-2.5 pr-4 text-ciruela/60">
+                        {val}
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <p className="mt-3 font-body text-xs text-ciruela/40">
+            Matriz de referencia — edición granular de permisos por rol es Fase 2.
+          </p>
+        </Card>
       </div>
+
+      {protocolEditModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-ciruela/40 px-4"
+          onClick={() => setProtocolEditModal(null)}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-sm rounded-2xl bg-hueso p-5 shadow-xl"
+          >
+            <div className="mb-4 flex items-center justify-between">
+              <p className="font-display text-sm text-ciruela">Editar protocolo</p>
+              <button
+                onClick={() => setProtocolEditModal(null)}
+                aria-label="Cerrar"
+                className="text-ciruela/50 hover:text-ciruela"
+              >
+                ×
+              </button>
+            </div>
+            <p className="mb-4 font-body text-xs text-ciruela/50">{protocolEditModal.name}</p>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="col-span-2">
+                <label className="mb-1 block font-body text-xs uppercase tracking-[0.14em] text-ciruela/50">
+                  Nivel
+                </label>
+                <select
+                  value={protocolEditModal.tier}
+                  onChange={(e) =>
+                    setProtocolEditModal((m) =>
+                      m ? { ...m, tier: e.target.value as ProtocolTier } : m,
+                    )
+                  }
+                  className="w-full rounded-lg border border-ciruela/20 bg-hueso px-3 py-2 font-body text-sm text-ciruela"
+                >
+                  <option value="Targeted">Targeted</option>
+                  <option value="Signature">Signature</option>
+                </select>
+              </div>
+              <div>
+                <label className="mb-1 block font-body text-xs uppercase tracking-[0.14em] text-ciruela/50">
+                  Duración (min)
+                </label>
+                <input
+                  type="number"
+                  value={protocolEditModal.duration}
+                  onChange={(e) =>
+                    setProtocolEditModal((m) => (m ? { ...m, duration: e.target.value } : m))
+                  }
+                  className="w-full rounded-lg border border-ciruela/20 bg-hueso px-3 py-2 font-body text-sm text-ciruela focus:outline-none focus:ring-1 focus:ring-ciruela/40"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block font-body text-xs uppercase tracking-[0.14em] text-ciruela/50">
+                  Precio (MXN)
+                </label>
+                <input
+                  type="number"
+                  value={protocolEditModal.price}
+                  onChange={(e) =>
+                    setProtocolEditModal((m) => (m ? { ...m, price: e.target.value } : m))
+                  }
+                  className="w-full rounded-lg border border-ciruela/20 bg-hueso px-3 py-2 font-body text-sm text-ciruela focus:outline-none focus:ring-1 focus:ring-ciruela/40"
+                />
+              </div>
+              <div className="col-span-2">
+                <label className="mb-1 block font-body text-xs uppercase tracking-[0.14em] text-ciruela/50">
+                  Costo unitario (MXN)
+                </label>
+                <input
+                  type="number"
+                  value={protocolEditModal.cost}
+                  onChange={(e) =>
+                    setProtocolEditModal((m) => (m ? { ...m, cost: e.target.value } : m))
+                  }
+                  className="w-full rounded-lg border border-ciruela/20 bg-hueso px-3 py-2 font-body text-sm text-ciruela focus:outline-none focus:ring-1 focus:ring-ciruela/40"
+                />
+              </div>
+            </div>
+
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                onClick={() => setProtocolEditModal(null)}
+                className="rounded-full border border-ciruela px-4 py-1.5 font-body text-xs text-ciruela hover:bg-ciruela hover:text-hueso"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={saveEditProtocol}
+                className="rounded-full bg-ciruela px-4 py-1.5 font-body text-xs text-hueso"
+              >
+                Guardar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }

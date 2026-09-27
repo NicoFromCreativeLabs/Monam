@@ -9,6 +9,10 @@ export interface TreatmentItem {
   duration: string;
   price: number;
   description: string;
+  // Only set on the Targeted item: the ampoule "flavors" the esthetician
+  // chooses from after an in-person evaluation. Informational only, not
+  // separately bookable.
+  ampoules?: string[];
 }
 
 export interface PhilosophyPillar {
@@ -94,7 +98,9 @@ export interface Content {
   };
   location: {
     heading: string;
-    hours: string;
+    // Per-day public hours — Tuesday closes earlier than the rest of the
+    // week, so a single string can't represent the real schedule.
+    hours: { day: string; hours: string }[];
     locations: { name: string; address: string }[];
     ctaDirections: string;
     ctaVisit: string;

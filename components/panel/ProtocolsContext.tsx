@@ -3,7 +3,7 @@
 import { createContext, useContext, useState, type ReactNode } from "react";
 import { PROTOCOLS as SEED_PROTOCOLS } from "@/lib/mock-data";
 
-export type ProtocolTier = "Express" | "Signature";
+export type ProtocolTier = "Targeted" | "Signature";
 
 export interface ProtocolRecord {
   id: string;
@@ -21,10 +21,10 @@ const ProtocolsContext = createContext<{
   removeProtocol: (id: string) => void;
 } | null>(null);
 
-// "+" is meaningful here (Glow vs. Glow+ are different protocols) so it
-// maps to "-plus" rather than being stripped — otherwise "Glow"/"Glow+" and
-// "Purify"/"Purify+" collide on the same slug and React throws duplicate
-// key warnings.
+// "+" would be meaningful in a protocol name (e.g. a future "Glow+" distinct
+// from "Glow") so it maps to "-plus" rather than being stripped, to avoid
+// two differently-named protocols colliding on the same slug and React
+// throwing duplicate key warnings.
 function slugify(name: string) {
   return (
     name

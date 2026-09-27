@@ -1,6 +1,6 @@
 # MONÂM OS
 
-Platform + landing page for Monâm Skin Studio (Mexico City — Roma Norte, Lomas de Chapultepec).
+Platform + landing page for Monâm Skin Studio (Mexico City — Roma Norte, Prado Norte).
 
 ## Specs (source of truth — read these, not this README, for requirements)
 

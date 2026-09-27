@@ -7,7 +7,9 @@ export function Footer({ content }: { content: Content }) {
       <div className="mx-auto flex max-w-[1200px] flex-col gap-10 min-[860px]:flex-row min-[860px]:justify-between">
         <div>
           <p className="font-display text-xl tracking-[0.12em] text-ciruela">MONÂM</p>
-          <p className="mt-2 font-script text-xl text-ciruela/70">{footer.script}</p>
+          <p className="mt-2 font-body text-xs uppercase tracking-[0.3em] text-ciruela/50">
+            {footer.script}
+          </p>
         </div>
 
         <div className="flex gap-16">

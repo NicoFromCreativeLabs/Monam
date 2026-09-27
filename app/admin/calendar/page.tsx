@@ -61,7 +61,7 @@ export default function AdminCalendar() {
               <span className="h-2.5 w-2.5 rounded-full bg-ciruela" /> Signature
             </span>
             <span className="flex items-center gap-1.5">
-              <span className="h-2.5 w-2.5 rounded-full bg-crepe" /> Express
+              <span className="h-2.5 w-2.5 rounded-full bg-crepe" /> Targeted
             </span>
           </div>
         </Card>

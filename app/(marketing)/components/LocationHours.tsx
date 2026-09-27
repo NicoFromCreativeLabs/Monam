@@ -18,7 +18,15 @@ export function LocationHours({ content }: { content: Content }) {
         <h2 className="mt-6 font-display text-3xl text-hueso min-[860px]:text-4xl">
           {location.heading}
         </h2>
-        <p className="mt-2 font-body text-sm text-hueso/80">{location.hours}</p>
+
+        <dl className="mx-auto mt-4 grid max-w-xs grid-cols-2 gap-x-6 gap-y-1 text-left">
+          {location.hours.map((row) => (
+            <div key={row.day} className="contents">
+              <dt className="font-body text-xs text-hueso/70">{row.day}</dt>
+              <dd className="text-right font-body text-xs text-hueso/90">{row.hours}</dd>
+            </div>
+          ))}
+        </dl>
 
         <div className="mx-auto mt-10 grid max-w-2xl grid-cols-1 gap-6 min-[860px]:grid-cols-2">
           {location.locations.map((loc) => (

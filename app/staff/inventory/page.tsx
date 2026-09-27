@@ -70,7 +70,8 @@ function InventoryCard({
                 <p>{item.product}</p>
                 <p className="text-xs text-ciruela/50">
                   SKU {item.sku} · Par {item.par}
-                  {showPao && "pao" in item ? ` · PAO ${item.pao}` : ""}
+                  {"expiresOn" in item ? ` · Vence ${item.expiresOn}` : ""}
+                  {showPao && "pao" in item ? ` · Abierto ${item.opensOn} · PAO ${item.pao}` : ""}
                 </p>
               </div>
               <div className="flex items-center gap-3">

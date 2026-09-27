@@ -1,6 +1,6 @@
 {
   "lang": "es",
-  "announcement": "Ahora abierto · Lunes a sábado, 9–6 · Reserva por WhatsApp",
+  "announcement": "Ahora abierto · Reserva por WhatsApp",
   "nav": {
     "estudio": "Estudio",
     "philosophy": "Filosofía",
@@ -11,21 +11,21 @@
   },
   "hero": {
     "subtitle": "Skin Studio",
-    "eyebrow": "Wellness Hub · Skincare Studio",
-    "headline": "Brilla desde adentro.",
-    "script": "el bienestar es el estado natural de mi cuerpo y mente",
-    "body": "Tu piel tiene memoria, y nosotros también. Registramos tu tipo de piel, sensibilidades y tratamientos anteriores, así que cada visita continúa exactamente donde quedó la última.",
+    "eyebrow": "Es solo skin studio",
+    "headline": "Tu piel, bien entendida.",
+    "script": "Ciencia sólida y sensorialidad elevada para piel, cabello y cuerpo.",
+    "body": "Creemos en un cuidado donde la eficacia, la evidencia y el criterio conviven con una selección consciente de lo que usamos sobre nuestra piel y cuerpo.",
     "ctaPrimary": "Reserva tu facial",
     "ctaSecondary": "Ver tratamientos"
   },
   "featured": {
     "eyebrow": "Signature",
-    "heading": "Faciales & Tratamientos",
-    "description": "Faciales de alta performance adaptados a las necesidades únicas de tu piel. Resultados visibles, relajación profunda.",
+    "heading": "Faciales",
+    "description": "Faciales personalizados de 30 y 60 minutos, diseñados alrededor de lo que tu piel necesita hoy.",
     "items": [
-      { "protocol": "Glow+", "label": "El Glow Signature", "icon": "sunburst" },
+      { "protocol": "Longevity", "label": "El Ritual Longevity", "icon": "sunburst" },
       { "protocol": "Lift", "label": "Sculpt & Lift", "icon": "arches" },
-      { "protocol": "Reset", "label": "Clear Reset", "icon": "ring" }
+      { "protocol": "Purify", "label": "Purify Profundo", "icon": "ring" }
     ]
   },
   "philosophy": {
@@ -34,8 +34,8 @@
     "pillars": [
       {
         "icon": "organico",
-        "title": "Orgánico",
-        "description": "Ingredientes suaves y naturales que respetan el equilibrio de tu piel, nunca químicos agresivos."
+        "title": "Criterio",
+        "description": "Lo mejor de la ciencia y la naturaleza, elegido con evidencia y sin comprometer eficacia."
       },
       {
         "icon": "serenidad",
@@ -44,36 +44,42 @@
       },
       {
         "icon": "balance",
-        "title": "Balance",
-        "description": "Skincare y nutrición como un mismo sistema, así lo que tomas y lo que aplicas trabajan juntos."
+        "title": "Personalización",
+        "description": "Tu piel tiene memoria, y nosotros también. Registramos tu tipo de piel, sensibilidad y tratamientos anteriores, así que cada visita continúa exactamente donde quedó la última."
       }
     ]
   },
   "treatments": {
     "eyebrow": "Menú · Faciales",
-    "heading": "Tratamientos",
-    "tagline": "Tu salud es una inversión, no un gasto.",
-    "note": "Reservas por duración, Express o Signature. Tu protocolo se asigna tras una valoración de piel en persona.",
+    "heading": "Faciales",
+    "tagline": "Hecho alrededor de ti",
+    "note": "Reservas por duración, Targeted o Signature. Tu protocolo se asigna tras una valoración de piel en persona y tus objetivos.",
     "items": [
-      { "name": "Reset", "tier": "Express", "duration": "30 min", "price": 850, "description": "Un reinicio rápido para piel cansada: limpieza profunda y luminosidad inmediata." },
-      { "name": "Calm", "tier": "Express", "duration": "30 min", "price": 850, "description": "Calma la piel sensible o irritada con ingredientes suaves y una textura fresca." },
-      { "name": "Purify", "tier": "Express", "duration": "30 min", "price": 850, "description": "Destapa los poros y equilibra la piel grasa sin resecarla." },
-      { "name": "Glow", "tier": "Express", "duration": "30 min", "price": 850, "description": "Un boost de luminosidad antes de cualquier ocasión especial." },
-      { "name": "Glow+", "tier": "Signature", "duration": "60 min", "price": 1900, "description": "El ritual completo de luminosidad: exfoliación, hidratación profunda y masaje facial." },
-      { "name": "Purify+", "tier": "Signature", "duration": "60 min", "price": 1900, "description": "Limpieza profunda y extracciones cuidadosas para congestión persistente." },
-      { "name": "Lift", "tier": "Signature", "duration": "60 min", "price": 1900, "description": "Masaje de esculpido facial que tensa, define y relaja en una sola sesión." },
-      { "name": "Calm+", "tier": "Signature", "duration": "60 min", "price": 1900, "description": "El ritual de calma total: fortalece la barrera de tu piel y baja el estrés visible." }
+      {
+        "name": "Targeted",
+        "tier": "Targeted",
+        "duration": "30 min",
+        "price": 850,
+        "description": "Un facial personalizado a tu piel el día de tu cita. Tras una valoración en cabina, tu esteticista selecciona la ampolla ideal para ti.",
+        "ampoules": ["Glow & Hydration", "Calm & Restore", "Purify", "Firmness & Age Support", "Revitalize"]
+      },
+      { "name": "Purify", "tier": "Signature", "duration": "60 min", "price": 1900, "description": "Descongestiona, limpia en profundidad y libera poros con extracciones cuidadosas." },
+      { "name": "Lift", "tier": "Signature", "duration": "60 min", "price": 1900, "description": "Un ritual de escultura facial que combina tecnología y masaje para tonificar, definir y favorecer una apariencia más firme." },
+      { "name": "Longevity", "tier": "Signature", "duration": "60 min", "price": 1900, "description": "Tratamiento intensivo con productos BABOR, enfocado en signos visibles de edad, luminosidad y vitalidad, ideal también como preparación antes de un evento." },
+      { "name": "Microbiomic", "tier": "Signature", "duration": "60 min", "price": 1900, "description": "Diseñado con productos BABOR para piel sensible, reactiva o estresada. Ayuda a fortalecer la barrera y recuperar confort, hidratación y equilibrio." },
+      { "name": "Collagen Botox", "tier": "Signature", "duration": "60 min", "price": 1900, "description": "Un tratamiento de firmeza y volumen que ayuda a suavizar líneas de expresión y devolver densidad visible a la piel." },
+      { "name": "Vegan Glow", "tier": "Signature", "duration": "60 min", "price": 1900, "description": "Un facial 100% vegano que ilumina e hidrata la piel con ingredientes botánicos, dejando un brillo fresco y natural." }
     ],
     "currency": "MXN",
     "cta": "Reservar un tratamiento"
   },
   "stripe": {
-    "quote": "Cada día es un nuevo comienzo. Respira profundo, sonríe y empieza de nuevo.",
+    "quote": "Haz espacio para cuidarte bien.",
     "cta": "Reservar ahora"
   },
   "circle": {
     "corner1": "El bienestar es más que una tendencia. Es un estilo de vida que abraza el autocuidado, el equilibrio y la salud integral.",
-    "corner2": "En Monâm creemos que la verdadera belleza empieza por sentirte bien por dentro.",
+    "corner2": "Menos ruido, mejores elecciones y un cuidado pensado para durar.",
     "heading1": "DONDE LA PIEL",
     "heading2": "ENCUENTRA CALMA",
     "ring": "Ciencia gentil, cuidado personal y resultados que se sienten desde la primera sesión, para que tu piel refleje bienestar real · "
@@ -88,11 +94,11 @@
       "skinType": "Mixta",
       "allergies": "Sin alergias registradas",
       "preferences": "Aromaterapia · Silencio",
-      "lastTreatment": "Glow, hace 3 semanas"
+      "lastTreatment": "Targeted, hace 3 semanas"
     }
   },
   "social": {
-    "handle": "@monam.wellness",
+    "handle": "@monam.skinstudio",
     "cta": "Síguenos",
     "quotes": [
       "Experimenta la mezcla perfecta entre ciencia y relajación, y deja que tu piel refleje la versión más sana de ti.",
@@ -102,16 +108,24 @@
   },
   "location": {
     "heading": "Visítanos",
-    "hours": "Lunes a sábado, 9–6",
+    "hours": [
+      { "day": "Lunes", "hours": "10:00–20:00" },
+      { "day": "Martes", "hours": "10:00–18:00" },
+      { "day": "Miércoles", "hours": "10:00–20:00" },
+      { "day": "Jueves", "hours": "10:00–20:00" },
+      { "day": "Viernes", "hours": "10:00–20:00" },
+      { "day": "Sábado", "hours": "11:00–19:00" },
+      { "day": "Domingo", "hours": "10:00–15:00" }
+    ],
     "locations": [
-      { "name": "Roma Norte", "address": "[PLACEHOLDER: Durango 258, Roma Norte, CDMX]" },
-      { "name": "Lomas de Chapultepec", "address": "[PLACEHOLDER: Av. Prado Norte 440, Lomas de Chapultepec, CDMX]" }
+      { "name": "Roma Norte", "address": "Durango 258, Roma Nte., Cuauhtémoc, 06700 Ciudad de México, CDMX, México" },
+      { "name": "Prado Norte", "address": "Próximamente" }
     ],
     "ctaDirections": "Cómo llegar",
     "ctaVisit": "Reservar una visita"
   },
   "footer": {
-    "script": "brilla desde adentro",
+    "script": "Monâm Skin Studio",
     "explore": { "heading": "Explorar", "links": ["Filosofía", "Tratamientos", "Visítanos"] },
     "connect": { "heading": "Conecta", "links": ["Instagram", "Sitio web", "Reservar"] },
     "copyright": "© 2026 Monâm Skin Studio."

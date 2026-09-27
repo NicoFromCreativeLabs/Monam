@@ -36,10 +36,10 @@ export default function ClientHome() {
 
       <Card title="Reagenda rápida">
         <p className="font-body text-sm text-ciruela/70">
-          Mismo protocolo, misma esteticista — elige tu próximo horario en un toque.
+          Repite tu protocolo y elige tu próximo horario.
         </p>
         <button className="mt-4 rounded-full bg-ciruela px-5 py-2.5 font-body text-sm text-hueso">
-          Reagendar Glow con Ana Torres
+          Reagendar Glow
         </button>
       </Card>
 

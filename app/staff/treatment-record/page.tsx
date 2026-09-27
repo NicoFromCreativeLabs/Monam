@@ -5,7 +5,7 @@ import { TopBar } from "@/components/panel/TopBar";
 import { Card } from "@/components/panel/Card";
 import { staffIdentity, useStaffRole } from "@/components/panel/StaffRoleContext";
 import { useProtocols } from "@/components/panel/ProtocolsContext";
-import { TODAY_APPOINTMENTS, BACKBAR_INVENTORY } from "@/lib/mock-data";
+import { TODAY_APPOINTMENTS, BACKBAR_INVENTORY, ADD_ONS } from "@/lib/mock-data";
 
 type UsedProduct = { sku: string; amountMl: string };
 
@@ -22,6 +22,12 @@ export default function StaffTreatmentRecord() {
   const [protocol, setProtocol] = useState(tierProtocols[0]?.name ?? "");
   const backbarAtLocation = BACKBAR_INVENTORY.filter((b) => b.location === identity.location);
   const [usedProducts, setUsedProducts] = useState<UsedProduct[]>([{ sku: "", amountMl: "" }]);
+  const [selectedAddOns, setSelectedAddOns] = useState<string[]>([]);
+  const availableAddOns = ADD_ONS.filter((a) => a.availableOn.includes(protocol));
+
+  function toggleAddOn(id: string) {
+    setSelectedAddOns((prev) => (prev.includes(id) ? prev.filter((a) => a !== id) : [...prev, id]));
+  }
 
   function updateUsedProduct(index: number, patch: Partial<UsedProduct>) {
     setUsedProducts((prev) => prev.map((p, i) => (i === index ? { ...p, ...patch } : p)));
@@ -41,7 +47,10 @@ export default function StaffTreatmentRecord() {
                 {tierProtocols.map((p) => (
                   <button
                     key={p.id}
-                    onClick={() => setProtocol(p.name)}
+                    onClick={() => {
+                      setProtocol(p.name);
+                      setSelectedAddOns([]);
+                    }}
                     className={`rounded-lg border px-3 py-2 text-left font-body text-sm ${
                       protocol === p.name
                         ? "border-ciruela bg-ciruela text-hueso"
@@ -53,6 +62,36 @@ export default function StaffTreatmentRecord() {
                 ))}
               </div>
             </div>
+
+            {availableAddOns.length > 0 && (
+              <div className="mt-5">
+                <p className="mb-2 font-body text-xs uppercase tracking-[0.14em] text-ciruela/50">
+                  Add-ons compatibles
+                </p>
+                <div className="space-y-2">
+                  {availableAddOns.map((a) => (
+                    <label
+                      key={a.id}
+                      className="flex items-center justify-between rounded-lg border border-ciruela/20 px-3 py-2 font-body text-sm text-ciruela"
+                    >
+                      <span className="flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          checked={selectedAddOns.includes(a.id)}
+                          onChange={() => toggleAddOn(a.id)}
+                          className="h-4 w-4 accent-ciruela"
+                        />
+                        <span>
+                          {a.name}
+                          <span className="ml-1 text-xs text-ciruela/50">· {a.function}</span>
+                        </span>
+                      </span>
+                      <span className="text-xs text-ciruela/40">+{a.extraMinutes} min</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            )}
 
             <div className="mt-5">
               <p className="mb-2 font-body text-xs uppercase tracking-[0.14em] text-ciruela/50">

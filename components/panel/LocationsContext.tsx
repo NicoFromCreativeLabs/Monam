@@ -8,6 +8,8 @@ export interface LocationRecord {
   name: string;
   address: string;
   isActive: boolean;
+  rentCost: number;
+  maintenanceCost: number;
 }
 
 const LocationsContext = createContext<{

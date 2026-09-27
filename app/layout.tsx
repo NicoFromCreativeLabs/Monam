@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import { Fraunces, Inter, Prata, Beau_Rivage } from "next/font/google";
 import { LocationsProvider } from "@/components/panel/LocationsContext";
 import { ProtocolsProvider } from "@/components/panel/ProtocolsContext";
+import { PanelAlertsProvider } from "@/components/panel/PanelAlertsContext";
+import { StaffRosterProvider } from "@/components/panel/StaffRosterContext";
 import { LoadingCurtain } from "@/components/LoadingCurtain";
 import "./globals.css";
 
@@ -44,7 +46,11 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       <body className="min-h-full flex flex-col">
         <LoadingCurtain />
         <LocationsProvider>
-          <ProtocolsProvider>{children}</ProtocolsProvider>
+          <ProtocolsProvider>
+            <StaffRosterProvider>
+              <PanelAlertsProvider>{children}</PanelAlertsProvider>
+            </StaffRosterProvider>
+          </ProtocolsProvider>
         </LocationsProvider>
       </body>
     </html>

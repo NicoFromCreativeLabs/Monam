@@ -1,14 +1,17 @@
 import { TopBar } from "@/components/panel/TopBar";
 import { Card } from "@/components/panel/Card";
-import { OWNER, COMMISSION_ENTRIES, ATTRIBUTION_LOG } from "@/lib/mock-data";
+import { OWNER, COMMISSION_ENTRIES, COMMISSION_TRANSACTIONS, ATTRIBUTION_LOG } from "@/lib/mock-data";
 
-// Per-staff/per-period totals (spec §5.4). Admin-visible only in Fase 1 —
-// staff self-service "My Commission" is Phase 2 per the signed rescope.
+// Equipo → Comisiones. Per-staff/per-period totals (spec §5.4) plus, per the
+// client's admin review, a detail-per-transaction breakdown — the summary
+// table on its own didn't let the owner check a single commission back to
+// the sale that generated it. Admin-visible only in Fase 1 — staff
+// self-service "My Commission" is Phase 2 per the signed rescope.
 export default function AdminCommissions() {
   return (
     <>
       <TopBar title="Comisiones" userName={OWNER.name} userRole={OWNER.role} allowBothLocations />
-      <div className="flex-1 space-y-6 px-8 py-6">
+      <div className="flex-1 space-y-6 px-4 py-6 min-[860px]:px-8">
         <Card title="Sep 2026 — por persona">
           <table className="w-full font-body text-sm text-ciruela">
             <thead>
@@ -28,6 +31,35 @@ export default function AdminCommissions() {
                   <td className="py-3 text-right text-ciruela/60">${c.service.toLocaleString()}</td>
                   <td className="py-3 text-right text-ciruela/60">${c.retail.toLocaleString()}</td>
                   <td className="py-3 text-right font-medium">${c.total.toLocaleString()} MXN</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </Card>
+
+        <Card title="Detalle por transacción">
+          <table className="w-full font-body text-sm text-ciruela">
+            <thead>
+              <tr className="text-left text-xs uppercase tracking-wide text-ciruela/40">
+                <th className="pb-2">Fecha</th>
+                <th className="pb-2">Personal</th>
+                <th className="pb-2">Clienta</th>
+                <th className="pb-2">Concepto</th>
+                <th className="pb-2 text-right">Base</th>
+                <th className="pb-2 text-right">Tasa</th>
+                <th className="pb-2 text-right">Comisión</th>
+              </tr>
+            </thead>
+            <tbody>
+              {COMMISSION_TRANSACTIONS.map((t) => (
+                <tr key={t.id} className="border-t border-ciruela/8">
+                  <td className="py-2.5 text-ciruela/50">{t.date}</td>
+                  <td className="py-2.5">{t.staff}</td>
+                  <td className="py-2.5 text-ciruela/60">{t.client}</td>
+                  <td className="py-2.5 text-ciruela/60">{t.concept}</td>
+                  <td className="py-2.5 text-right text-ciruela/60">${t.base.toLocaleString()}</td>
+                  <td className="py-2.5 text-right text-ciruela/50">{t.ratePct}%</td>
+                  <td className="py-2.5 text-right font-medium">${t.commission.toLocaleString()}</td>
                 </tr>
               ))}
             </tbody>

@@ -39,6 +39,21 @@ function DownloadButton({ onClick }: { onClick: () => void }) {
 
 type LedgerChoice = "Retail" | "Backbar" | "Ambos";
 
+interface EditDraft {
+  sku: string;
+  originalLedger: "Retail" | "Backbar";
+  product: string;
+  location: string;
+  ledger: "Retail" | "Backbar";
+  qty: string;
+  par: string;
+  price: string;
+  cost: string;
+  expiresOn: string;
+  opensOn: string;
+  pao: string;
+}
+
 const emptyNewProduct = {
   name: "",
   location: "",
@@ -61,19 +76,7 @@ export default function AdminInventory() {
   const [tab, setTab] = useState<Tab>("todos");
   const [retailAll, setRetail] = useState<RetailInventoryItem[]>(RETAIL_INVENTORY);
   const [backbarAll, setBackbar] = useState<BackbarInventoryItem[]>(BACKBAR_INVENTORY);
-  const [editingSku, setEditingSku] = useState<string | null>(null);
-  const [editingLedger, setEditingLedger] = useState<"Retail" | "Backbar" | null>(null);
-  const [draft, setDraft] = useState<{
-    qty: string;
-    par: string;
-    price: string;
-    ledger: "Retail" | "Backbar";
-  }>({
-    qty: "",
-    par: "",
-    price: "",
-    ledger: "Retail",
-  });
+  const [editModal, setEditModal] = useState<EditDraft | null>(null);
   const [restockOnly, setRestockOnly] = useState(false);
   const [addProductOpen, setAddProductOpen] = useState(false);
   const [newProduct, setNewProduct] = useState({
@@ -96,100 +99,84 @@ export default function AdminInventory() {
   const locationLabel =
     selectedNames.length > 1 ? selectedNames.join(" + ") : selectedNames[0];
 
-  function startEdit(
-    item: { sku: string; qty: number; par: number; price?: number },
+  // Editing happens in a single modal shared by all three tables/tabs,
+  // rather than turning a table row into inline inputs — that inline
+  // pattern squeezed a select + two number inputs + two buttons into one
+  // row, which broke down badly below desktop width.
+  function openEdit(
+    item: RetailInventoryItem | BackbarInventoryItem,
     ledger: "Retail" | "Backbar",
   ) {
-    setEditingSku(item.sku);
-    setEditingLedger(ledger);
-    setDraft({
+    const isRetail = ledger === "Retail";
+    const retailItem = isRetail ? (item as RetailInventoryItem) : null;
+    const backbarItem = !isRetail ? (item as BackbarInventoryItem) : null;
+    setEditModal({
+      sku: item.sku,
+      originalLedger: ledger,
+      product: item.product,
+      location: item.location,
+      ledger,
       qty: String(item.qty),
       par: String(item.par),
-      price: item.price != null ? String(item.price) : "",
-      ledger,
+      price: retailItem ? String(retailItem.price) : "",
+      cost: retailItem ? String(retailItem.cost) : "",
+      expiresOn: retailItem ? retailItem.expiresOn : "",
+      opensOn: backbarItem ? backbarItem.opensOn : "",
+      pao: backbarItem ? backbarItem.pao : "",
     });
   }
 
-  function cancelEdit() {
-    setEditingSku(null);
-    setEditingLedger(null);
-  }
-
-  function saveRetail(sku: string) {
-    setRetail((prev) =>
-      prev.map((i) =>
-        i.sku === sku
-          ? { ...i, qty: Number(draft.qty) || 0, par: Number(draft.par) || 0, price: Number(draft.price) || 0 }
-          : i,
-      ),
-    );
-    setEditingSku(null);
-    setEditingLedger(null);
-  }
-
-  function saveBackbar(sku: string) {
-    setBackbar((prev) =>
-      prev.map((i) =>
-        i.sku === sku ? { ...i, qty: Number(draft.qty) || 0, par: Number(draft.par) || 0 } : i,
-      ),
-    );
-    setEditingSku(null);
-    setEditingLedger(null);
+  function closeEdit() {
+    setEditModal(null);
   }
 
   // Moving a product between ledgers removes it from one array and adds it
-  // to the other with sensible defaults for the fields that ledger has and
-  // the source didn't (spec §5.3 — still never merged into one stock line,
-  // this just lets a mis-categorized product be corrected).
-  function moveLedger(sku: string, from: "Retail" | "Backbar") {
-    if (from === "Retail") {
-      const item = retailAll.find((i) => i.sku === sku);
-      if (!item) return;
-      setRetail((prev) => prev.filter((i) => i.sku !== sku));
-      setBackbar((prev) => [
-        ...prev,
-        {
-          sku: item.sku,
-          product: item.product,
-          location: item.location,
-          qty: Number(draft.qty) || 0,
-          par: Number(draft.par) || 0,
-          opensOn: "—",
-          pao: "—",
-        },
-      ]);
-    } else {
-      const item = backbarAll.find((i) => i.sku === sku);
-      if (!item) return;
-      setBackbar((prev) => prev.filter((i) => i.sku !== sku));
-      setRetail((prev) => [
-        ...prev,
-        {
-          sku: item.sku,
-          product: item.product,
-          location: item.location,
-          qty: Number(draft.qty) || 0,
-          par: Number(draft.par) || 0,
-          price: Number(draft.price) || 0,
-          cost: 0,
-          expiresOn: "—",
-        },
-      ]);
-    }
-    setEditingSku(null);
-    setEditingLedger(null);
-  }
+  // to the other — per spec §5.3 retail and backbar are never one stock
+  // line, this just lets a mis-categorized product be corrected.
+  function saveEditModal() {
+    if (!editModal) return;
+    const { sku, originalLedger, ledger, product, location, qty, par, price, cost, expiresOn, opensOn, pao } =
+      editModal;
+    const qtyNum = Number(qty) || 0;
+    const parNum = Number(par) || 0;
 
-  // Dispatches to the right ledger's save — used by the combined "Todos"
-  // table, which edits both ledgers from one place. If the ledger itself
-  // changed, that's a move, not an in-place update.
-  function saveEdit(sku: string) {
-    if (draft.ledger !== editingLedger) {
-      if (editingLedger) moveLedger(sku, editingLedger);
-      return;
+    if (ledger !== originalLedger) {
+      if (originalLedger === "Retail") {
+        setRetail((prev) => prev.filter((i) => i.sku !== sku));
+        setBackbar((prev) => [
+          ...prev,
+          { sku, product, location, qty: qtyNum, par: parNum, opensOn: opensOn || "—", pao: pao || "—" },
+        ]);
+      } else {
+        setBackbar((prev) => prev.filter((i) => i.sku !== sku));
+        setRetail((prev) => [
+          ...prev,
+          {
+            sku,
+            product,
+            location,
+            qty: qtyNum,
+            par: parNum,
+            price: Number(price) || 0,
+            cost: Number(cost) || 0,
+            expiresOn: expiresOn || "—",
+          },
+        ]);
+      }
+    } else if (ledger === "Retail") {
+      setRetail((prev) =>
+        prev.map((i) =>
+          i.sku === sku
+            ? { ...i, qty: qtyNum, par: parNum, price: Number(price) || 0, cost: Number(cost) || 0, expiresOn }
+            : i,
+        ),
+      );
+    } else {
+      setBackbar((prev) =>
+        prev.map((i) => (i.sku === sku ? { ...i, qty: qtyNum, par: parNum, opensOn, pao } : i)),
+      );
     }
-    if (editingLedger === "Retail") saveRetail(sku);
-    else if (editingLedger === "Backbar") saveBackbar(sku);
+    setEditModal(null);
   }
 
   // A brand can supply both retail and backbar versions of a product, but
@@ -502,13 +489,15 @@ export default function AdminInventory() {
                   : "Sin productos registrados en esta sucursal todavía."}
               </p>
             ) : (
-            <table className="w-full font-body text-sm text-ciruela">
+            <div className="overflow-x-auto">
+            <table className="w-full min-w-[640px] whitespace-nowrap font-body text-sm text-ciruela">
               <thead>
                 <tr className="text-left text-xs uppercase tracking-wide text-ciruela/40">
                   <th className="pb-2">SKU</th>
                   <th className="pb-2">Producto</th>
                   <th className="pb-2">Ledger</th>
                   <th className="pb-2 pr-6">Ubicación</th>
+                  <th className="pb-2 pr-6">Caducidad</th>
                   <th className="pb-2 pr-3 text-right">Cant.</th>
                   <th className="pb-2 pr-6 text-right">Par</th>
                   <th className="pb-2" />
@@ -520,86 +509,38 @@ export default function AdminInventory() {
                   ...backbar.map((i) => ({ ...i, ledger: "Backbar" as const })),
                 ].map((item) => {
                   const low = item.qty < item.par;
-                  const isEditing = editingSku === item.sku;
                   return (
                     <tr key={item.sku} className="border-t border-ciruela/8">
                       <td className="py-3 text-ciruela/50">{item.sku}</td>
                       <td className="py-3">{item.product}</td>
                       <td className="py-3">
-                        {isEditing ? (
-                          <select
-                            value={draft.ledger}
-                            onChange={(e) =>
-                              setDraft((d) => ({
-                                ...d,
-                                ledger: e.target.value as "Retail" | "Backbar",
-                              }))
-                            }
-                            className="rounded-lg border border-ciruela/20 bg-hueso px-2 py-1 font-body text-xs text-ciruela"
-                          >
-                            <option value="Retail">Retail</option>
-                            <option value="Backbar">Backbar</option>
-                          </select>
-                        ) : (
-                          <Badge tone={item.ledger === "Retail" ? "info" : "neutral"}>
-                            {item.ledger}
-                          </Badge>
-                        )}
+                        <Badge tone={item.ledger === "Retail" ? "info" : "neutral"}>
+                          {item.ledger}
+                        </Badge>
                       </td>
                       <td className="py-3 pr-6 text-ciruela/60">{item.location}</td>
-                      {isEditing ? (
-                        <>
-                          <td className="py-2 pr-3 text-right">
-                            <NumberInput
-                              value={draft.qty}
-                              onChange={(v) => setDraft((d) => ({ ...d, qty: v }))}
-                            />
-                          </td>
-                          <td className="py-2 pr-6 text-right">
-                            <NumberInput
-                              value={draft.par}
-                              onChange={(v) => setDraft((d) => ({ ...d, par: v }))}
-                            />
-                          </td>
-                          <td className="py-2 text-right">
-                            <div className="flex justify-end gap-2">
-                              <button
-                                onClick={() => saveEdit(item.sku)}
-                                className="rounded-full bg-ciruela px-2.5 py-1 font-body text-[11px] text-hueso"
-                              >
-                                {draft.ledger !== editingLedger ? "Mover" : "Guardar"}
-                              </button>
-                              <button
-                                onClick={cancelEdit}
-                                className="rounded-full border border-ciruela/30 px-2.5 py-1 font-body text-[11px] text-ciruela/70"
-                              >
-                                Cancelar
-                              </button>
-                            </div>
-                          </td>
-                        </>
-                      ) : (
-                        <>
-                          <td className="py-3 pr-3 text-right">{item.qty}</td>
-                          <td className="py-3 pr-6 text-right text-ciruela/50">{item.par}</td>
-                          <td className="py-3 text-right">
-                            <div className="flex items-center justify-end gap-2">
-                              {low && <Badge tone="warning">Bajo par</Badge>}
-                              <button
-                                onClick={() => startEdit(item, item.ledger)}
-                                className="font-body text-[11px] text-ciruela underline"
-                              >
-                                Editar
-                              </button>
-                            </div>
-                          </td>
-                        </>
-                      )}
+                      <td className="py-3 pr-6 text-ciruela/50">
+                        {item.ledger === "Retail" ? item.expiresOn : `PAO ${item.pao}`}
+                      </td>
+                      <td className="py-3 pr-3 text-right">{item.qty}</td>
+                      <td className="py-3 pr-6 text-right text-ciruela/50">{item.par}</td>
+                      <td className="py-3 text-right">
+                        <div className="flex items-center justify-end gap-2">
+                          {low && <Badge tone="warning">Bajo par</Badge>}
+                          <button
+                            onClick={() => openEdit(item, item.ledger)}
+                            className="font-body text-[11px] text-ciruela underline"
+                          >
+                            Editar
+                          </button>
+                        </div>
+                      </td>
                     </tr>
                   );
                 })}
               </tbody>
             </table>
+            </div>
             )}
           </Card>
         )}
@@ -613,7 +554,8 @@ export default function AdminInventory() {
                   : "Sin productos retail registrados en esta sucursal todavía."}
               </p>
             ) : (
-            <table className="w-full font-body text-sm text-ciruela">
+            <div className="overflow-x-auto">
+            <table className="w-full min-w-[640px] whitespace-nowrap font-body text-sm text-ciruela">
               <thead>
                 <tr className="text-left text-xs uppercase tracking-wide text-ciruela/40">
                   <th className="pb-2">SKU</th>
@@ -629,75 +571,32 @@ export default function AdminInventory() {
               <tbody>
                 {retail.map((item) => {
                   const low = item.qty < item.par;
-                  const isEditing = editingSku === item.sku;
                   return (
                     <tr key={item.sku} className="border-t border-ciruela/8">
                       <td className="py-3 text-ciruela/50">{item.sku}</td>
                       <td className="py-3">{item.product}</td>
                       <td className="py-3 pr-6 text-ciruela/60">{item.location}</td>
-                      {isEditing ? (
-                        <>
-                          <td className="py-2 pr-3 text-right">
-                            <NumberInput
-                              value={draft.qty}
-                              onChange={(v) => setDraft((d) => ({ ...d, qty: v }))}
-                            />
-                          </td>
-                          <td className="py-2 pr-6 text-right">
-                            <NumberInput
-                              value={draft.par}
-                              onChange={(v) => setDraft((d) => ({ ...d, par: v }))}
-                            />
-                          </td>
-                          <td className="py-2 pr-6 text-right">
-                            <NumberInput
-                              value={draft.price}
-                              onChange={(v) => setDraft((d) => ({ ...d, price: v }))}
-                              prefix="$"
-                            />
-                          </td>
-                          <td className="py-3 text-ciruela/50">{item.expiresOn}</td>
-                          <td className="py-3 text-right">
-                            <div className="flex justify-end gap-2">
-                              <button
-                                onClick={() => saveRetail(item.sku)}
-                                className="rounded-full bg-ciruela px-2.5 py-1 font-body text-[11px] text-hueso"
-                              >
-                                Guardar
-                              </button>
-                              <button
-                                onClick={cancelEdit}
-                                className="rounded-full border border-ciruela/30 px-2.5 py-1 font-body text-[11px] text-ciruela/70"
-                              >
-                                Cancelar
-                              </button>
-                            </div>
-                          </td>
-                        </>
-                      ) : (
-                        <>
-                          <td className="py-3 pr-3 text-right">{item.qty}</td>
-                          <td className="py-3 pr-6 text-right text-ciruela/50">{item.par}</td>
-                          <td className="py-3 pr-6 text-right">${item.price} MXN</td>
-                          <td className="py-3 text-ciruela/50">{item.expiresOn}</td>
-                          <td className="py-3 text-right">
-                            <div className="flex items-center justify-end gap-2">
-                              {low && <Badge tone="warning">Bajo par</Badge>}
-                              <button
-                                onClick={() => startEdit(item, "Retail")}
-                                className="font-body text-[11px] text-ciruela underline"
-                              >
-                                Editar
-                              </button>
-                            </div>
-                          </td>
-                        </>
-                      )}
+                      <td className="py-3 pr-3 text-right">{item.qty}</td>
+                      <td className="py-3 pr-6 text-right text-ciruela/50">{item.par}</td>
+                      <td className="py-3 pr-6 text-right">${item.price} MXN</td>
+                      <td className="py-3 text-ciruela/50">{item.expiresOn}</td>
+                      <td className="py-3 text-right">
+                        <div className="flex items-center justify-end gap-2">
+                          {low && <Badge tone="warning">Bajo par</Badge>}
+                          <button
+                            onClick={() => openEdit(item, "Retail")}
+                            className="font-body text-[11px] text-ciruela underline"
+                          >
+                            Editar
+                          </button>
+                        </div>
+                      </td>
                     </tr>
                   );
                 })}
               </tbody>
             </table>
+            </div>
             )}
           </Card>
         )}
@@ -711,7 +610,8 @@ export default function AdminInventory() {
                   : "Sin productos backbar registrados en esta sucursal todavía."}
               </p>
             ) : (
-            <table className="w-full font-body text-sm text-ciruela">
+            <div className="overflow-x-auto">
+            <table className="w-full min-w-[640px] whitespace-nowrap font-body text-sm text-ciruela">
               <thead>
                 <tr className="text-left text-xs uppercase tracking-wide text-ciruela/40">
                   <th className="pb-2">SKU</th>
@@ -727,69 +627,32 @@ export default function AdminInventory() {
               <tbody>
                 {backbar.map((item) => {
                   const low = item.qty < item.par;
-                  const isEditing = editingSku === item.sku;
                   return (
                     <tr key={item.sku} className="border-t border-ciruela/8">
                       <td className="py-3 text-ciruela/50">{item.sku}</td>
                       <td className="py-3">{item.product}</td>
                       <td className="py-3 pr-6 text-ciruela/60">{item.location}</td>
-                      {isEditing ? (
-                        <>
-                          <td className="py-2 pr-3 text-right">
-                            <NumberInput
-                              value={draft.qty}
-                              onChange={(v) => setDraft((d) => ({ ...d, qty: v }))}
-                            />
-                          </td>
-                          <td className="py-2 pr-6 text-right">
-                            <NumberInput
-                              value={draft.par}
-                              onChange={(v) => setDraft((d) => ({ ...d, par: v }))}
-                            />
-                          </td>
-                          <td className="py-3 pr-6 text-ciruela/50">{item.opensOn}</td>
-                          <td className="py-3 text-ciruela/50">{item.pao}</td>
-                          <td className="py-3 text-right">
-                            <div className="flex justify-end gap-2">
-                              <button
-                                onClick={() => saveBackbar(item.sku)}
-                                className="rounded-full bg-ciruela px-2.5 py-1 font-body text-[11px] text-hueso"
-                              >
-                                Guardar
-                              </button>
-                              <button
-                                onClick={cancelEdit}
-                                className="rounded-full border border-ciruela/30 px-2.5 py-1 font-body text-[11px] text-ciruela/70"
-                              >
-                                Cancelar
-                              </button>
-                            </div>
-                          </td>
-                        </>
-                      ) : (
-                        <>
-                          <td className="py-3 pr-3 text-right">{item.qty}</td>
-                          <td className="py-3 pr-6 text-right text-ciruela/50">{item.par}</td>
-                          <td className="py-3 pr-6 text-ciruela/50">{item.opensOn}</td>
-                          <td className="py-3 text-ciruela/50">{item.pao}</td>
-                          <td className="py-3 text-right">
-                            <div className="flex items-center justify-end gap-2">
-                              {low && <Badge tone="warning">Bajo par</Badge>}
-                              <button
-                                onClick={() => startEdit(item, "Backbar")}
-                                className="font-body text-[11px] text-ciruela underline"
-                              >
-                                Editar
-                              </button>
-                            </div>
-                          </td>
-                        </>
-                      )}
+                      <td className="py-3 pr-3 text-right">{item.qty}</td>
+                      <td className="py-3 pr-6 text-right text-ciruela/50">{item.par}</td>
+                      <td className="py-3 pr-6 text-ciruela/50">{item.opensOn}</td>
+                      <td className="py-3 text-ciruela/50">{item.pao}</td>
+                      <td className="py-3 text-right">
+                        <div className="flex items-center justify-end gap-2">
+                          {low && <Badge tone="warning">Bajo par</Badge>}
+                          <button
+                            onClick={() => openEdit(item, "Backbar")}
+                            className="font-body text-[11px] text-ciruela underline"
+                          >
+                            Editar
+                          </button>
+                        </div>
+                      </td>
                     </tr>
                   );
                 })}
               </tbody>
             </table>
+            </div>
             )}
             <p className="mt-4 font-body text-xs text-ciruela/40">
               Las líneas K-beauty (SKIN1004, Anua, Beauty of Joseon, Numbuzin, AXIS-Y, Purito,
@@ -798,6 +661,124 @@ export default function AdminInventory() {
           </Card>
         )}
       </div>
+
+      {editModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-ciruela/40 px-4"
+          onClick={closeEdit}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-sm rounded-2xl bg-hueso p-5 shadow-xl"
+          >
+            <div className="mb-1 flex items-center justify-between">
+              <p className="font-display text-sm text-ciruela">Editar producto</p>
+              <button onClick={closeEdit} aria-label="Cerrar" className="text-ciruela/50 hover:text-ciruela">
+                ×
+              </button>
+            </div>
+            <p className="mb-4 font-body text-xs text-ciruela/50">
+              {editModal.product} · {editModal.location}
+            </p>
+
+            <div className="mb-4">
+              <label className="mb-1 block font-body text-xs uppercase tracking-[0.14em] text-ciruela/50">
+                Ledger
+              </label>
+              <div className="flex gap-1 rounded-full border border-ciruela/20 p-1 font-body text-xs w-fit">
+                {(["Retail", "Backbar"] as const).map((choice) => (
+                  <button
+                    key={choice}
+                    type="button"
+                    onClick={() => setEditModal((m) => (m ? { ...m, ledger: choice } : m))}
+                    aria-pressed={editModal.ledger === choice}
+                    className={`rounded-full px-4 py-1.5 ${
+                      editModal.ledger === choice
+                        ? "bg-ciruela text-hueso"
+                        : "text-ciruela/70 hover:bg-ciruela/8"
+                    }`}
+                  >
+                    {choice}
+                  </button>
+                ))}
+              </div>
+              {editModal.ledger !== editModal.originalLedger && (
+                <p className="mt-1 font-body text-[11px] text-ciruela/40">
+                  Guardar moverá este producto al ledger {editModal.ledger} — nunca se mezclan en
+                  una sola línea (spec §5.3).
+                </p>
+              )}
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <TextInput
+                label="Cantidad"
+                type="number"
+                value={editModal.qty}
+                onChange={(v) => setEditModal((m) => (m ? { ...m, qty: v } : m))}
+              />
+              <TextInput
+                label="Par"
+                type="number"
+                value={editModal.par}
+                onChange={(v) => setEditModal((m) => (m ? { ...m, par: v } : m))}
+              />
+              {editModal.ledger === "Retail" ? (
+                <>
+                  <TextInput
+                    label="Precio (MXN)"
+                    type="number"
+                    value={editModal.price}
+                    onChange={(v) => setEditModal((m) => (m ? { ...m, price: v } : m))}
+                  />
+                  <TextInput
+                    label="Costo (MXN)"
+                    type="number"
+                    value={editModal.cost}
+                    onChange={(v) => setEditModal((m) => (m ? { ...m, cost: v } : m))}
+                  />
+                  <TextInput
+                    label="Vence"
+                    type="date"
+                    value={editModal.expiresOn}
+                    onChange={(v) => setEditModal((m) => (m ? { ...m, expiresOn: v } : m))}
+                  />
+                </>
+              ) : (
+                <>
+                  <TextInput
+                    label="Abierto"
+                    type="date"
+                    value={editModal.opensOn}
+                    onChange={(v) => setEditModal((m) => (m ? { ...m, opensOn: v } : m))}
+                  />
+                  <TextInput
+                    label="PAO"
+                    value={editModal.pao}
+                    placeholder="p. ej. 6 meses"
+                    onChange={(v) => setEditModal((m) => (m ? { ...m, pao: v } : m))}
+                  />
+                </>
+              )}
+            </div>
+
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                onClick={closeEdit}
+                className="rounded-full border border-ciruela px-4 py-1.5 font-body text-xs text-ciruela hover:bg-ciruela hover:text-hueso"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={saveEditModal}
+                className="rounded-full bg-ciruela px-4 py-1.5 font-body text-xs text-hueso"
+              >
+                {editModal.ledger !== editModal.originalLedger ? "Mover" : "Guardar"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }
@@ -826,28 +807,6 @@ function TextInput({
         placeholder={placeholder}
         onChange={(e) => onChange(e.target.value)}
         className="w-full rounded-lg border border-ciruela/20 bg-hueso px-2 py-1.5 font-body text-sm text-ciruela placeholder:text-ciruela/40 focus:outline-none focus:ring-1 focus:ring-ciruela/40"
-      />
-    </div>
-  );
-}
-
-function NumberInput({
-  value,
-  onChange,
-  prefix,
-}: {
-  value: string;
-  onChange: (v: string) => void;
-  prefix?: string;
-}) {
-  return (
-    <div className="flex items-center justify-end gap-1">
-      {prefix && <span className="text-ciruela/50">{prefix}</span>}
-      <input
-        type="number"
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        className="w-16 rounded border border-ciruela/25 bg-hueso px-1.5 py-1 text-right font-body text-sm text-ciruela focus:outline-none focus:ring-1 focus:ring-ciruela/40"
       />
     </div>
   );

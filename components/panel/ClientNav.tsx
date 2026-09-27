@@ -8,16 +8,17 @@ import { UserMenu } from "./UserMenu";
 const LINKS = [
   { href: "/my", label: "Inicio" },
   { href: "/my/book", label: "Reservar" },
-  { href: "/my/appointments", label: "Mis citas" },
+  { href: "/my/appointments", label: "Mi rutina" },
   { href: "/my/skin-id", label: "Mi Skin ID" },
   { href: "/my/packages", label: "Paquetes" },
 ];
 
 // Less-frequent account settings live in the profile menu instead of the
-// main nav, to keep the primary tab strip short and scannable.
+// main nav, to keep the primary tab strip short and scannable. Purchases
+// used to be its own entry here — folded into "Mi rutina" instead (spec:
+// routine + purchase history + recommendations belong in one place).
 const PROFILE_LINKS = [
   { href: "/my/preferences", label: "Preferencias" },
-  { href: "/my/purchases", label: "Compras" },
   { href: "/my/consent", label: "Centro de consentimiento" },
   { href: "/my/payment", label: "Métodos de pago" },
 ];

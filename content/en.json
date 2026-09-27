@@ -1,6 +1,6 @@
 {
   "lang": "en",
-  "announcement": "Now open · Monday–Saturday, 9–6 · Book by WhatsApp",
+  "announcement": "Now open · Book by WhatsApp",
   "nav": {
     "estudio": "Studio",
     "philosophy": "Philosophy",
@@ -11,21 +11,21 @@
   },
   "hero": {
     "subtitle": "Skin Studio",
-    "eyebrow": "Wellness Hub · Skincare Studio",
-    "headline": "Glow from within.",
-    "script": "wellness is the natural state of my body and mind",
-    "body": "Your skin has a memory, and so do we. We track your skin type, sensitivities, and past treatments, so every visit picks up exactly where the last one left off.",
+    "eyebrow": "Just a skin studio",
+    "headline": "Your skin, well understood.",
+    "script": "Solid science and elevated sensoriality for skin, hair, and body.",
+    "body": "We believe in care where efficacy, evidence, and judgment coexist with a conscious selection of what we use on our skin and body.",
     "ctaPrimary": "Book Your Facial",
     "ctaSecondary": "View Treatments"
   },
   "featured": {
     "eyebrow": "Signature",
-    "heading": "Facials & Treatments",
-    "description": "High-performance facials tailored to your skin's unique needs. Visible results, deep relaxation.",
+    "heading": "Facials",
+    "description": "Personalized 30- and 60-minute facials, designed around what your skin needs today.",
     "items": [
-      { "protocol": "Glow+", "label": "The Glow Signature", "icon": "sunburst" },
+      { "protocol": "Longevity", "label": "The Longevity Ritual", "icon": "sunburst" },
       { "protocol": "Lift", "label": "Sculpt & Lift", "icon": "arches" },
-      { "protocol": "Reset", "label": "Clear Reset", "icon": "ring" }
+      { "protocol": "Purify", "label": "Deep Purify", "icon": "ring" }
     ]
   },
   "philosophy": {
@@ -34,8 +34,8 @@
     "pillars": [
       {
         "icon": "organico",
-        "title": "Organic",
-        "description": "Gentle, natural ingredients that respect your skin's balance, never harsh chemicals."
+        "title": "Judgment",
+        "description": "The best of science and nature, chosen with evidence and without compromising efficacy."
       },
       {
         "icon": "serenidad",
@@ -44,36 +44,42 @@
       },
       {
         "icon": "balance",
-        "title": "Balance",
-        "description": "Skincare and nutrition as one system, so what you take in and what you apply work together."
+        "title": "Personalization",
+        "description": "Your skin has a memory, and so do we. We track your skin type, sensitivity, and past treatments, so every visit picks up exactly where the last one left off."
       }
     ]
   },
   "treatments": {
     "eyebrow": "Menú · Faciales",
-    "heading": "Treatments",
-    "tagline": "Your health is an investment, not an expense.",
-    "note": "Booked by duration, Express or Signature. Your protocol is assigned after an in-person skin assessment.",
+    "heading": "Facials",
+    "tagline": "Made around you",
+    "note": "Booked by duration, Targeted or Signature. Your protocol is assigned after an in-person skin assessment and your goals.",
     "items": [
-      { "name": "Reset", "tier": "Express", "duration": "30 min", "price": 850, "description": "A quick reset for tired skin: deep cleanse, instant glow." },
-      { "name": "Calm", "tier": "Express", "duration": "30 min", "price": 850, "description": "Soothes sensitive or reactive skin with gentle ingredients and a cooling touch." },
-      { "name": "Purify", "tier": "Express", "duration": "30 min", "price": 850, "description": "Clears congestion and balances oily skin without stripping it." },
-      { "name": "Glow", "tier": "Express", "duration": "30 min", "price": 850, "description": "A luminosity boost before any occasion." },
-      { "name": "Glow+", "tier": "Signature", "duration": "60 min", "price": 1900, "description": "The full glow ritual: exfoliation, deep hydration, and facial massage." },
-      { "name": "Purify+", "tier": "Signature", "duration": "60 min", "price": 1900, "description": "Deep cleansing and careful extractions for persistent congestion." },
-      { "name": "Lift", "tier": "Signature", "duration": "60 min", "price": 1900, "description": "A sculpting facial massage that lifts, defines, and relaxes in one session." },
-      { "name": "Calm+", "tier": "Signature", "duration": "60 min", "price": 1900, "description": "The total calm ritual: strengthens your skin barrier and eases visible stress." }
+      {
+        "name": "Targeted",
+        "tier": "Targeted",
+        "duration": "30 min",
+        "price": 850,
+        "description": "A facial personalized to your skin on the day of your visit. After an in-cabin evaluation, your esthetician selects the ideal ampoule for you.",
+        "ampoules": ["Glow & Hydration", "Calm & Restore", "Purify", "Firmness & Age Support", "Revitalize"]
+      },
+      { "name": "Purify", "tier": "Signature", "duration": "60 min", "price": 1900, "description": "Decongests, deep-cleanses, and clears pores with careful extractions." },
+      { "name": "Lift", "tier": "Signature", "duration": "60 min", "price": 1900, "description": "A facial sculpting ritual that combines technology and massage to tone, define, and support a firmer appearance." },
+      { "name": "Longevity", "tier": "Signature", "duration": "60 min", "price": 1900, "description": "An intensive treatment featuring BABOR, focused on visible signs of aging, luminosity, and vitality — also ideal as pre-event prep." },
+      { "name": "Microbiomic", "tier": "Signature", "duration": "60 min", "price": 1900, "description": "Designed with BABOR for sensitive, reactive, or stressed skin. Helps strengthen the skin barrier and restore comfort, hydration, and balance." },
+      { "name": "Collagen Botox", "tier": "Signature", "duration": "60 min", "price": 1900, "description": "A firming, volumizing treatment that helps soften expression lines and restore visible density to the skin." },
+      { "name": "Vegan Glow", "tier": "Signature", "duration": "60 min", "price": 1900, "description": "A 100% vegan facial that brightens and hydrates the skin with botanical ingredients, leaving a fresh, natural glow." }
     ],
     "currency": "MXN",
     "cta": "Book a Treatment"
   },
   "stripe": {
-    "quote": "Every day is a new beginning. Take a deep breath, smile, and start again.",
+    "quote": "Make space to take good care of yourself.",
     "cta": "Book Now"
   },
   "circle": {
     "corner1": "Wellness is more than a trend. It's a lifestyle that embraces self care, balance, and whole health.",
-    "corner2": "At Monâm, we believe true beauty starts with feeling good from within.",
+    "corner2": "Less noise, better choices, and care designed to last.",
     "heading1": "WHERE SKIN",
     "heading2": "MEETS CALM",
     "ring": "Gentle science, personal care, and results you can feel from the first session, so your skin reflects real wellness · "
@@ -88,11 +94,11 @@
       "skinType": "Combination",
       "allergies": "No allergies on file",
       "preferences": "Aromatherapy · Silence",
-      "lastTreatment": "Glow, 3 weeks ago"
+      "lastTreatment": "Targeted, 3 weeks ago"
     }
   },
   "social": {
-    "handle": "@monam.wellness",
+    "handle": "@monam.skinstudio",
     "cta": "Follow along",
     "quotes": [
       "Experience the perfect blend of science and relaxation, and let your skin reflect the healthiest version of you.",
@@ -102,16 +108,24 @@
   },
   "location": {
     "heading": "Visit",
-    "hours": "Monday to Saturday, 9–6",
+    "hours": [
+      { "day": "Monday", "hours": "10:00–20:00" },
+      { "day": "Tuesday", "hours": "10:00–18:00" },
+      { "day": "Wednesday", "hours": "10:00–20:00" },
+      { "day": "Thursday", "hours": "10:00–20:00" },
+      { "day": "Friday", "hours": "10:00–20:00" },
+      { "day": "Saturday", "hours": "11:00–19:00" },
+      { "day": "Sunday", "hours": "10:00–15:00" }
+    ],
     "locations": [
-      { "name": "Roma Norte", "address": "[PLACEHOLDER: Durango 258, Roma Norte, Mexico City]" },
-      { "name": "Lomas de Chapultepec", "address": "[PLACEHOLDER: Av. Prado Norte 440, Lomas de Chapultepec, Mexico City]" }
+      { "name": "Roma Norte", "address": "Durango 258, Roma Nte., Cuauhtémoc, 06700 Ciudad de México, CDMX, México" },
+      { "name": "Prado Norte", "address": "Coming Soon" }
     ],
     "ctaDirections": "Get Directions",
     "ctaVisit": "Book a Visit"
   },
   "footer": {
-    "script": "glow from within",
+    "script": "Monâm Skin Studio",
     "explore": { "heading": "Explore", "links": ["Philosophy", "Treatments", "Visit"] },
     "connect": { "heading": "Connect", "links": ["Instagram", "Website", "Book Now"] },
     "copyright": "© 2026 Monâm Skin Studio."

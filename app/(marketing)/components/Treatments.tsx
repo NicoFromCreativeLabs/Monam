@@ -41,6 +41,11 @@ export function Treatments({ content }: { content: Content }) {
                 <dd className="mt-1 max-w-sm font-body text-xs text-ciruela/50">
                   {item.description}
                 </dd>
+                {item.ampoules && (
+                  <dd className="mt-1 max-w-sm font-body text-[11px] italic text-ciruela/40">
+                    Ampolletas: {item.ampoules.join(" · ")}
+                  </dd>
+                )}
               </div>
               <span className="whitespace-nowrap font-body text-sm text-ciruela">
                 ${item.price} {treatments.currency}

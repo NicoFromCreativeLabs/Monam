@@ -1,13 +1,30 @@
 import { Card } from "@/components/panel/Card";
-import { CLIENT_APPOINTMENTS_LIST } from "@/lib/mock-data";
+import { PostFacialRecommendations } from "@/components/panel/PostFacialRecommendations";
+import { CLIENT_APPOINTMENTS_LIST, CLIENT_PURCHASES } from "@/lib/mock-data";
 
-// Upcoming, past, reschedule, cancel — policy-aware (spec §5.2/§8.1): ≥24h
+// Only the 3 most recent purchases show here — this is a routine/rhythm
+// view, not a full statement; the client shouldn't have to see the running
+// total of what they've spent every time they check their routine.
+const RECENT_PURCHASES_LIMIT = 3;
+
+// "Mi rutina" now also covers "Mis compras" (purchase history used to be
+// its own nav item — folded in here) and post-facial recommendations, so
+// this is one place for everything about a client's ongoing relationship
+// with the studio, not three (spec: routine + purchases + recommendations).
+// Upcoming/past, reschedule, cancel — policy-aware (spec §5.2/§8.1): ≥24h
 // notice is free, inside the window shows the deposit-forfeit warning inline.
 export default function ClientAppointments() {
   const { upcoming, past } = CLIENT_APPOINTMENTS_LIST;
+  const recentPurchases = CLIENT_PURCHASES.slice(0, RECENT_PURCHASES_LIMIT);
 
   return (
     <div className="space-y-6">
+      <div>
+        <p className="font-body text-xs uppercase tracking-[0.14em] text-ciruela/40">
+          Mi rutina · Mis compras
+        </p>
+      </div>
+
       <Card title="Próximas">
         <ul className="divide-y divide-ciruela/8">
           {upcoming.map((a) => (
@@ -47,6 +64,24 @@ export default function ClientAppointments() {
           ))}
         </ul>
       </Card>
+
+      <Card title="Mis compras">
+        <ul className="divide-y divide-ciruela/8">
+          {recentPurchases.map((p, i) => (
+            <li key={i} className="flex items-center justify-between py-3">
+              <div>
+                <p className="font-body text-sm text-ciruela">{p.product}</p>
+                <p className="font-body text-xs text-ciruela/50">
+                  {p.size} · {p.date}
+                </p>
+              </div>
+              <span className="font-body text-sm text-ciruela">${p.price} MXN</span>
+            </li>
+          ))}
+        </ul>
+      </Card>
+
+      <PostFacialRecommendations />
     </div>
   );
 }

@@ -4,73 +4,72 @@ import { useState } from "react";
 import { TopBar } from "@/components/panel/TopBar";
 import { Card } from "@/components/panel/Card";
 import { Badge } from "@/components/panel/Badge";
-import { OWNER, STAFF_ROSTER, type StaffMember } from "@/lib/mock-data";
+import { OWNER, ESTHETICIAN_OCCUPANCY, type StaffMember } from "@/lib/mock-data";
 import { useLocations } from "@/components/panel/LocationsContext";
+import { useStaffRoster } from "@/components/panel/StaffRosterContext";
 
 // All roles the roster can hold — Admin included, so ownership/admin rights
 // can be granted or moved between people from this same screen.
 const ROLE_OPTIONS = ["Admin", "Recepción", "Esteticista", "Gerente de clínica", "Contador"] as const;
 
-// Roster, roles, location assignment (spec §6.1). Individual named logins
-// only — no shared accounts, ever (spec §10). Front Desk / Esthetician /
-// Clinic Manager / Accountant / Admin accounts don't pre-exist — the Admin
-// creates each one here before that person can log in, and can edit or
-// reassign any row's role/location later, including other Admin rows (real
-// write would update AppUser.role + Supabase app_metadata together, per the
-// implementation plan's Phase 0).
+// Equipo → Personal y horarios (renamed from "Personal" per client admin
+// review). Roster, roles, location assignment (spec §6.1) plus a light
+// weekly-hours summary — full shift scheduling/editing is out of scope for
+// this pass, this is a read-only rollup of hours booked vs. available.
+// Individual named logins only — no shared accounts, ever (spec §10).
 export default function AdminStaff() {
   const { locations } = useLocations();
   const LOCATION_OPTIONS = [...locations.map((l) => l.name), "Ambas"];
-  const [roster, setRoster] = useState<StaffMember[]>(STAFF_ROSTER);
+  const { roster, addStaff, updateStaff, toggleStatus } = useStaffRoster();
   const [formOpen, setFormOpen] = useState(false);
-  const [form, setForm] = useState<{ name: string; email: string; role: string; location: string }>({
+  const [form, setForm] = useState<{
+    name: string;
+    email: string;
+    role: string;
+    location: string;
+    salary: string;
+  }>({
     name: "",
     email: "",
     role: ROLE_OPTIONS[1],
     location: locations[0].name,
+    salary: "",
   });
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [draft, setDraft] = useState<{ role: string; location: string }>({ role: "", location: "" });
+  const [draft, setDraft] = useState<{ role: string; location: string; salary: string }>({
+    role: "",
+    location: "",
+    salary: "",
+  });
 
   function submitInvite(e: React.FormEvent) {
     e.preventDefault();
     if (!form.name.trim() || !form.email.trim()) return;
-    setRoster((prev) => [
-      ...prev,
-      {
-        id: `st-${Date.now()}`,
-        name: form.name.trim(),
-        role: form.role,
-        location: form.location,
-        status: "Invitado",
-      },
-    ]);
-    setForm({ name: "", email: "", role: ROLE_OPTIONS[1], location: locations[0].name });
+    addStaff({
+      name: form.name.trim(),
+      role: form.role,
+      location: form.location,
+      status: "Invitado",
+      salary: Number(form.salary) || 0,
+    });
+    setForm({ name: "", email: "", role: ROLE_OPTIONS[1], location: locations[0].name, salary: "" });
     setFormOpen(false);
-  }
-
-  function toggleStatus(id: string) {
-    setRoster((prev) =>
-      prev.map((s) => (s.id === id ? { ...s, status: s.status === "Activo" ? "Inactivo" : "Activo" } : s)),
-    );
   }
 
   function startEdit(s: StaffMember) {
     setEditingId(s.id);
-    setDraft({ role: s.role, location: s.location });
+    setDraft({ role: s.role, location: s.location, salary: String(s.salary) });
   }
 
   function saveEdit(id: string) {
-    setRoster((prev) =>
-      prev.map((s) => (s.id === id ? { ...s, role: draft.role, location: draft.location } : s)),
-    );
+    updateStaff(id, { role: draft.role, location: draft.location, salary: Number(draft.salary) || 0 });
     setEditingId(null);
   }
 
   return (
     <>
-      <TopBar title="Personal" userName={OWNER.name} userRole={OWNER.role} allowBothLocations />
-      <div className="flex-1 px-8 py-6">
+      <TopBar title="Personal y horarios" userName={OWNER.name} userRole={OWNER.role} allowBothLocations />
+      <div className="flex-1 space-y-6 px-4 py-6 min-[860px]:px-8">
         <Card
           title="Roster"
           action={
@@ -147,6 +146,19 @@ export default function AdminStaff() {
                   ))}
                 </select>
               </div>
+              <div>
+                <label className="mb-1 block font-body text-xs uppercase tracking-[0.14em] text-ciruela/50">
+                  Salario mensual (MXN)
+                </label>
+                <input
+                  type="number"
+                  min={0}
+                  value={form.salary}
+                  onChange={(e) => setForm((f) => ({ ...f, salary: e.target.value }))}
+                  placeholder="0"
+                  className="w-full rounded-lg border border-ciruela/20 bg-hueso px-3 py-2 font-body text-sm text-ciruela placeholder:text-ciruela/40 focus:outline-none focus:ring-1 focus:ring-ciruela/40"
+                />
+              </div>
               <div className="min-[700px]:col-span-2">
                 <button
                   type="submit"
@@ -156,18 +168,20 @@ export default function AdminStaff() {
                 </button>
                 <p className="mt-2 font-body text-[11px] text-ciruela/40">
                   Login individual y con alcance de ubicación — nunca una cuenta compartida
-                  (spec §10).
+                  (spec §10). El salario alimenta &ldquo;Nómina base&rdquo; en Análisis → P&L.
                 </p>
               </div>
             </form>
           )}
 
-          <table className="w-full font-body text-sm text-ciruela">
+          <div className="overflow-x-auto">
+          <table className="w-full min-w-[640px] whitespace-nowrap font-body text-sm text-ciruela">
             <thead>
               <tr className="text-left text-xs uppercase tracking-wide text-ciruela/40">
                 <th className="pb-2">Nombre</th>
                 <th className="pb-2">Rol</th>
                 <th className="pb-2">Ubicación</th>
+                <th className="pb-2 text-right">Salario</th>
                 <th className="pb-2">Estado</th>
                 <th className="pb-2" />
               </tr>
@@ -206,6 +220,18 @@ export default function AdminStaff() {
                             ))}
                           </select>
                         </td>
+                        <td className="py-2 text-right">
+                          <div className="flex items-center justify-end gap-1">
+                            $
+                            <input
+                              type="number"
+                              min={0}
+                              value={draft.salary}
+                              onChange={(e) => setDraft((d) => ({ ...d, salary: e.target.value }))}
+                              className="w-20 rounded border border-ciruela/25 bg-hueso px-1.5 py-1 text-right font-body text-sm text-ciruela"
+                            />
+                          </div>
+                        </td>
                         <td className="py-3">
                           <Badge tone={s.status === "Activo" ? "positive" : s.status === "Invitado" ? "info" : "neutral"}>
                             {s.status}
@@ -232,6 +258,9 @@ export default function AdminStaff() {
                       <>
                         <td className="py-3 text-ciruela/60">{s.role}</td>
                         <td className="py-3 text-ciruela/60">{s.location}</td>
+                        <td className="py-3 text-right text-ciruela/60">
+                          ${s.salary.toLocaleString()} MXN
+                        </td>
                         <td className="py-3">
                           <Badge tone={s.status === "Activo" ? "positive" : s.status === "Invitado" ? "info" : "neutral"}>
                             {s.status}
@@ -260,6 +289,31 @@ export default function AdminStaff() {
               })}
             </tbody>
           </table>
+          </div>
+        </Card>
+
+        <Card title="Horarios — semana en curso">
+          <ul className="space-y-3">
+            {ESTHETICIAN_OCCUPANCY.map((e) => {
+              const pct = e.hoursBooked / e.hoursAvailable;
+              return (
+                <li key={e.name}>
+                  <div className="mb-1 flex justify-between font-body text-xs text-ciruela">
+                    <span>{e.name}</span>
+                    <span className="text-ciruela/50">
+                      {e.hoursBooked}h agendadas / {e.hoursAvailable}h disponibles
+                    </span>
+                  </div>
+                  <div className="h-2 rounded-full bg-ciruela/8">
+                    <div className="h-2 rounded-full bg-ciruela" style={{ width: `${pct * 100}%` }} />
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+          <p className="mt-4 font-body text-xs text-ciruela/40">
+            Vista de solo lectura — la edición de turnos individuales es Fase 2.
+          </p>
         </Card>
       </div>
     </>
