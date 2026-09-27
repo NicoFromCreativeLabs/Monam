@@ -11,6 +11,13 @@ config({ path: ".env.local" });
 // 5432) Supabase connection — migrations run DDL, and Supavisor's pooled
 // connection (port 6543, used by the app at runtime via lib/prisma.ts)
 // can't reliably run CREATE EXTENSION/ALTER TABLE.
+//
+// `env()` throws immediately if the var is unset, and this object literal
+// is evaluated just to *load* the config — including for `prisma generate`,
+// which never touches the datasource. Not migrated against Supabase yet, so
+// DIRECT_URL isn't configured anywhere; fall back to undefined instead of
+// crashing generate, and let migrate/db commands fail with Prisma's own
+// missing-connection error if someone runs them before it's set.
 export default defineConfig({
   schema: "prisma/schema.prisma",
   migrations: {
@@ -18,6 +25,6 @@ export default defineConfig({
     seed: "tsx prisma/seed.ts",
   },
   datasource: {
-    url: env("DIRECT_URL"),
+    url: process.env.DIRECT_URL ? env("DIRECT_URL") : undefined,
   },
 });
