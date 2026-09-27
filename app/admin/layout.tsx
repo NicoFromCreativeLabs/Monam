@@ -44,6 +44,7 @@ const SECTIONS: NavSection[] = [
     heading: "Equipo",
     items: [
       { href: "/admin/staff", label: "Personal y horarios" },
+      { href: "/admin/staff/comparativa", label: "Comparativa" },
       { href: "/admin/commissions", label: "Comisiones" },
     ],
   },

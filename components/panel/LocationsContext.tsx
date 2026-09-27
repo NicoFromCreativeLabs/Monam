@@ -3,6 +3,11 @@
 import { createContext, useContext, useState, type ReactNode } from "react";
 import { LOCATIONS as SEED_LOCATIONS } from "@/lib/mock-data";
 
+export interface LocationRoom {
+  id: string;
+  name: string;
+}
+
 export interface LocationRecord {
   id: string;
   name: string;
@@ -10,6 +15,7 @@ export interface LocationRecord {
   isActive: boolean;
   rentCost: number;
   maintenanceCost: number;
+  rooms: LocationRoom[];
 }
 
 const LocationsContext = createContext<{

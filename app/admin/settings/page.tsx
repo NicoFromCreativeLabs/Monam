@@ -12,7 +12,11 @@ import {
   PERMISSIONS_MATRIX,
   BUSINESS_RULES_EXTRA,
 } from "@/lib/mock-data";
-import { useLocations, type LocationRecord } from "@/components/panel/LocationsContext";
+import {
+  useLocations,
+  type LocationRecord,
+  type LocationRoom,
+} from "@/components/panel/LocationsContext";
 import {
   useProtocols,
   type ProtocolRecord,
@@ -27,7 +31,32 @@ import {
 // once it actually opens — and the change is shared app-wide via
 // LocationsContext (location switcher, booking flow, staff assignment all
 // read the same state), not just this page's own copy.
-const emptyNewLocation = { name: "", address: "", isActive: false, rentCost: "", maintenanceCost: "" };
+// Rooms default to "Sala N" by position — only overridden when a room has
+// something specific about it (e.g. "Sala 4 (LED)"), same convention the
+// original calendar mock used. Resizing preserves existing names/ids and
+// only invents defaults for newly added slots, so growing the count from
+// 2 to 4 doesn't touch the names already typed into slots 1-2.
+function makeRoom(index: number): LocationRoom {
+  return { id: crypto.randomUUID(), name: `Sala ${index + 1}` };
+}
+
+function resizeRooms(rooms: LocationRoom[], count: number): LocationRoom[] {
+  const safeCount = Math.max(1, count);
+  const next = rooms.slice(0, safeCount);
+  while (next.length < safeCount) next.push(makeRoom(next.length));
+  return next;
+}
+
+function emptyNewLocation() {
+  return {
+    name: "",
+    address: "",
+    isActive: false,
+    rentCost: "",
+    maintenanceCost: "",
+    rooms: [makeRoom(0)] as LocationRoom[],
+  };
+}
 const emptyNewProtocol = { name: "", tier: "Targeted" as ProtocolTier, duration: 30, price: 850, cost: 200 };
 
 export default function AdminSettings() {
@@ -39,12 +68,14 @@ export default function AdminSettings() {
     isActive: boolean;
     rentCost: string;
     maintenanceCost: string;
+    rooms: LocationRoom[];
   }>({
     name: "",
     address: "",
     isActive: false,
     rentCost: "",
     maintenanceCost: "",
+    rooms: [],
   });
   const [addOpen, setAddOpen] = useState(false);
   const [newLocation, setNewLocation] = useState(emptyNewLocation);
@@ -76,6 +107,7 @@ export default function AdminSettings() {
       isActive: l.isActive,
       rentCost: String(l.rentCost),
       maintenanceCost: String(l.maintenanceCost),
+      rooms: resizeRooms(l.rooms, Math.max(1, l.rooms.length)),
     });
   }
 
@@ -86,6 +118,7 @@ export default function AdminSettings() {
       isActive: draft.isActive,
       rentCost: Number(draft.rentCost) || 0,
       maintenanceCost: Number(draft.maintenanceCost) || 0,
+      rooms: draft.rooms,
     });
     setEditingId(null);
   }
@@ -99,8 +132,9 @@ export default function AdminSettings() {
       isActive: newLocation.isActive,
       rentCost: Number(newLocation.rentCost) || 0,
       maintenanceCost: Number(newLocation.maintenanceCost) || 0,
+      rooms: newLocation.rooms,
     });
-    setNewLocation(emptyNewLocation);
+    setNewLocation(emptyNewLocation());
     setAddOpen(false);
   }
 
@@ -205,6 +239,45 @@ export default function AdminSettings() {
                 />
               </div>
               <div className="min-[700px]:col-span-2">
+                <label className="mb-1 block font-body text-xs uppercase tracking-[0.14em] text-ciruela/50">
+                  Número de salas
+                </label>
+                <input
+                  type="number"
+                  min={1}
+                  value={newLocation.rooms.length}
+                  onChange={(e) =>
+                    setNewLocation((f) => ({
+                      ...f,
+                      rooms: resizeRooms(f.rooms, Number(e.target.value) || 1),
+                    }))
+                  }
+                  className="w-24 rounded-lg border border-ciruela/20 bg-hueso px-3 py-2 font-body text-sm text-ciruela focus:outline-none focus:ring-1 focus:ring-ciruela/40"
+                />
+                <div className="mt-2 grid grid-cols-2 gap-2 min-[700px]:grid-cols-3">
+                  {newLocation.rooms.map((room, i) => (
+                    <input
+                      key={room.id}
+                      value={room.name}
+                      onChange={(e) =>
+                        setNewLocation((f) => ({
+                          ...f,
+                          rooms: f.rooms.map((r, ri) =>
+                            ri === i ? { ...r, name: e.target.value } : r,
+                          ),
+                        }))
+                      }
+                      placeholder={`Sala ${i + 1}`}
+                      className="w-full rounded-lg border border-ciruela/20 bg-hueso px-3 py-2 font-body text-sm text-ciruela placeholder:text-ciruela/40 focus:outline-none focus:ring-1 focus:ring-ciruela/40"
+                    />
+                  ))}
+                </div>
+                <p className="mt-1 font-body text-[11px] text-ciruela/40">
+                  Se numeran por defecto (Sala 1, Sala 2...) — cambia el nombre solo en las que
+                  tengan algo específico (p. ej. &ldquo;Sala 4 (LED)&rdquo;).
+                </p>
+              </div>
+              <div className="min-[700px]:col-span-2">
                 <label className="flex items-center gap-2 font-body text-sm text-ciruela">
                   <input
                     type="checkbox"
@@ -284,6 +357,45 @@ export default function AdminSettings() {
                           />
                         </div>
                       </div>
+                      <div>
+                        <label className="mb-1 block font-body text-xs uppercase tracking-[0.14em] text-ciruela/50">
+                          Número de salas
+                        </label>
+                        <input
+                          type="number"
+                          min={1}
+                          value={draft.rooms.length}
+                          onChange={(e) =>
+                            setDraft((d) => ({
+                              ...d,
+                              rooms: resizeRooms(d.rooms, Number(e.target.value) || 1),
+                            }))
+                          }
+                          className="w-24 rounded-lg border border-ciruela/20 bg-hueso px-3 py-2 font-body text-sm text-ciruela focus:outline-none focus:ring-1 focus:ring-ciruela/40"
+                        />
+                        <div className="mt-2 grid grid-cols-2 gap-2 min-[700px]:grid-cols-3">
+                          {draft.rooms.map((room, i) => (
+                            <input
+                              key={room.id}
+                              value={room.name}
+                              onChange={(e) =>
+                                setDraft((d) => ({
+                                  ...d,
+                                  rooms: d.rooms.map((r, ri) =>
+                                    ri === i ? { ...r, name: e.target.value } : r,
+                                  ),
+                                }))
+                              }
+                              placeholder={`Sala ${i + 1}`}
+                              className="w-full rounded-lg border border-ciruela/20 bg-hueso px-3 py-2 font-body text-sm text-ciruela placeholder:text-ciruela/40 focus:outline-none focus:ring-1 focus:ring-ciruela/40"
+                            />
+                          ))}
+                        </div>
+                        <p className="mt-1 font-body text-[11px] text-ciruela/40">
+                          Se numeran por defecto (Sala 1, Sala 2...) — cambia el nombre solo en
+                          las que tengan algo específico (p. ej. &ldquo;Sala 4 (LED)&rdquo;).
+                        </p>
+                      </div>
                       <label className="flex items-center gap-2 font-body text-sm text-ciruela">
                         <input
                           type="checkbox"
@@ -316,6 +428,13 @@ export default function AdminSettings() {
                         <p className="mt-0.5 font-body text-xs text-ciruela/40">
                           Renta ${l.rentCost.toLocaleString()} MXN · Mantenimiento $
                           {l.maintenanceCost.toLocaleString()} MXN
+                        </p>
+                        <p className="mt-0.5 font-body text-xs text-ciruela/40">
+                          {l.rooms.length === 0
+                            ? "Sin salas configuradas"
+                            : `${l.rooms.length} sala${l.rooms.length === 1 ? "" : "s"}: ${l.rooms
+                                .map((r) => r.name)
+                                .join(", ")}`}
                         </p>
                       </div>
                       <div className="flex items-center gap-3">

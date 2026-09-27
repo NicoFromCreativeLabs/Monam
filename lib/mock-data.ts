@@ -10,11 +10,20 @@ export const LOCATIONS = [
   // rentCost/maintenanceCost for Roma Norte match the consolidated P&L
   // "Renta" (-$70,000) and "Mantenimiento y servicios" (-$11,200) lines —
   // it's the only active location, so it currently accounts for all of it.
-  { id: "roma-norte", name: "Roma Norte", address: "Durango 258, Roma Nte., Cuauhtémoc, 06700 Ciudad de México, CDMX, México", isActive: true, rentCost: 70000, maintenanceCost: 11200 },
+  {
+    id: "roma-norte", name: "Roma Norte", address: "Durango 258, Roma Nte., Cuauhtémoc, 06700 Ciudad de México, CDMX, México", isActive: true, rentCost: 70000, maintenanceCost: 11200,
+    rooms: [
+      { id: "roma-norte-sala-1", name: "Sala 1" },
+      { id: "roma-norte-sala-2", name: "Sala 2" },
+      { id: "roma-norte-sala-3", name: "Sala 3" },
+      { id: "roma-norte-sala-4", name: "Sala 4 (LED)" },
+    ],
+  },
   // Prado Norte doesn't have a confirmed real address yet and isn't open —
   // "Próximamente" (Coming Soon) instead of a placeholder/fake address.
   // Costs below are the projected pre-opening estimate, not a signed lease.
-  { id: "prado-norte", name: "Prado Norte", address: "Próximamente", isActive: false, rentCost: 32000, maintenanceCost: 5500 },
+  // No rooms configured yet either — set up in Settings once the layout is confirmed.
+  { id: "prado-norte", name: "Prado Norte", address: "Próximamente", isActive: false, rentCost: 32000, maintenanceCost: 5500, rooms: [] },
 ];
 
 // ---------------------------------------------------------------------------
