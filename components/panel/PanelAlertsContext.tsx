@@ -35,6 +35,18 @@ function loadFromStorage(): PanelAlert[] {
 let cachedAlerts: PanelAlert[] = typeof window === "undefined" ? seedAlerts() : loadFromStorage();
 const listeners = new Set<() => void>();
 
+// A stable snapshot equal to what SSR always renders (the server has no
+// localStorage, so it always renders the seed). getServerSnapshot must
+// return exactly this, never `cachedAlerts` — once any alert has ever been
+// added on a given browser, `cachedAlerts` diverges from the seed at
+// module-load time (before hydration even runs), and returning it from
+// getServerSnapshot was throwing a real hydration-mismatch error on every
+// load of the Admin panel from then on. useSyncExternalStore's contract is
+// exactly this two-snapshot handshake: match the server on the hydration
+// pass via getServerSnapshot, then immediately re-render with the real
+// client value via getSnapshot — no manual re-sync needed once separated.
+const SEED_SNAPSHOT: PanelAlert[] = seedAlerts();
+
 function emitChange() {
   listeners.forEach((l) => l());
 }
@@ -57,7 +69,7 @@ function getSnapshot() {
 }
 
 function getServerSnapshot() {
-  return cachedAlerts;
+  return SEED_SNAPSHOT;
 }
 
 function addAlertToStore(text: string, severity: PanelAlert["severity"] = "warning") {

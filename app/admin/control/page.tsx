@@ -4,13 +4,8 @@ import { useState } from "react";
 import { TopBar } from "@/components/panel/TopBar";
 import { Card } from "@/components/panel/Card";
 import { Badge } from "@/components/panel/Badge";
-import {
-  OWNER,
-  APPROVALS_QUEUE,
-  ANOMALY_FLAGS,
-  AUDIT_LOG,
-  CLINICAL_INCIDENTS,
-} from "@/lib/mock-data";
+import { useApprovals } from "@/components/panel/ApprovalsContext";
+import { OWNER, ANOMALY_FLAGS, AUDIT_LOG, CLINICAL_INCIDENTS } from "@/lib/mock-data";
 
 const APPROVAL_TONE: Record<string, "warning" | "positive" | "neutral"> = {
   Pendiente: "warning",
@@ -28,11 +23,7 @@ type Tab = (typeof TABS)[number];
 // mock section (a few rows) rather than a full clinical-incident tracker.
 export default function AdminControl() {
   const [tab, setTab] = useState<Tab>("Aprobaciones");
-  const [queue, setQueue] = useState(APPROVALS_QUEUE);
-
-  function decide(id: string, status: "Aprobado" | "Rechazado") {
-    setQueue((prev) => prev.map((a) => (a.id === id ? { ...a, status } : a)));
-  }
+  const { approvals: queue, decide } = useApprovals();
 
   return (
     <>

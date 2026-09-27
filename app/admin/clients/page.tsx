@@ -1,3 +1,6 @@
+"use client";
+
+import { useState } from "react";
 import Link from "next/link";
 import { TopBar } from "@/components/panel/TopBar";
 import { Card } from "@/components/panel/Card";
@@ -7,6 +10,14 @@ import { OWNER, CLIENTS_LIST } from "@/lib/mock-data";
 // No bulk export control exists for any role but Owner — see Settings/Audit
 // Log for the logged export action; there is none here on purpose.
 export default function AdminClients() {
+  const [search, setSearch] = useState("");
+  const term = search.trim().toLowerCase();
+  const filtered = term
+    ? CLIENTS_LIST.filter(
+        (c) => c.name.toLowerCase().includes(term) || c.phone.replace(/\s/g, "").includes(term.replace(/\s/g, "")),
+      )
+    : CLIENTS_LIST;
+
   return (
     <>
       <TopBar title="Clientes" userName={OWNER.name} userRole={OWNER.role} allowBothLocations />
@@ -14,9 +25,14 @@ export default function AdminClients() {
         <Card>
           <input
             type="search"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
             placeholder="Buscar por nombre o teléfono…"
             className="mb-4 w-full rounded-full border border-ciruela/20 bg-hueso px-4 py-2 font-body text-sm text-ciruela placeholder:text-ciruela/40 focus:outline-none focus:ring-1 focus:ring-ciruela/40"
           />
+          {filtered.length === 0 ? (
+            <p className="py-6 text-center font-body text-sm text-ciruela/50">Sin resultados.</p>
+          ) : (
           <table className="w-full font-body text-sm text-ciruela">
             <thead>
               <tr className="text-left text-xs uppercase tracking-wide text-ciruela/40">
@@ -29,7 +45,7 @@ export default function AdminClients() {
               </tr>
             </thead>
             <tbody>
-              {CLIENTS_LIST.map((c) => (
+              {filtered.map((c) => (
                 <tr key={c.id} className="border-t border-ciruela/8">
                   <td className="py-3">{c.name}</td>
                   <td className="py-3 text-ciruela/60">{c.phone}</td>
@@ -48,6 +64,7 @@ export default function AdminClients() {
               ))}
             </tbody>
           </table>
+          )}
         </Card>
       </div>
     </>

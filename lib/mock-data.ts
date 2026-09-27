@@ -109,11 +109,6 @@ export const LOW_STOCK_ALERTS = [
   { product: "Anua Heartleaf Toner", ledger: "Backbar", location: "Roma Norte", qty: 1, par: 6 },
 ];
 
-export const PENDING_APPROVALS = [
-  { id: "apr-1", type: "Descuento", requestedBy: "Camila Ruiz", amount: "15%", client: "Sofía Marín", location: "Roma Norte", reason: undefined as string | undefined },
-  { id: "apr-2", type: "Reembolso", requestedBy: "Camila Ruiz", amount: "$1,900 MXN", client: "Renata Lugo", location: "Roma Norte", reason: "Servicio no satisfactorio" as string | undefined },
-];
-
 export const PROTOCOL_RETAIL_LINK = [
   { protocol: "Targeted", topProduct: "Beauty of Joseon Glow Serum", attachRate: 0.41 },
   { protocol: "Purify", topProduct: "Anua Heartleaf Toner", attachRate: 0.37 },
@@ -491,11 +486,19 @@ export const STAFF_ROSTER: StaffMember[] = [
 // ---------------------------------------------------------------------------
 // Admin — Approvals (full queue) + Audit log + anomaly flags
 // ---------------------------------------------------------------------------
+// Single source for both the dashboard's "Aprobaciones pendientes" widget
+// and the full Control > Aprobaciones queue — these were two separate mock
+// arrays (PENDING_APPROVALS + APPROVALS_QUEUE) seeded with the same first
+// two rows, which is exactly the duplication the architecture plan already
+// flagged as "the same concept mocked twice." Collapsed into one list, read
+// through ApprovalsContext, so approving/rejecting shows up in both places
+// instead of the dashboard's buttons doing nothing.
+export type ApprovalStatus = "Pendiente" | "Aprobado" | "Rechazado";
 export const APPROVALS_QUEUE = [
-  { id: "apr-1", type: "Descuento", requestedBy: "Camila Ruiz", amount: "15%", client: "Sofía Marín", date: "2026-09-21", status: "Pendiente" },
-  { id: "apr-2", type: "Reembolso", requestedBy: "Camila Ruiz", amount: "$1,900 MXN", client: "Renata Lugo", date: "2026-09-21", status: "Pendiente" },
-  { id: "apr-3", type: "Ajuste de inventario", requestedBy: "Ana Torres", amount: "-2 uds. SKIN1004 Centella Ampoule", client: "—", date: "2026-09-20", status: "Aprobado" },
-  { id: "apr-4", type: "Cortesía", requestedBy: "Camila Ruiz", amount: "$850 MXN", client: "Daniela Ponce", date: "2026-09-19", status: "Rechazado" },
+  { id: "apr-1", type: "Descuento", requestedBy: "Camila Ruiz", amount: "15%", client: "Sofía Marín", location: "Roma Norte", reason: undefined as string | undefined, date: "2026-09-21", status: "Pendiente" as ApprovalStatus },
+  { id: "apr-2", type: "Reembolso", requestedBy: "Camila Ruiz", amount: "$1,900 MXN", client: "Renata Lugo", location: "Roma Norte", reason: "Servicio no satisfactorio" as string | undefined, date: "2026-09-21", status: "Pendiente" as ApprovalStatus },
+  { id: "apr-3", type: "Ajuste de inventario", requestedBy: "Ana Torres", amount: "-2 uds. SKIN1004 Centella Ampoule", client: "—", location: "Roma Norte", reason: undefined as string | undefined, date: "2026-09-20", status: "Aprobado" as ApprovalStatus },
+  { id: "apr-4", type: "Cortesía", requestedBy: "Camila Ruiz", amount: "$850 MXN", client: "Daniela Ponce", location: "Roma Norte", reason: undefined as string | undefined, date: "2026-09-19", status: "Rechazado" as ApprovalStatus },
 ];
 
 export const AUDIT_LOG = [

@@ -5,6 +5,7 @@ import { ProtocolsProvider } from "@/components/panel/ProtocolsContext";
 import { PanelAlertsProvider } from "@/components/panel/PanelAlertsContext";
 import { StaffRosterProvider } from "@/components/panel/StaffRosterContext";
 import { ClientBookingProvider } from "@/components/panel/ClientBookingContext";
+import { ApprovalsProvider } from "@/components/panel/ApprovalsContext";
 import { LoadingCurtain } from "@/components/LoadingCurtain";
 import "./globals.css";
 
@@ -50,7 +51,9 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
           <ProtocolsProvider>
             <StaffRosterProvider>
               <PanelAlertsProvider>
-                <ClientBookingProvider>{children}</ClientBookingProvider>
+                <ClientBookingProvider>
+                  <ApprovalsProvider>{children}</ApprovalsProvider>
+                </ClientBookingProvider>
               </PanelAlertsProvider>
             </StaffRosterProvider>
           </ProtocolsProvider>

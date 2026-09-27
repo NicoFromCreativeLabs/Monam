@@ -18,6 +18,7 @@ const ACCOUNTS = [
   { kind: "staff" as const, name: "Persona Test FrontDesk", email: "persona-frontdesk@test.monam.invalid", role: "FRONT_DESK" as const },
   { kind: "staff" as const, name: "Persona Test Esteticista", email: "persona-esteticista@test.monam.invalid", role: "ESTHETICIAN" as const },
   { kind: "staff" as const, name: "Persona Test Owner QA", email: "persona-owner-qa@test.monam.invalid", role: "OWNER" as const },
+  { kind: "staff" as const, name: "Persona Test Admin Review", email: "persona-admin-review@test.monam.invalid", role: "OWNER" as const },
 ];
 
 async function main() {
@@ -58,7 +59,11 @@ async function main() {
       }
     }
 
-    results[acct.kind === "staff" ? acct.role : "CLIENT"] = { email: acct.email, password };
+    // Keyed by email's local part, not role — two accounts can share a role
+    // (e.g. two OWNER test accounts), and role alone would silently
+    // overwrite one's saved credentials with the other's.
+    const key = acct.email.split("@")[0].toUpperCase().replace(/-/g, "_");
+    results[key] = { email: acct.email, password };
     console.log(`Created ${acct.email} (${acct.kind === "staff" ? acct.role : "CLIENT"})`);
   }
 

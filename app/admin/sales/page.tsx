@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { TopBar } from "@/components/panel/TopBar";
 import { Card, StatTile } from "@/components/panel/Card";
 import { Badge } from "@/components/panel/Badge";
@@ -20,6 +21,8 @@ export default function AdminSales() {
   const c = CASH_CUT_SUMMARY;
   const total = PAYMENT_METHOD_BREAKDOWN.reduce((sum, p) => sum + p.amount, 0);
   const maxAmount = Math.max(...PAYMENT_METHOD_BREAKDOWN.map((p) => p.amount));
+  const [status, setStatus] = useState<"Abierto" | "Cerrado">(c.status);
+  const [confirmClose, setConfirmClose] = useState(false);
 
   return (
     <>
@@ -27,7 +30,7 @@ export default function AdminSales() {
       <div className="flex-1 space-y-6 px-4 py-6 min-[860px]:px-8">
         <Card
           title={`Corte de caja — ${c.location}`}
-          action={<Badge tone={c.status === "Abierto" ? "positive" : "neutral"}>{c.status}</Badge>}
+          action={<Badge tone={status === "Abierto" ? "positive" : "neutral"}>{status}</Badge>}
         >
           <div className="grid grid-cols-2 gap-4 min-[700px]:grid-cols-4">
             <StatTile label="Abierta desde" value={c.openedAt} sub={c.openedBy} />
@@ -38,9 +41,16 @@ export default function AdminSales() {
               value={`${PAYMENT_METHOD_BREAKDOWN.reduce((s, p) => s + p.count, 0)}`}
             />
           </div>
-          <button className="mt-5 rounded-full bg-ciruela px-5 py-2.5 font-body text-sm text-hueso">
-            Cerrar caja
-          </button>
+          {status === "Abierto" ? (
+            <button
+              onClick={() => setConfirmClose(true)}
+              className="mt-5 rounded-full bg-ciruela px-5 py-2.5 font-body text-sm text-hueso"
+            >
+              Cerrar caja
+            </button>
+          ) : (
+            <p className="mt-5 font-body text-sm text-oliva">Caja cerrada — corte registrado.</p>
+          )}
         </Card>
 
         <Card title="Cobros por método de pago — hoy">
@@ -93,6 +103,42 @@ export default function AdminSales() {
           </p>
         </Card>
       </div>
+
+      {confirmClose && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-ciruela/40 px-4"
+          onClick={() => setConfirmClose(false)}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-xs rounded-2xl bg-hueso p-5 shadow-xl"
+          >
+            <p className="font-display text-sm text-ciruela">¿Cerrar la caja?</p>
+            <p className="mt-2 font-body text-sm text-ciruela/70">
+              Total cobrado hoy: ${total.toLocaleString()} MXN en{" "}
+              {PAYMENT_METHOD_BREAKDOWN.reduce((s, p) => s + p.count, 0)} transacciones. Esto
+              registra el corte de caja y no se puede reabrir desde aquí.
+            </p>
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                onClick={() => setConfirmClose(false)}
+                className="rounded-full border border-ciruela px-4 py-1.5 font-body text-xs text-ciruela hover:bg-ciruela hover:text-hueso"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={() => {
+                  setStatus("Cerrado");
+                  setConfirmClose(false);
+                }}
+                className="rounded-full bg-ciruela px-4 py-1.5 font-body text-xs text-hueso"
+              >
+                Cerrar caja
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }

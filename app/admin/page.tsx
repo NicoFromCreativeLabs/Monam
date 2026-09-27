@@ -6,13 +6,8 @@ import { GlobalFilterBar } from "@/components/panel/GlobalFilterBar";
 import { Card } from "@/components/panel/Card";
 import { KpiCard } from "@/components/panel/KpiCard";
 import { usePanelAlerts } from "@/components/panel/PanelAlertsContext";
-import {
-  OWNER,
-  PANEL_KPIS,
-  PANEL_TODAY_VS_LASTWEEK,
-  PENDING_APPROVALS,
-  TODAY_APPOINTMENTS,
-} from "@/lib/mock-data";
+import { useApprovals } from "@/components/panel/ApprovalsContext";
+import { OWNER, PANEL_KPIS, PANEL_TODAY_VS_LASTWEEK, TODAY_APPOINTMENTS } from "@/lib/mock-data";
 
 // Panel (Hoy) — rebuilt per client review, Sep 2026. The client's #1
 // complaint about the old dashboard: "everything has the same visual
@@ -22,6 +17,8 @@ import {
 // the eye can tell at a glance which band it's looking at.
 export default function AdminPanel() {
   const { alerts } = usePanelAlerts();
+  const { approvals, decide } = useApprovals();
+  const pendingApprovals = approvals.filter((a) => a.status === "Pendiente");
   const appointmentsByEsthetician = TODAY_APPOINTMENTS.reduce<Record<string, typeof TODAY_APPOINTMENTS>>(
     (acc, apt) => {
       (acc[apt.esthetician] ??= []).push(apt);
@@ -63,20 +60,20 @@ export default function AdminPanel() {
           <SectionHeading title="Requiere acción" subtitle="Lo que necesita una decisión tuya hoy" />
           <div className="grid grid-cols-1 gap-6 min-[1000px]:grid-cols-2">
             <Card
-              title={`Aprobaciones pendientes (${PENDING_APPROVALS.length})`}
+              title={`Aprobaciones pendientes (${pendingApprovals.length})`}
               action={
                 <Link href="/admin/control" className="font-body text-xs text-ciruela underline">
                   Ver todas →
                 </Link>
               }
             >
-              {PENDING_APPROVALS.length === 0 ? (
+              {pendingApprovals.length === 0 ? (
                 <p className="py-4 text-center font-body text-sm text-ciruela/50">
                   Sin aprobaciones pendientes.
                 </p>
               ) : (
                 <ul className="divide-y divide-ciruela/8">
-                  {PENDING_APPROVALS.map((a) => (
+                  {pendingApprovals.map((a) => (
                     <li key={a.id} className="flex items-center justify-between gap-3 py-3">
                       <p className="font-body text-sm text-ciruela">
                         {a.type} · {a.client} ·{" "}
@@ -94,10 +91,16 @@ export default function AdminPanel() {
                         )}
                       </p>
                       <div className="flex shrink-0 gap-2">
-                        <button className="rounded-full bg-ciruela px-3 py-1 font-body text-xs text-hueso">
+                        <button
+                          onClick={() => decide(a.id, "Aprobado")}
+                          className="rounded-full bg-ciruela px-3 py-1 font-body text-xs text-hueso"
+                        >
                           Aprobar
                         </button>
-                        <button className="rounded-full border border-ciruela px-3 py-1 font-body text-xs text-ciruela">
+                        <button
+                          onClick={() => decide(a.id, "Rechazado")}
+                          className="rounded-full border border-ciruela px-3 py-1 font-body text-xs text-ciruela"
+                        >
                           Rechazar
                         </button>
                       </div>

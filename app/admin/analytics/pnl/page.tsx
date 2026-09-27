@@ -5,6 +5,7 @@ import { GlobalFilterBar } from "@/components/panel/GlobalFilterBar";
 import { Card } from "@/components/panel/Card";
 import { Badge } from "@/components/panel/Badge";
 import { useStaffRoster } from "@/components/panel/StaffRosterContext";
+import { downloadCsv } from "@/lib/csv";
 import { OWNER, PNL_LINES } from "@/lib/mock-data";
 
 function formatMoney(n: number) {
@@ -37,6 +38,19 @@ export default function AdminPnl() {
       : row,
   );
 
+  function exportForAccountant() {
+    downloadCsv(
+      "pnl-roma-norte-monam.csv",
+      pnlLines
+        .filter((row) => row.type !== "section")
+        .map((row) => ({
+          Línea: row.label,
+          Real: row.real ?? "",
+          "% Ing.": row.pctLabel ?? "",
+        })),
+    );
+  }
+
   return (
     <>
       <TopBar title="P&L" userName={OWNER.name} userRole={OWNER.role} allowBothLocations />
@@ -51,7 +65,10 @@ export default function AdminPnl() {
           </div>
           <div className="flex items-center gap-3">
             <Badge tone="warning">Preliminar</Badge>
-            <button className="rounded-full bg-ciruela px-4 py-2 font-body text-xs text-hueso">
+            <button
+              onClick={exportForAccountant}
+              className="rounded-full bg-ciruela px-4 py-2 font-body text-xs text-hueso"
+            >
               Exportar para contador
             </button>
           </div>
