@@ -5,7 +5,8 @@ import { TopBar } from "@/components/panel/TopBar";
 import { Card } from "@/components/panel/Card";
 import { Badge } from "@/components/panel/Badge";
 import { useApprovals } from "@/components/panel/ApprovalsContext";
-import { OWNER, ANOMALY_FLAGS, AUDIT_LOG, CLINICAL_INCIDENTS } from "@/lib/mock-data";
+import { useAnomalies } from "@/components/panel/AnomaliesContext";
+import { OWNER, AUDIT_LOG, CLINICAL_INCIDENTS } from "@/lib/mock-data";
 
 const APPROVAL_TONE: Record<string, "warning" | "positive" | "neutral"> = {
   Pendiente: "warning",
@@ -24,6 +25,7 @@ type Tab = (typeof TABS)[number];
 export default function AdminControl() {
   const [tab, setTab] = useState<Tab>("Aprobaciones");
   const { approvals: queue, decide } = useApprovals();
+  const { anomalies, resolveAnomaly } = useAnomalies();
 
   return (
     <>
@@ -84,16 +86,32 @@ export default function AdminControl() {
         {tab === "Anomalías" && (
           <Card title="Alertas de anomalías">
             <ul className="divide-y divide-ciruela/8">
-              {ANOMALY_FLAGS.map((f) => (
-                <li key={f.id} className="flex items-center justify-between py-3">
+              {anomalies.map((f) => (
+                <li key={f.id} className="flex items-center justify-between gap-3 py-3">
                   <div>
                     <p className="font-body text-sm text-ciruela">{f.type}</p>
                     <p className="font-body text-xs text-ciruela/50">{f.detail}</p>
                   </div>
-                  <Badge tone={f.status === "Abierto" ? "warning" : "positive"}>{f.status}</Badge>
+                  <div className="flex shrink-0 items-center gap-3">
+                    <Badge tone={f.status === "Abierto" ? "warning" : "positive"}>{f.status}</Badge>
+                    {f.status === "Abierto" && (
+                      <button
+                        onClick={() => resolveAnomaly(f.id)}
+                        className="font-body text-[11px] text-ciruela underline"
+                      >
+                        Marcar resuelto
+                      </button>
+                    )}
+                  </div>
                 </li>
               ))}
             </ul>
+            <p className="mt-4 font-body text-xs text-ciruela/40">
+              Descuento inusual y Reembolso inusual se generan solos al aprobar una solicitud en
+              Aprobaciones por encima del umbral configurado en Configuración; Merma y Comisión
+              reasignada manualmente, al ajustar inventario o re-agregar un producto quitado en
+              Cobro/POS.
+            </p>
           </Card>
         )}
 

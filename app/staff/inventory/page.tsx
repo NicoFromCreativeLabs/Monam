@@ -5,6 +5,7 @@ import { TopBar } from "@/components/panel/TopBar";
 import { Card } from "@/components/panel/Card";
 import { staffIdentity, useStaffRole } from "@/components/panel/StaffRoleContext";
 import { usePanelAlerts } from "@/components/panel/PanelAlertsContext";
+import { useAnomalies } from "@/components/panel/AnomaliesContext";
 import {
   RETAIL_INVENTORY,
   BACKBAR_INVENTORY,
@@ -49,6 +50,7 @@ function InventoryCard({
   showPao?: boolean;
 }) {
   const { addAlert } = usePanelAlerts();
+  const { addAnomaly } = useAnomalies();
   const [list, setList] = useState(items);
   const [editingSku, setEditingSku] = useState<string | null>(null);
   const [draftQty, setDraftQty] = useState("");
@@ -70,6 +72,10 @@ function InventoryCard({
     if (qty < item.qty) {
       addAlert(
         `Inventario ${item.product} (SKU ${item.sku}) ajustado de ${item.qty} a ${qty} — motivo: ${draftReason.trim()}.`,
+      );
+      addAnomaly(
+        "Merma",
+        `${item.product} (SKU ${item.sku}) bajó de ${item.qty} a ${qty} — motivo: ${draftReason.trim()}.`,
       );
     }
     setList((prev) => prev.map((i) => (i.sku === sku ? { ...i, qty } : i)));

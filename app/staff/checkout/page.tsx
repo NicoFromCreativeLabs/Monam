@@ -5,6 +5,7 @@ import { TopBar } from "@/components/panel/TopBar";
 import { Card } from "@/components/panel/Card";
 import { staffIdentity, useStaffRole } from "@/components/panel/StaffRoleContext";
 import { usePanelAlerts } from "@/components/panel/PanelAlertsContext";
+import { useAnomalies } from "@/components/panel/AnomaliesContext";
 import { CHECKOUT_TICKET, RETAIL_INVENTORY } from "@/lib/mock-data";
 
 type AddedItem = { product: string; price: number; qty: number };
@@ -21,6 +22,7 @@ export default function StaffCheckout() {
   const { role } = useStaffRole();
   const identity = staffIdentity(role);
   const { addAlert } = usePanelAlerts();
+  const { addAnomaly } = useAnomalies();
   const t = CHECKOUT_TICKET;
   const [wishlist, setWishlist] = useState(t.wishlist);
   const [recommendedItems, setRecommendedItems] = useState(t.retailItems);
@@ -58,6 +60,10 @@ export default function StaffCheckout() {
     if (removed) {
       addAlert(
         `"${pendingReAdd.product}" fue re-agregado al ticket de ${t.client} después de quitarse la recomendación de ${removed.recommendedBy} — confirmar a quién se atribuye la comisión.`,
+      );
+      addAnomaly(
+        "Comisión reasignada manualmente",
+        `"${pendingReAdd.product}" re-agregado al ticket de ${t.client} tras quitar la recomendación de ${removed.recommendedBy}.`,
       );
     }
     setPendingReAdd(null);

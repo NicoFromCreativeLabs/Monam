@@ -4,14 +4,7 @@ import { useState } from "react";
 import { TopBar } from "@/components/panel/TopBar";
 import { Card } from "@/components/panel/Card";
 import { Badge } from "@/components/panel/Badge";
-import {
-  OWNER,
-  SETTINGS,
-  ADD_ONS,
-  KPI_TARGETS,
-  PERMISSIONS_MATRIX,
-  BUSINESS_RULES_EXTRA,
-} from "@/lib/mock-data";
+import { OWNER, SETTINGS, ADD_ONS, KPI_TARGETS, PERMISSIONS_MATRIX } from "@/lib/mock-data";
 import {
   useLocations,
   type LocationRecord,
@@ -22,6 +15,7 @@ import {
   type ProtocolRecord,
   type ProtocolTier,
 } from "@/components/panel/ProtocolsContext";
+import { useBusinessRules } from "@/components/panel/BusinessRulesContext";
 
 // Locations, protocols/menu, deposit rules, cancellation policy (spec §6.1).
 // Values shown as editable settings, not hardcoded constants — several are
@@ -98,12 +92,27 @@ export default function AdminSettings() {
     cancellationWindowHours: SETTINGS.cancellationWindowHours,
     discountApprovalThresholdPct: SETTINGS.discountApprovalThresholdPct,
   });
-  const [commissionRules, setCommissionRules] = useState({
-    commissionServicePct: BUSINESS_RULES_EXTRA.commissionServicePct,
-    commissionRetailPct: BUSINESS_RULES_EXTRA.commissionRetailPct,
-    anomalyDiscountThresholdPct: BUSINESS_RULES_EXTRA.anomalyDiscountThresholdPct,
-    anomalyRefundThresholdMXN: BUSINESS_RULES_EXTRA.anomalyRefundThresholdMXN,
-  });
+  const { rules: commissionRules, updateRules: setCommissionRules } = useBusinessRules();
+  const [kpiTargets, setKpiTargets] = useState(KPI_TARGETS.map((k) => ({ ...k })));
+  const [permissions, setPermissions] = useState(() => ({
+    roles: PERMISSIONS_MATRIX.roles,
+    rows: PERMISSIONS_MATRIX.rows.map((row) => ({ ...row, access: [...row.access] })),
+  }));
+
+  function updateKpiTarget(kpi: string, patch: Partial<{ target: string; vigencia: string }>) {
+    setKpiTargets((prev) => prev.map((k) => (k.kpi === kpi ? { ...k, ...patch } : k)));
+  }
+
+  function updatePermissionCell(area: string, roleIndex: number, value: string) {
+    setPermissions((prev) => ({
+      ...prev,
+      rows: prev.rows.map((row) =>
+        row.area === area
+          ? { ...row, access: row.access.map((v, i) => (i === roleIndex ? value : v)) }
+          : row,
+      ),
+    }));
+  }
 
   function startEdit(l: LocationRecord) {
     setEditingId(l.id);
@@ -705,10 +714,7 @@ export default function AdminSettings() {
                     max={100}
                     value={commissionRules.commissionServicePct}
                     onChange={(e) =>
-                      setCommissionRules((r) => ({
-                        ...r,
-                        commissionServicePct: Number(e.target.value) || 0,
-                      }))
+                      setCommissionRules({ commissionServicePct: Number(e.target.value) || 0 })
                     }
                     className="w-16 rounded border border-ciruela/25 bg-hueso px-1.5 py-1 text-right font-body text-sm text-ciruela focus:outline-none focus:ring-1 focus:ring-ciruela/40"
                   />
@@ -726,10 +732,7 @@ export default function AdminSettings() {
                     max={100}
                     value={commissionRules.commissionRetailPct}
                     onChange={(e) =>
-                      setCommissionRules((r) => ({
-                        ...r,
-                        commissionRetailPct: Number(e.target.value) || 0,
-                      }))
+                      setCommissionRules({ commissionRetailPct: Number(e.target.value) || 0 })
                     }
                     className="w-16 rounded border border-ciruela/25 bg-hueso px-1.5 py-1 text-right font-body text-sm text-ciruela focus:outline-none focus:ring-1 focus:ring-ciruela/40"
                   />
@@ -747,10 +750,7 @@ export default function AdminSettings() {
                     max={100}
                     value={commissionRules.anomalyDiscountThresholdPct}
                     onChange={(e) =>
-                      setCommissionRules((r) => ({
-                        ...r,
-                        anomalyDiscountThresholdPct: Number(e.target.value) || 0,
-                      }))
+                      setCommissionRules({ anomalyDiscountThresholdPct: Number(e.target.value) || 0 })
                     }
                     className="w-16 rounded border border-ciruela/25 bg-hueso px-1.5 py-1 text-right font-body text-sm text-ciruela focus:outline-none focus:ring-1 focus:ring-ciruela/40"
                   />
@@ -768,10 +768,7 @@ export default function AdminSettings() {
                     min={0}
                     value={commissionRules.anomalyRefundThresholdMXN}
                     onChange={(e) =>
-                      setCommissionRules((r) => ({
-                        ...r,
-                        anomalyRefundThresholdMXN: Number(e.target.value) || 0,
-                      }))
+                      setCommissionRules({ anomalyRefundThresholdMXN: Number(e.target.value) || 0 })
                     }
                     className="w-20 rounded border border-ciruela/25 bg-hueso px-1.5 py-1 text-right font-body text-sm text-ciruela focus:outline-none focus:ring-1 focus:ring-ciruela/40"
                   />
@@ -781,8 +778,10 @@ export default function AdminSettings() {
             </div>
           </dl>
           <p className="mt-4 font-body text-xs text-ciruela/40">
-            Los cambios aplican de inmediato en este panel — el cálculo real de comisiones y
-            anomalías contra ventas/transacciones sigue pendiente del backend (Fase 2).
+            Los umbrales de anomalía ya son reales: al aprobar un Descuento o Reembolso en
+            Aprobaciones por encima de estos valores, se genera solo una anomalía en Control →
+            Anomalías. El cálculo de comisiones contra ventas reales sigue pendiente del backend
+            (Fase 2).
           </p>
         </Card>
 
@@ -797,11 +796,25 @@ export default function AdminSettings() {
               </tr>
             </thead>
             <tbody>
-              {KPI_TARGETS.map((k) => (
+              {kpiTargets.map((k) => (
                 <tr key={k.kpi} className="border-t border-ciruela/8">
                   <td className="py-2.5">{k.kpi}</td>
-                  <td className="py-2.5 text-right">{k.target}</td>
-                  <td className="py-2.5 text-right text-ciruela/50">{k.vigencia}</td>
+                  <td className="py-2.5 text-right">
+                    <input
+                      type="text"
+                      value={k.target}
+                      onChange={(e) => updateKpiTarget(k.kpi, { target: e.target.value })}
+                      className="w-28 rounded border border-ciruela/25 bg-hueso px-1.5 py-1 text-right font-body text-sm text-ciruela focus:outline-none focus:ring-1 focus:ring-ciruela/40"
+                    />
+                  </td>
+                  <td className="py-2.5 text-right text-ciruela/50">
+                    <input
+                      type="text"
+                      value={k.vigencia}
+                      onChange={(e) => updateKpiTarget(k.kpi, { vigencia: e.target.value })}
+                      className="w-16 rounded border border-ciruela/25 bg-hueso px-1.5 py-1 text-right font-body text-sm text-ciruela focus:outline-none focus:ring-1 focus:ring-ciruela/40"
+                    />
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -809,7 +822,8 @@ export default function AdminSettings() {
           </div>
           <p className="mt-3 font-body text-xs text-ciruela/40">
             Alimenta la columna &ldquo;Objetivo&rdquo; en Análisis → P&L y el avance mostrado en
-            cada tarjeta de KPI. Edición de objetivos es Fase 2.
+            cada tarjeta de KPI — esa conexión en vivo sigue pendiente del backend (Fase 2); por
+            ahora los cambios aquí solo se reflejan en este panel.
           </p>
         </Card>
 
@@ -819,7 +833,7 @@ export default function AdminSettings() {
               <thead>
                 <tr className="text-left text-xs uppercase tracking-wide text-ciruela/40">
                   <th className="pb-2 pr-4">Área</th>
-                  {PERMISSIONS_MATRIX.roles.map((r) => (
+                  {permissions.roles.map((r) => (
                     <th key={r} className="pb-2 pr-4 text-left">
                       {r}
                     </th>
@@ -827,12 +841,17 @@ export default function AdminSettings() {
                 </tr>
               </thead>
               <tbody>
-                {PERMISSIONS_MATRIX.rows.map((row) => (
+                {permissions.rows.map((row) => (
                   <tr key={row.area} className="border-t border-ciruela/8">
                     <td className="py-2.5 pr-4">{row.area}</td>
                     {row.access.map((val, i) => (
-                      <td key={i} className="py-2.5 pr-4 text-ciruela/60">
-                        {val}
+                      <td key={i} className="py-2.5 pr-4">
+                        <input
+                          type="text"
+                          value={val}
+                          onChange={(e) => updatePermissionCell(row.area, i, e.target.value)}
+                          className="w-24 rounded border border-ciruela/25 bg-hueso px-1.5 py-1 font-body text-sm text-ciruela/60 focus:outline-none focus:ring-1 focus:ring-ciruela/40"
+                        />
                       </td>
                     ))}
                   </tr>
@@ -841,7 +860,9 @@ export default function AdminSettings() {
             </table>
           </div>
           <p className="mt-3 font-body text-xs text-ciruela/40">
-            Matriz de referencia — edición granular de permisos por rol es Fase 2.
+            Matriz de referencia editable — la aplicación real de permisos granulares por rol en
+            el código sigue pendiente del backend (Fase 2); los valores aquí no cambian lo que
+            cada rol puede hacer todavía.
           </p>
         </Card>
       </div>
