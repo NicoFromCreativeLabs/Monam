@@ -1,86 +1,34 @@
-"use client";
+import { prisma } from "@/lib/prisma";
+import { requireClient } from "@/lib/auth/dal";
+import { ClientHomeView } from "@/components/panel/ClientHomeView";
+import type { UpcomingAppointmentView } from "@/components/panel/ClientAppointmentsView";
 
-import Link from "next/link";
-import { Card } from "@/components/panel/Card";
-import { useClientBooking } from "@/components/panel/ClientBookingContext";
-import { useCurrentClient } from "@/components/panel/CurrentClientContext";
+function formatDate(d: Date) {
+  return d.toISOString().slice(0, 10);
+}
+function formatTime(d: Date) {
+  return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+}
 
-export default function ClientHome() {
-  const { upcoming, packageBalance: pack } = useClientBooking();
-  const client = useCurrentClient();
-  const apt = upcoming[0];
+export default async function ClientHomePage() {
+  const client = await requireClient();
 
-  return (
-    <div className="space-y-6">
-      <div>
-        <p className="font-body text-sm text-ciruela/60">Hola,</p>
-        <h1 className="font-display text-2xl text-ciruela">{client.name.split(" ")[0]}</h1>
-      </div>
+  const next = await prisma.appointment.findFirst({
+    where: { clientId: client.id, startAt: { gte: new Date() }, status: { notIn: ["CANCELLED", "NO_SHOW"] } },
+    include: { protocol: true, location: true, deposit: true },
+    orderBy: { startAt: "asc" },
+  });
 
-      <Card title="Próxima cita">
-        {apt ? (
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="font-display text-lg text-ciruela">{apt.protocolTier}</p>
-              <p className="font-body text-sm text-ciruela/60">
-                {apt.date} · {apt.time} · {apt.location}
-              </p>
-              <p className="mt-1 font-body text-xs text-oliva">
-                {apt.depositPaid ? "Depósito pagado" : "Depósito pendiente"}
-              </p>
-            </div>
-            <div className="flex gap-2">
-              <Link
-                href="/my/appointments"
-                className="rounded-full border border-ciruela px-4 py-2 font-body text-xs text-ciruela hover:bg-ciruela hover:text-hueso"
-              >
-                Reagendar
-              </Link>
-              <Link
-                href="/my/appointments"
-                className="rounded-full bg-ciruela px-4 py-2 font-body text-xs text-hueso"
-              >
-                Detalles
-              </Link>
-            </div>
-          </div>
-        ) : (
-          <div className="flex items-center justify-between">
-            <p className="font-body text-sm text-ciruela/60">No tienes citas próximas.</p>
-            <Link
-              href="/my/book"
-              className="rounded-full bg-ciruela px-4 py-2 font-body text-xs text-hueso"
-            >
-              Reservar
-            </Link>
-          </div>
-        )}
-      </Card>
+  const nextAppointment: UpcomingAppointmentView | null = next
+    ? {
+        id: next.id,
+        protocolTier: `${next.protocol?.name ?? next.durationTier} (${next.durationTier === "SIGNATURE" ? 60 : 30} min)`,
+        date: formatDate(next.startAt),
+        time: formatTime(next.startAt),
+        location: next.location.name,
+        depositPaid: next.deposit !== null,
+      }
+    : null;
 
-      <Card title="Reagenda rápida">
-        <p className="font-body text-sm text-ciruela/70">
-          Repite tu protocolo y elige tu próximo horario.
-        </p>
-        <Link
-          href="/my/book"
-          className="mt-4 inline-block rounded-full bg-ciruela px-5 py-2.5 font-body text-sm text-hueso"
-        >
-          Reagendar Glow
-        </Link>
-      </Card>
-
-      <Card title="Saldo de paquete">
-        <div className="flex items-center justify-between">
-          <div>
-            <p className="font-display text-lg text-ciruela">{pack.name}</p>
-            <p className="font-body text-sm text-ciruela/60">Vence el {pack.expiresOn}</p>
-          </div>
-          <p className="font-display text-2xl text-ciruela">
-            {pack.sessionsRemaining}{" "}
-            <span className="font-body text-sm text-ciruela/50">sesiones restantes</span>
-          </p>
-        </div>
-      </Card>
-    </div>
-  );
+  return <ClientHomeView nextAppointment={nextAppointment} />;
 }

@@ -5,8 +5,8 @@ import { Card } from "@/components/panel/Card";
 import { useLocations } from "@/components/panel/LocationsContext";
 import { useProtocols } from "@/components/panel/ProtocolsContext";
 import { useAddOns } from "@/components/panel/AddOnsContext";
-import { useClientBooking } from "@/components/panel/ClientBookingContext";
 import { useScrollEdgeFade } from "@/components/panel/useScrollEdgeFade";
+import { createAppointmentAction } from "@/lib/actions/booking";
 import { BUSINESS_HOURS, CLIENT_PAYMENT_METHODS, type DayHours } from "@/lib/mock-data";
 
 // Booking flow: location → duration → (facial) → (add-ons) → day/slot →
@@ -73,7 +73,6 @@ export default function ClientBook() {
   const addOns = useAddOns();
   const signatureProtocols = protocols.filter((p) => p.tier === "Signature");
   const targetedProtocol = protocols.find((p) => p.tier === "Targeted");
-  const { addAppointment } = useClientBooking();
   const [step, setStep] = useState<Step>("location");
   const [location, setLocation] = useState<string | null>(null);
   const [duration, setDuration] = useState<"Targeted" | "Signature" | null>(null);
@@ -81,6 +80,8 @@ export default function ClientBook() {
   const [selectedAddOns, setSelectedAddOns] = useState<string[]>([]);
   const [dayIndex, setDayIndex] = useState(0);
   const [slot, setSlot] = useState<string | null>(null);
+  const [confirming, setConfirming] = useState(false);
+  const [bookingError, setBookingError] = useState<string | null>(null);
 
   const dayOptions = useMemo(() => buildDayOptions(), []);
   const selectedDay = dayOptions[dayIndex];
@@ -131,18 +132,30 @@ export default function ClientBook() {
 
   const daySlots = duration ? generateSlots(selectedDay.hours, duration) : [];
 
-  // Writes the booking into ClientBookingContext the moment the client
-  // actually reaches the confirmation screen — from either transition into
-  // "confirm" (with or without a deposit step in between) — so it shows up
-  // in "Próxima cita" and "Mi rutina" immediately, not just on this screen.
-  function confirmBooking(chosenSlot: string) {
-    addAppointment({
+  // Writes a real Appointment row the moment the client actually reaches
+  // the confirmation screen — from either transition into "confirm" (with
+  // or without a deposit step in between). The room/esthetician assignment
+  // and the actual conflict check both happen server-side
+  // (lib/actions/booking.ts) — a slot can still lose a race between when
+  // it was offered and when this fires, so this returns an error instead
+  // of just advancing the step in that case.
+  async function confirmBooking(chosenSlot: string) {
+    setConfirming(true);
+    setBookingError(null);
+    const result = await createAppointmentAction({
+      locationName: location!,
       date: selectedDay.date.toISOString().slice(0, 10),
       time: chosenSlot,
-      location: location!,
-      protocolTier: `${protocol ?? duration} (${duration === "Signature" ? 60 : 30} min)`,
-      depositPaid: requiresDeposit,
+      durationTier: duration!,
+      protocolName: duration === "Signature" ? protocol : null,
     });
+    setConfirming(false);
+    if ("error" in result) {
+      setBookingError(result.error);
+      return false;
+    }
+    setStep("confirm");
+    return true;
   }
 
   return (
@@ -318,21 +331,27 @@ export default function ClientBook() {
               {daySlots.map((s) => (
                 <button
                   key={s}
+                  disabled={confirming}
                   onClick={() => {
                     setSlot(s);
+                    setBookingError(null);
                     if (requiresDeposit) {
                       setStep("deposit");
                     } else {
                       confirmBooking(s);
-                      setStep("confirm");
                     }
                   }}
-                  className="rounded-lg border border-ciruela/20 px-3 py-2 font-body text-sm text-ciruela hover:bg-ciruela hover:text-hueso"
+                  className="rounded-lg border border-ciruela/20 px-3 py-2 font-body text-sm text-ciruela hover:bg-ciruela hover:text-hueso disabled:opacity-50"
                 >
                   {s}
                 </button>
               ))}
             </div>
+          )}
+          {bookingError && (
+            <p className="mt-3 rounded-lg bg-[#b3392f]/10 px-3 py-2 font-body text-xs text-[#b3392f]">
+              {bookingError}
+            </p>
           )}
         </Card>
       )}
@@ -356,14 +375,17 @@ export default function ClientBook() {
             </div>
           )}
           <button
-            onClick={() => {
-              confirmBooking(slot!);
-              setStep("confirm");
-            }}
-            className="mt-6 w-full rounded-full bg-ciruela px-5 py-3 font-body text-sm text-hueso"
+            onClick={() => confirmBooking(slot!)}
+            disabled={confirming}
+            className="mt-6 w-full rounded-full bg-ciruela px-5 py-3 font-body text-sm text-hueso disabled:opacity-50"
           >
-            Pagar depósito y confirmar
+            {confirming ? "Confirmando…" : "Pagar depósito y confirmar"}
           </button>
+          {bookingError && (
+            <p className="mt-3 rounded-lg bg-[#b3392f]/10 px-3 py-2 font-body text-xs text-[#b3392f]">
+              {bookingError}
+            </p>
+          )}
         </Card>
       )}
 

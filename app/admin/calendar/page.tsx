@@ -1,13 +1,15 @@
 import { TopBar } from "@/components/panel/TopBar";
 import { Card } from "@/components/panel/Card";
 import { prisma } from "@/lib/prisma";
-import { OWNER, CALENDAR_APPOINTMENTS, CALENDAR_HOURS } from "@/lib/mock-data";
+import { getTodayAppointments } from "@/lib/appointments";
+import { OWNER, CALENDAR_HOURS } from "@/lib/mock-data";
 
 // All-location calendar — reassign/override, device-conflict flags (spec §6.3).
-// The room+esthetician+device conflict check itself is server-side logic
-// (implementation plan Phase 2); this is the read-only view shell.
-// Rooms are real (Catalog phase); appointments are still mock — Booking is
-// the next domain to convert, not this one.
+// The room+esthetician+device conflict check itself is a database constraint
+// (the EXCLUDE constraints on `appointments`, see prisma/schema.prisma); this
+// is the read-only view shell. Rooms and appointments are both real now
+// (Catalog + Booking phases) — only the display hour axis (9:00-17:00) is
+// still a fixed constant, not derived from real business-hours data.
 export default async function AdminCalendar() {
   const colWidth = 100 / CALENDAR_HOURS.length;
   const romaNorte = await prisma.location.findFirst({
@@ -15,6 +17,13 @@ export default async function AdminCalendar() {
     include: { rooms: { orderBy: { name: "asc" } } },
   });
   const rooms = romaNorte?.rooms.map((r) => r.name) ?? [];
+  const todayAppointments = romaNorte ? await getTodayAppointments(romaNorte.id) : [];
+  const calendarAppointments = todayAppointments.map((a) => {
+    const [h, m] = a.time.split(":").map(Number);
+    const start = h + m / 60;
+    const span = a.tier === "Signature" ? 1 : 0.5;
+    return { id: a.id, room: a.room, start, span, client: a.clientName, esthetician: a.esthetician, tier: a.tier };
+  });
 
   return (
     <>
@@ -40,7 +49,7 @@ export default async function AdminCalendar() {
                 <div key={room} className="flex items-center border-b border-ciruela/8 py-3">
                   <div className="w-32 shrink-0 font-body text-sm text-ciruela/70">{room}</div>
                   <div className="relative h-12 flex-1">
-                    {CALENDAR_APPOINTMENTS.filter((a) => a.room === room).map((apt) => {
+                    {calendarAppointments.filter((a) => a.room === room).map((apt) => {
                       const left =
                         ((apt.start - CALENDAR_HOURS[0]) / CALENDAR_HOURS.length) * 100;
                       const width = (apt.span / CALENDAR_HOURS.length) * 100;
