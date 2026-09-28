@@ -7,21 +7,20 @@ import { Badge } from "@/components/panel/Badge";
 import { useStaffRoster } from "@/components/panel/StaffRosterContext";
 import { useLocations } from "@/components/panel/LocationsContext";
 import { downloadCsv } from "@/lib/csv";
-import { OWNER, PNL_LINES, type PnlRow } from "@/lib/mock-data";
+import { OWNER, PNL_LINES, PNL_LINES_BY_LOCATION, type PnlRow } from "@/lib/mock-data";
 
 function formatMoney(n: number) {
   const abs = Math.abs(n).toLocaleString("es-MX");
   return n < 0 ? `(${abs})` : abs;
 }
 
-// Every sale/COGS/commission line in PNL_LINES is Roma Norte's real activity
-// — the only location actually operating today. Rather than fabricate a
-// Prado Norte revenue history it doesn't have, these lines read 0 whenever
-// Roma Norte isn't part of the selected scope; Renta/Mantenimiento/Nómina
-// stay live either way, since a signed lease and shared admin overhead are
-// real pre-opening costs (spec: Prado Norte's rentCost/maintenanceCost are
-// "the projected pre-opening estimate, not a signed lease" — still real
-// numbers Settings already lets you edit, not invented here).
+// Every line below is tracked per-location in PNL_LINES_BY_LOCATION (Roma
+// Norte's real activity, plus illustrative Prado Norte test figures so the
+// "Local" filter has real numbers to show once Prado Norte is activated) —
+// summed across whichever location(s) are selected, so Consolidado is a
+// true sum rather than Roma Norte's total repeated. Renta/Mantenimiento/
+// Nómina are handled separately below (computed live from Location/roster
+// records, not this map).
 const OPERATIONAL_LABELS = new Set([
   "Servicios Targeted",
   "Servicios Signature",
@@ -62,7 +61,6 @@ export default function AdminPnl() {
   const { roster } = useStaffRoster();
   const { locations, selectedNames } = useLocations();
 
-  const includesRomaNorte = selectedNames.includes("Roma Norte");
   const scopeLabel = selectedNames.length > 1 ? "Consolidado" : selectedNames[0];
 
   const scopedLocations = locations.filter((l) => selectedNames.includes(l.name));
@@ -85,7 +83,13 @@ export default function AdminPnl() {
     }
     if (row.label === "Renta") return { ...row, real: -rentCost };
     if (row.label === "Mantenimiento y servicios") return { ...row, real: -maintenanceCost };
-    if (OPERATIONAL_LABELS.has(row.label)) return { ...row, real: includesRomaNorte ? row.real : 0 };
+    if (OPERATIONAL_LABELS.has(row.label)) {
+      const scopedTotal = scopedLocations.reduce(
+        (sum, l) => sum + (PNL_LINES_BY_LOCATION[l.name]?.[row.label] ?? 0),
+        0,
+      );
+      return { ...row, real: scopedTotal };
+    }
     return row;
   });
 
@@ -215,12 +219,12 @@ export default function AdminPnl() {
             </tbody>
           </table>
           <p className="mt-3 font-body text-xs text-ciruela/40">
-            {includesRomaNorte
-              ? "Ingresos y costos operativos son de Roma Norte, la única sucursal abierta hoy. "
-              : "Prado Norte aún no abre — sin actividad de ventas, solo Renta/Mantenimiento/Nómina. "}
-            &ldquo;Nómina base&rdquo;, &ldquo;Renta&rdquo; y &ldquo;Mantenimiento y servicios&rdquo;
-            se calculan en vivo para la(s) sucursal(es) seleccionada(s) — el resto son cifras
-            ilustrativas.
+            Ingresos y costos operativos se suman por sucursal según lo seleccionado en
+            &ldquo;Local&rdquo; — Consolidado es la suma real de las sucursales activas, no solo
+            Roma Norte repetido. &ldquo;Nómina base&rdquo;, &ldquo;Renta&rdquo; y
+            &ldquo;Mantenimiento y servicios&rdquo; se calculan en vivo para la(s) sucursal(es)
+            seleccionada(s). Todas las cifras, incluidas las de Prado Norte, son ilustrativas —
+            actívala en Configuración → Sucursales para poder seleccionarla aquí.
           </p>
         </Card>
       </div>

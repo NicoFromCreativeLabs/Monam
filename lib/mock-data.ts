@@ -801,6 +801,57 @@ export const PNL_LINES: PnlRow[] = [
   { type: "subtotal", label: "EBITDA del local", real: 56960, pctLabel: "12%", favorite: true },
 ];
 
+// Per-location operational figures for every line the P&L page scopes to
+// the selected location(s) (spec/page comment: "OPERATIONAL_LABELS"). Roma
+// Norte's numbers match PNL_LINES above (it's the only location with real
+// activity today); Prado Norte's are illustrative test data — roughly 40-46%
+// of Roma Norte's, consistent with its smaller Renta/Mantenimiento
+// (LOCATIONS: $32,000/$5,500 vs. $70,000/$11,200) — so switching the "Local"
+// filter to Prado Norte or Consolidado has real numbers to show instead of
+// zeros. Prado Norte is still seeded `isActive: false` ("Próximamente") —
+// selecting it requires activating it first in Configuración → Sucursales,
+// same as every other screen scoped by LocationsContext.
+export const PNL_LINES_BY_LOCATION: Record<string, Partial<Record<string, number>>> = {
+  "Roma Norte": {
+    "Servicios Targeted": 117241,
+    "Servicios Signature": 212931,
+    "Add-ons": 20690,
+    "Retail": 150000,
+    "Paquetes vencidos no usados": 0,
+    "− Descuentos": -12000,
+    "− Reembolsos": -1638,
+    "Backbar teórico": -91600,
+    "Insumos de add-ons": -2400,
+    "Costo retail vendido": -67500,
+    "Cortesías": -600,
+    "Merma": -3000,
+    "Comisiones de servicio": -42000,
+    "Comisiones de retail": -12000,
+    "Comisión de terminal": -13564,
+    "Operación del local": -18000,
+    "Marketing local": -10000,
+  },
+  "Prado Norte": {
+    "Servicios Targeted": 52800,
+    "Servicios Signature": 95700,
+    "Add-ons": 8900,
+    "Retail": 61000,
+    "Paquetes vencidos no usados": 0,
+    "− Descuentos": -4800,
+    "− Reembolsos": -420,
+    "Backbar teórico": -39800,
+    "Insumos de add-ons": -1050,
+    "Costo retail vendido": -27800,
+    "Cortesías": -250,
+    "Merma": -1200,
+    "Comisiones de servicio": -18500,
+    "Comisiones de retail": -4900,
+    "Comisión de terminal": -5920,
+    "Operación del local": -8200,
+    "Marketing local": -4500,
+  },
+};
+
 // ---------------------------------------------------------------------------
 // Admin — Análisis sub-pages (Nivel 1 headline + Nivel 2 supporting KPIs)
 // ---------------------------------------------------------------------------
