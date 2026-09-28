@@ -1,9 +1,11 @@
 "use client";
 
+import Link from "next/link";
 import { TopBar } from "@/components/panel/TopBar";
 import { Card } from "@/components/panel/Card";
 import { RoleToggle } from "@/components/panel/RoleToggle";
 import { staffIdentity, useStaffRole } from "@/components/panel/StaffRoleContext";
+import { usePendingCheckouts } from "@/components/panel/PendingCheckoutsContext";
 import {
   TODAY_APPOINTMENTS,
   CLIENT_SKIN_ID_PREVIEW,
@@ -32,9 +34,41 @@ export default function StaffToday() {
 }
 
 function FrontDeskToday() {
+  const { pending } = usePendingCheckouts();
+
   return (
     <div className="grid grid-cols-1 gap-6 min-[1100px]:grid-cols-3">
-      <div className="min-[1100px]:col-span-2">
+      <div className="min-[1100px]:col-span-2 space-y-6">
+        <Card title={`Listas para cobro (${pending.length})`}>
+          {pending.length === 0 ? (
+            <p className="py-4 text-center font-body text-sm text-ciruela/50">
+              Ninguna clienta lista para cobro todavía — aparece aquí en cuanto una esteticista
+              completa un tratamiento.
+            </p>
+          ) : (
+            <ul className="divide-y divide-ciruela/8">
+              {pending.map((p) => (
+                <li key={p.id}>
+                  <Link
+                    href={`/staff/checkout?session=${p.id}`}
+                    className="flex items-center justify-between py-3 hover:bg-ciruela/[0.03]"
+                  >
+                    <div>
+                      <p className="font-body text-sm text-ciruela">{p.clientName}</p>
+                      <p className="font-body text-xs text-ciruela/50">
+                        {p.service.name} · facial finalizado {p.finishedAt}
+                      </p>
+                    </div>
+                    <span className="rounded-full bg-ciruela px-3 py-1.5 font-body text-xs text-hueso">
+                      Cobrar
+                    </span>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Card>
+
         <Card title="Roma Norte — agenda de hoy">
           <ul className="divide-y divide-ciruela/8">
             {TODAY_APPOINTMENTS.map((apt) => (
@@ -64,12 +98,18 @@ function FrontDeskToday() {
             ))}
           </ul>
           <div className="mt-4 flex gap-3">
-            <button className="rounded-full bg-ciruela px-4 py-2 font-body text-xs text-hueso">
+            <Link
+              href="/staff/check-in"
+              className="rounded-full bg-ciruela px-4 py-2 font-body text-xs text-hueso"
+            >
               Registrar siguiente cliente
-            </button>
-            <button className="rounded-full border border-ciruela px-4 py-2 font-body text-xs text-ciruela">
-              Cobrar / vender / reagendar
-            </button>
+            </Link>
+            <Link
+              href="/staff/checkout"
+              className="rounded-full border border-ciruela px-4 py-2 font-body text-xs text-ciruela"
+            >
+              Venta de mostrador
+            </Link>
           </div>
         </Card>
       </div>

@@ -49,20 +49,8 @@ export function Sidebar({
               </p>
             )}
             <ul className="flex flex-col gap-0.5">
-              {section.items.map((item) => {
+              {section.items.filter((item) => !item.disabled).map((item) => {
                 const active = pathname === item.href;
-                if (item.disabled) {
-                  return (
-                    <li key={item.href}>
-                      <span className="flex items-center justify-between rounded-lg px-3 py-2 font-body text-sm text-ciruela/30">
-                        {item.label}
-                        <span className="rounded-full bg-ciruela/5 px-2 py-0.5 text-[10px] text-ciruela/40">
-                          Fase 2
-                        </span>
-                      </span>
-                    </li>
-                  );
-                }
                 return (
                   <li key={item.href}>
                     <Link

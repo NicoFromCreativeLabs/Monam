@@ -5,11 +5,13 @@ import { TopBar } from "@/components/panel/TopBar";
 import { Card } from "@/components/panel/Card";
 import { staffIdentity, useStaffRole } from "@/components/panel/StaffRoleContext";
 import { useProtocols } from "@/components/panel/ProtocolsContext";
+import { usePendingCheckouts } from "@/components/panel/PendingCheckoutsContext";
 import {
   TODAY_APPOINTMENTS,
   BACKBAR_INVENTORY,
   ADD_ONS,
   CLIENT_SKIN_ID_PREVIEW,
+  CHECKOUT_TICKET,
 } from "@/lib/mock-data";
 
 type UsedProduct = { sku: string; amountMl: string };
@@ -22,6 +24,7 @@ export default function StaffTreatmentRecord() {
   const { role } = useStaffRole();
   const identity = staffIdentity(role);
   const { protocols } = useProtocols();
+  const { addPendingCheckout } = usePendingCheckouts();
   const client = TODAY_APPOINTMENTS[0];
   const tierProtocols = protocols.filter((p) => p.tier === client.tier);
   const [protocol, setProtocol] = useState(tierProtocols[0]?.name ?? "");
@@ -48,6 +51,24 @@ export default function StaffTreatmentRecord() {
   const hasLoggedProduct = usedProducts.some((p) => p.sku && Number(p.amountMl) > 0);
   const hasNotes = clinicalNotes.trim().length > 0;
   const canComplete = hasLoggedProduct && hasNotes;
+
+  // Finishing a treatment here and charging for it at Cobro/POS are two
+  // different people, two different moments — this is the hand-off. Front
+  // Desk never picks a bill off a static list; they only ever see this
+  // specific client appear as "lista para cobro" once the esthetician ends
+  // the session, and clicking it is the only way into this exact ticket.
+  function finishSession() {
+    const selectedProtocol = protocols.find((p) => p.name === protocol);
+    const isKnownTicket = client.client === CHECKOUT_TICKET.client;
+    addPendingCheckout({
+      clientName: client.client,
+      service: { name: protocol, price: selectedProtocol?.price ?? 0 },
+      retailItems: isKnownTicket ? CHECKOUT_TICKET.retailItems : [],
+      wishlist: isKnownTicket ? CHECKOUT_TICKET.wishlist : [],
+      depositCredit: isKnownTicket ? CHECKOUT_TICKET.depositCredit : 0,
+    });
+    setCompleted(true);
+  }
 
   return (
     <>
@@ -195,12 +216,13 @@ export default function StaffTreatmentRecord() {
 
             {completed ? (
               <p className="mt-6 rounded-lg bg-oliva/10 px-3 py-2 text-center font-body text-sm text-oliva">
-                Tratamiento completado y registrado.
+                Tratamiento completado y registrado. {client.client} ya aparece como &ldquo;lista
+                para cobro&rdquo; en el panel de Recepción.
               </p>
             ) : (
               <>
                 <button
-                  onClick={() => setCompleted(true)}
+                  onClick={finishSession}
                   disabled={!canComplete}
                   className="mt-6 w-full rounded-full bg-ciruela px-5 py-3 font-body text-sm text-hueso disabled:cursor-not-allowed disabled:opacity-40"
                 >

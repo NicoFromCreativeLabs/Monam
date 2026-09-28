@@ -5,6 +5,7 @@ import { TopBar } from "@/components/panel/TopBar";
 import { Card, StatTile } from "@/components/panel/Card";
 import { Badge } from "@/components/panel/Badge";
 import { OWNER, CASH_CUT_SUMMARY, PAYMENT_METHOD_BREAKDOWN, CFDI_QUEUE } from "@/lib/mock-data";
+import { CFDI_ENABLED } from "@/lib/feature-flags";
 
 const CFDI_TONE: Record<string, "warning" | "positive"> = {
   "Pendiente de timbrado": "warning",
@@ -77,31 +78,33 @@ export default function AdminSales() {
           </ul>
         </Card>
 
-        <Card title="CFDI — cola de timbrado">
-          <table className="w-full font-body text-sm text-ciruela">
-            <thead>
-              <tr className="text-left text-xs uppercase tracking-wide text-ciruela/40">
-                <th className="pb-2">Clienta</th>
-                <th className="pb-2 text-right">Monto</th>
-                <th className="pb-2 text-right">Estado</th>
-              </tr>
-            </thead>
-            <tbody>
-              {CFDI_QUEUE.map((c) => (
-                <tr key={c.id} className="border-t border-ciruela/8">
-                  <td className="py-2.5">{c.client}</td>
-                  <td className="py-2.5 text-right">${c.amount.toLocaleString()} MXN</td>
-                  <td className="py-2.5 text-right">
-                    <Badge tone={CFDI_TONE[c.status]}>{c.status}</Badge>
-                  </td>
+        {CFDI_ENABLED && (
+          <Card title="CFDI — cola de timbrado">
+            <table className="w-full font-body text-sm text-ciruela">
+              <thead>
+                <tr className="text-left text-xs uppercase tracking-wide text-ciruela/40">
+                  <th className="pb-2">Clienta</th>
+                  <th className="pb-2 text-right">Monto</th>
+                  <th className="pb-2 text-right">Estado</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-          <p className="mt-3 font-body text-xs text-ciruela/40">
-            Facturación (CFDI 4.0) — placeholder de integración con PAC. No timbra facturas reales.
-          </p>
-        </Card>
+              </thead>
+              <tbody>
+                {CFDI_QUEUE.map((c) => (
+                  <tr key={c.id} className="border-t border-ciruela/8">
+                    <td className="py-2.5">{c.client}</td>
+                    <td className="py-2.5 text-right">${c.amount.toLocaleString()} MXN</td>
+                    <td className="py-2.5 text-right">
+                      <Badge tone={CFDI_TONE[c.status]}>{c.status}</Badge>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <p className="mt-3 font-body text-xs text-ciruela/40">
+              Facturación (CFDI 4.0) — placeholder de integración con PAC. No timbra facturas reales.
+            </p>
+          </Card>
+        )}
       </div>
 
       {confirmClose && (
