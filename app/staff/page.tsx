@@ -170,12 +170,18 @@ function EstheticianToday() {
           </div>
         </dl>
         <div className="mt-5 flex gap-3">
-          <button className="rounded-full bg-ciruela px-4 py-2 font-body text-xs text-hueso">
+          <Link
+            href="/staff/clients"
+            className="rounded-full bg-ciruela px-4 py-2 font-body text-xs text-hueso"
+          >
             Abrir perfil del cliente
-          </button>
-          <button className="rounded-full border border-ciruela px-4 py-2 font-body text-xs text-ciruela">
+          </Link>
+          <Link
+            href="/staff/treatment-record"
+            className="rounded-full border border-ciruela px-4 py-2 font-body text-xs text-ciruela"
+          >
             Registrar tratamiento
-          </button>
+          </Link>
         </div>
       </Card>
     </div>

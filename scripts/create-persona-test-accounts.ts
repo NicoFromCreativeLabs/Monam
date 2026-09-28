@@ -15,6 +15,7 @@ function genPassword() {
 
 const ACCOUNTS = [
   { kind: "client" as const, name: "Persona Test Newbie", email: "persona-newbie@test.monam.invalid", phone: "+520000000001" },
+  { kind: "client" as const, name: "Persona Test Buyer", email: "persona-buyer@test.monam.invalid", phone: "+520000000002" },
   { kind: "staff" as const, name: "Persona Test FrontDesk", email: "persona-frontdesk@test.monam.invalid", role: "FRONT_DESK" as const },
   { kind: "staff" as const, name: "Persona Test Esteticista", email: "persona-esteticista@test.monam.invalid", role: "ESTHETICIAN" as const },
   { kind: "staff" as const, name: "Persona Test Owner QA", email: "persona-owner-qa@test.monam.invalid", role: "OWNER" as const },
@@ -27,26 +28,42 @@ async function main() {
 
   for (const acct of ACCOUNTS) {
     const password = genPassword();
-    const { data, error } = await admin.auth.admin.createUser({
+    let userId: string;
+    const created = await admin.auth.admin.createUser({
       email: acct.email,
       password,
       email_confirm: true,
       user_metadata: { name: acct.name },
     });
-    if (error || !data.user) {
-      throw new Error(`Failed creating ${acct.email}: ${error?.message}`);
+    if (created.error || !created.data.user) {
+      // Re-running this script after an earlier persona test pass — the
+      // account already exists, so just rotate its password instead of
+      // failing. Still a throwaway test account, never a real person.
+      if (created.error?.message.includes("already been registered")) {
+        const { data: list, error: listErr } = await admin.auth.admin.listUsers({ perPage: 1000 });
+        if (listErr) throw new Error(`Failed listing users for ${acct.email}: ${listErr.message}`);
+        const existing = list.users.find((u) => u.email === acct.email);
+        if (!existing) throw new Error(`${acct.email} reported as registered but not found in listUsers`);
+        const { error: updateErr } = await admin.auth.admin.updateUserById(existing.id, { password });
+        if (updateErr) throw new Error(`Failed rotating password for ${acct.email}: ${updateErr.message}`);
+        userId = existing.id;
+      } else {
+        throw new Error(`Failed creating ${acct.email}: ${created.error?.message}`);
+      }
+    } else {
+      userId = created.data.user.id;
     }
 
     if (acct.kind === "client") {
       await prisma.client.upsert({
         where: { phone: acct.phone },
-        create: { authUserId: data.user.id, name: acct.name, phone: acct.phone, email: acct.email },
-        update: { authUserId: data.user.id },
+        create: { authUserId: userId, name: acct.name, phone: acct.phone, email: acct.email },
+        update: { authUserId: userId },
       });
     } else {
       const appUser = await prisma.appUser.upsert({
-        where: { id: data.user.id },
-        create: { id: data.user.id, name: acct.name, email: acct.email, role: acct.role, status: "ACTIVE" },
+        where: { id: userId },
+        create: { id: userId, name: acct.name, email: acct.email, role: acct.role, status: "ACTIVE" },
         update: { role: acct.role, status: "ACTIVE" },
       });
       const romaNorte = await prisma.location.findFirst({ where: { name: "Roma Norte" } });

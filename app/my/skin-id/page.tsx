@@ -1,3 +1,6 @@
+"use client";
+
+import { useState } from "react";
 import { Card } from "@/components/panel/Card";
 import { CLIENT_DETAIL } from "@/lib/mock-data";
 
@@ -15,9 +18,25 @@ const OBJECTIVE_OPTIONS = [
 const SUN_EXPOSURE_OPTIONS = ["Leve", "Moderada", "Alta"];
 
 // Editable directly by the client — any edit here is visible to staff
-// immediately, same as Preferencias.
+// immediately, same as Preferencias. Fields are controlled and "Guardar
+// cambios" actually responds — found completely dead (no onClick, every
+// field uncontrolled) during the persona QA pass.
 export default function ClientSkinId() {
   const { skinId } = CLIENT_DETAIL;
+  const [form, setForm] = useState({
+    skinType: skinId.skinType,
+    allergies: skinId.allergies.join(", "),
+    medications: skinId.medications.join(", "),
+    visitObjective: skinId.visitObjective,
+    sunExposure: skinId.sunExposure,
+    notes: "",
+  });
+  const [saved, setSaved] = useState(false);
+
+  function update<K extends keyof typeof form>(key: K, value: (typeof form)[K]) {
+    setForm((f) => ({ ...f, [key]: value }));
+    setSaved(false);
+  }
 
   return (
     <Card title="Mi Skin ID">
@@ -26,22 +45,35 @@ export default function ClientSkinId() {
         contigo antes de cada tratamiento
       </p>
       <div className="space-y-4">
-        <SelectField label="Tipo de piel" value={skinId.skinType} options={SKIN_TYPE_OPTIONS} />
+        <SelectField
+          label="Tipo de piel"
+          value={form.skinType}
+          options={SKIN_TYPE_OPTIONS}
+          onChange={(v) => update("skinType", v)}
+        />
         <Field
           label="Alergias"
-          value={skinId.allergies.join(", ")}
+          value={form.allergies}
           placeholder="Ej. fragancias, frutos secos, algún ingrediente…"
+          onChange={(v) => update("allergies", v)}
         />
         <Field
           label="Medicamentos"
-          value={skinId.medications.join(", ")}
+          value={form.medications}
           placeholder="Incluye medicamentos tópicos y orales relevantes"
+          onChange={(v) => update("medications", v)}
         />
-        <SelectField label="Objetivo" value={skinId.visitObjective} options={OBJECTIVE_OPTIONS} />
+        <SelectField
+          label="Objetivo"
+          value={form.visitObjective}
+          options={OBJECTIVE_OPTIONS}
+          onChange={(v) => update("visitObjective", v)}
+        />
         <SelectField
           label="Exposición solar"
-          value={skinId.sunExposure}
+          value={form.sunExposure}
           options={SUN_EXPOSURE_OPTIONS}
+          onChange={(v) => update("sunExposure", v)}
         />
       </div>
 
@@ -54,14 +86,22 @@ export default function ClientSkinId() {
         </p>
         <textarea
           rows={4}
+          value={form.notes}
+          onChange={(e) => update("notes", e.target.value)}
           placeholder="Escribe aquí cualquier detalle relevante…"
           className="w-full rounded-lg border border-ciruela/20 bg-hueso px-3 py-2 font-body text-sm text-ciruela focus:outline-none focus:ring-1 focus:ring-ciruela/40"
         />
       </div>
 
-      <button className="mt-6 rounded-full bg-ciruela px-5 py-2.5 font-body text-sm text-hueso">
-        Guardar cambios
-      </button>
+      <div className="mt-6 flex items-center gap-3">
+        <button
+          onClick={() => setSaved(true)}
+          className="rounded-full bg-ciruela px-5 py-2.5 font-body text-sm text-hueso"
+        >
+          Guardar cambios
+        </button>
+        {saved && <span className="font-body text-xs text-oliva">Guardado.</span>}
+      </div>
     </Card>
   );
 }
@@ -69,10 +109,12 @@ export default function ClientSkinId() {
 function Field({
   label,
   value,
+  onChange,
   placeholder,
 }: {
   label: string;
   value: string;
+  onChange: (v: string) => void;
   placeholder?: string;
 }) {
   return (
@@ -81,9 +123,10 @@ function Field({
         {label}
       </label>
       <input
-        defaultValue={value}
+        value={value}
         placeholder={placeholder}
-        className="w-full rounded-lg border border-ciruela/20 bg-hueso px-3 py-2 font-body text-sm text-ciruela focus:outline-none focus:ring-1 focus:ring-ciruela/40"
+        onChange={(e) => onChange(e.target.value)}
+        className="w-full rounded-lg border border-ciruela/20 bg-hueso px-3 py-2 font-body text-sm text-ciruela placeholder:text-ciruela/40 focus:outline-none focus:ring-1 focus:ring-ciruela/40"
       />
     </div>
   );
@@ -93,10 +136,12 @@ function SelectField({
   label,
   value,
   options,
+  onChange,
 }: {
   label: string;
   value: string;
   options: string[];
+  onChange: (v: string) => void;
 }) {
   // The client's current mock value isn't guaranteed to be one of the fixed
   // options (e.g. free-text history from before this became a dropdown), so
@@ -109,7 +154,8 @@ function SelectField({
         {label}
       </label>
       <select
-        defaultValue={value}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
         className="w-full rounded-lg border border-ciruela/20 bg-hueso px-3 py-2 font-body text-sm text-ciruela focus:outline-none focus:ring-1 focus:ring-ciruela/40"
       >
         {allOptions.map((opt) => (

@@ -12,7 +12,13 @@ export default function StaffRetailTags() {
   const { role } = useStaffRole();
   const identity = staffIdentity(role);
   const client = TODAY_APPOINTMENTS[0];
-  const [selected, setSelected] = useState<string[]>([RETAIL_INVENTORY[0].sku]);
+  // Scoped to this staff member's own location — unscoped, this mixed in
+  // every other location's retail catalog too, showing e.g. Prado Norte's
+  // own "Beauty of Joseon Glow Serum" as a second, confusing duplicate of
+  // Roma Norte's (found during the persona QA pass).
+  const catalog = RETAIL_INVENTORY.filter((item) => item.location === identity.location);
+  const [selected, setSelected] = useState<string[]>(catalog[0] ? [catalog[0].sku] : []);
+  const [saved, setSaved] = useState(false);
 
   function toggle(sku: string) {
     setSelected((prev) => {
@@ -20,6 +26,7 @@ export default function StaffRetailTags() {
       if (prev.length >= 3) return prev;
       return [...prev, sku];
     });
+    setSaved(false);
   }
 
   return (
@@ -29,7 +36,7 @@ export default function StaffRetailTags() {
         <div className="mx-auto max-w-xl">
           <Card title={`${client.client} — recomienda hasta 3 productos`}>
             <ul className="space-y-2">
-              {RETAIL_INVENTORY.map((item) => {
+              {catalog.map((item) => {
                 const active = selected.includes(item.sku);
                 return (
                   <li key={item.sku}>
@@ -50,9 +57,17 @@ export default function StaffRetailTags() {
                 );
               })}
             </ul>
-            <button className="mt-6 w-full rounded-full bg-ciruela px-5 py-3 font-body text-sm text-hueso">
+            <button
+              onClick={() => setSaved(true)}
+              className="mt-6 w-full rounded-full bg-ciruela px-5 py-3 font-body text-sm text-hueso"
+            >
               Guardar recomendaciones
             </button>
+            {saved && (
+              <p className="mt-2 text-center font-body text-xs text-oliva">
+                Recomendaciones guardadas.
+              </p>
+            )}
           </Card>
         </div>
       </div>
