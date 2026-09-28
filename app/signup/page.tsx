@@ -69,6 +69,26 @@ export default function SignupPage() {
               minLength={8}
             />
 
+            <label className="flex items-start gap-2 font-body text-xs text-ciruela/70">
+              <input
+                required
+                type="checkbox"
+                name="acceptTerms"
+                className="mt-0.5 h-4 w-4 shrink-0 accent-ciruela"
+              />
+              <span>
+                Acepto los{" "}
+                <Link
+                  href="/legal/terminos-y-privacidad"
+                  target="_blank"
+                  className="text-ciruela underline underline-offset-2"
+                >
+                  Términos y Condiciones y el Aviso de Privacidad
+                </Link>
+                .
+              </span>
+            </label>
+
             {state?.error && (
               <p className="rounded-lg bg-[#b3392f]/10 px-3 py-2 font-body text-xs text-[#b3392f]">
                 {state.error}

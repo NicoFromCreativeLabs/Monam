@@ -87,17 +87,28 @@ export async function updatePassword(_prevState: ActionState, formData: FormData
   redirect(appUser ? homeForRole(appUser.role) : "/my");
 }
 
+// Current version of the bundled Términos y Condiciones / Aviso de
+// Privacidad doc every new client must accept at signup (spec §5.1/§8.1).
+// Bumping this to a new version means anyone who accepted the old one shows
+// as needing to re-accept — same pattern /my/consent already displays
+// per-version, just not yet wired to a real signup-time acceptance until now.
+const SIGNUP_CONSENT_VERSION = "v1.0";
+
 export async function signUpClient(_prevState: ActionState, formData: FormData): Promise<ActionState> {
   const name = String(formData.get("name") ?? "").trim();
   const phone = String(formData.get("phone") ?? "").trim();
   const email = String(formData.get("email") ?? "").trim();
   const password = String(formData.get("password") ?? "");
+  const acceptedTerms = formData.get("acceptTerms") === "on";
 
   if (!name || !phone || !email || !password) {
     return { error: "Completa todos los campos." };
   }
   if (password.length < 8) {
     return { error: "La contraseña debe tener al menos 8 caracteres." };
+  }
+  if (!acceptedTerms) {
+    return { error: "Debes aceptar los Términos y Condiciones y el Aviso de Privacidad." };
   }
 
   const existingPhone = await prisma.client.findUnique({ where: { phone } });
@@ -131,8 +142,24 @@ export async function signUpClient(_prevState: ActionState, formData: FormData):
     return { error: "No se pudo crear la cuenta. Intenta de nuevo." };
   }
 
-  await prisma.client.create({
+  const client = await prisma.client.create({
     data: { authUserId: data.user.id, name, phone, email },
+  });
+
+  // Records the acceptance as a real Consent row (spec §5.1/§8.1) instead of
+  // just gating the submit button — /my/consent already displays this as if
+  // it were accepted at signup, but nothing ever actually wrote it.
+  const consentDoc = await prisma.consentDocumentVersion.upsert({
+    where: { type_version: { type: "PRIVACY_NOTICE", version: SIGNUP_CONSENT_VERSION } },
+    create: {
+      type: "PRIVACY_NOTICE",
+      version: SIGNUP_CONSENT_VERSION,
+      bodyUrl: "/legal/terminos-y-privacidad",
+    },
+    update: {},
+  });
+  await prisma.consent.create({
+    data: { clientId: client.id, documentId: consentDoc.id },
   });
 
   // Hosted Supabase projects require email confirmation by default — signUp()

@@ -8,7 +8,7 @@ import { NextResponse, type NextRequest } from "next/server";
 // scope for Proxy: read the verified session, redirect if there isn't one,
 // never do the real authorization check against Postgres here.
 const PUBLIC_PATHS = ["/", "/login", "/signup", "/forgot-password"];
-const PUBLIC_PREFIXES = ["/auth"];
+const PUBLIC_PREFIXES = ["/auth", "/legal"];
 
 function isPublicPath(pathname: string) {
   return PUBLIC_PATHS.includes(pathname) || PUBLIC_PREFIXES.some((p) => pathname.startsWith(p));
