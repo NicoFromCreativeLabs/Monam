@@ -2,10 +2,18 @@
 // Shapes are drawn directly from the data model design in the implementation
 // plan (Phase 0/2/4/5/6 models) so wiring real data later is a drop-in swap.
 
-// Seed data only — components read live location state (including
-// isActive) from LocationsContext, not this array directly, so that
-// activating Prado Norte in Settings is reflected everywhere (location
-// switcher, booking flow, staff assignment) without a page reload.
+// LOCATIONS/PROTOCOLS/ADD_ONS below are prisma/seed.ts's data source, not
+// something app code reads directly anymore — LocationsContext,
+// ProtocolsContext, and AddOnsContext now seed from a real Prisma query in
+// app/layout.tsx instead. Kept here (rather than moved into the seed script
+// itself) so there's exactly one authored copy of these values, not two.
+//
+// Rooms: only 3 "Sala N" rooms are real per location — the 4th, "Sala 4
+// (LED)", is modeled as a Device instead (prisma/seed.ts), matching the
+// schema's own correctness note that a shared/portable LED panel is a
+// booking-conflict resource in its own right, not a room. This array's
+// `rooms` list reflects that (3 entries), not the mock UI's old flattened
+// 4-room shortcut.
 export const LOCATIONS = [
   // rentCost/maintenanceCost for Roma Norte match the consolidated P&L
   // "Renta" (-$70,000) and "Mantenimiento y servicios" (-$11,200) lines —
@@ -16,7 +24,6 @@ export const LOCATIONS = [
       { id: "roma-norte-sala-1", name: "Sala 1" },
       { id: "roma-norte-sala-2", name: "Sala 2" },
       { id: "roma-norte-sala-3", name: "Sala 3" },
-      { id: "roma-norte-sala-4", name: "Sala 4 (LED)" },
     ],
   },
   // Prado Norte doesn't have a confirmed real address yet and isn't open —
@@ -195,16 +202,9 @@ export const PACKAGE_OPTIONS = [
   { name: "Pack Signature x10", sessions: 10, tier: "Signature" as const, listPrice: 19000, price: 16500 },
 ];
 
-// ---------------------------------------------------------------------------
-// Protocols (real client menu — Targeted 30 min + six named Signature 60 min
-// protocols). Pricing is carried over from the prior placeholder tiers
-// ($850 Targeted / $1,900 Signature) since the client's menu PDF has no
-// prices — not yet client-confirmed for these specific items.
-// ---------------------------------------------------------------------------
-// `cost` = backbar product cost per treatment (COGS only — excludes labor,
-// commission, rent). Feeds the per-protocol margin view on /admin/financials,
-// which the client called out as unusually important to their blended
-// margin (Targeted vs. Signature mix, spec §6.3).
+// PROTOCOLS/ADD_ONS below are prisma/seed.ts's data source (see the note
+// above LOCATIONS) — ProtocolsContext/AddOnsContext now seed from a real
+// Prisma query in app/layout.tsx, not these arrays directly.
 export const PROTOCOLS = [
   // Single bookable Targeted item — no client-facing formula choice; the
   // esthetician selects the ampoule after an in-person evaluation.
@@ -217,11 +217,6 @@ export const PROTOCOLS = [
   { name: "Vegan Glow", tier: "Signature" as const, duration: 60, price: 1900, cost: 430 },
 ];
 
-// Add-ons (new — client-provided, no existing concept in the app). Not
-// separately bookable as a step in the client-facing flow yet; surfaced in
-// Staff Treatment Record so an esthetician can log what was added during a
-// Signature session. A future client-facing "add an add-on" step in
-// app/my/book/page.tsx should read from this same array.
 export interface AddOn {
   id: string;
   name: string;
@@ -283,8 +278,9 @@ export const PROTOCOL_PERFORMANCE = [
 // ---------------------------------------------------------------------------
 // Admin — Calendar
 // ---------------------------------------------------------------------------
-export const CALENDAR_ROOMS = ["Sala 1", "Sala 2", "Sala 3", "Sala 4 (LED)"];
-
+// Rooms are real now (Catalog phase) — admin/calendar/page.tsx queries them
+// directly. CALENDAR_APPOINTMENTS/CALENDAR_HOURS below are still mock,
+// pending the Booking phase.
 export const CALENDAR_APPOINTMENTS = [
   { id: "cal-1", room: "Sala 1", start: 9, span: 1, client: "Sofía Marín", esthetician: "Ana Torres", tier: "Signature" as const },
   { id: "cal-2", room: "Sala 2", start: 9.5, span: 0.5, client: "Renata Lugo", esthetician: "Ana Torres", tier: "Targeted" as const },

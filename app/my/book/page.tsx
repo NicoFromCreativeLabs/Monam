@@ -3,11 +3,11 @@
 import { useMemo, useState } from "react";
 import { Card } from "@/components/panel/Card";
 import { useLocations } from "@/components/panel/LocationsContext";
+import { useProtocols } from "@/components/panel/ProtocolsContext";
+import { useAddOns } from "@/components/panel/AddOnsContext";
 import { useClientBooking } from "@/components/panel/ClientBookingContext";
 import { useScrollEdgeFade } from "@/components/panel/useScrollEdgeFade";
-import { BUSINESS_HOURS, PROTOCOLS, ADD_ONS, CLIENT_PAYMENT_METHODS, type DayHours } from "@/lib/mock-data";
-
-const SIGNATURE_PROTOCOLS = PROTOCOLS.filter((p) => p.tier === "Signature");
+import { BUSINESS_HOURS, CLIENT_PAYMENT_METHODS, type DayHours } from "@/lib/mock-data";
 
 // Booking flow: location → duration → (facial) → (add-ons) → day/slot →
 // deposit if required → confirmation. The client never picks a specific
@@ -64,11 +64,15 @@ function buildDayOptions() {
 // Steps are named rather than numbered because the flow branches: the
 // "facial" step only applies to Signature (Targeted's ampoule is assigned
 // in-cabin, spec/note copy), and "addons" only appears when the chosen
-// facial (or Targeted) actually has compatible add-ons in ADD_ONS.
+// facial (or Targeted) actually has compatible add-ons.
 type Step = "location" | "duration" | "facial" | "addons" | "schedule" | "deposit" | "confirm";
 
 export default function ClientBook() {
   const { locations } = useLocations();
+  const { protocols } = useProtocols();
+  const addOns = useAddOns();
+  const signatureProtocols = protocols.filter((p) => p.tier === "Signature");
+  const targetedProtocol = protocols.find((p) => p.tier === "Targeted");
   const { addAppointment } = useClientBooking();
   const [step, setStep] = useState<Step>("location");
   const [location, setLocation] = useState<string | null>(null);
@@ -90,9 +94,9 @@ export default function ClientBook() {
   // specific facial the client picked.
   const protocolForAddOns = duration === "Targeted" ? "Targeted" : protocol;
   const availableAddOns = protocolForAddOns
-    ? ADD_ONS.filter((a) => a.availableOn.includes(protocolForAddOns))
+    ? addOns.filter((a) => a.availableOn.includes(protocolForAddOns))
     : [];
-  const chosenAddOns = ADD_ONS.filter((a) => selectedAddOns.includes(a.id));
+  const chosenAddOns = addOns.filter((a) => selectedAddOns.includes(a.id));
   const extraMinutesTotal = chosenAddOns.reduce((sum, a) => sum + a.extraMinutes, 0);
 
   function toggleAddOn(id: string) {
@@ -121,8 +125,8 @@ export default function ClientBook() {
   // Skips the add-ons step entirely when the chosen facial (or Targeted)
   // has no compatible add-ons, rather than showing an empty screen.
   function goPastFacialChoice(protocolName: string) {
-    const addOns = ADD_ONS.filter((a) => a.availableOn.includes(protocolName));
-    setStep(addOns.length > 0 ? "addons" : "schedule");
+    const compatibleAddOns = addOns.filter((a) => a.availableOn.includes(protocolName));
+    setStep(compatibleAddOns.length > 0 ? "addons" : "schedule");
   }
 
   const daySlots = duration ? generateSlots(selectedDay.hours, duration) : [];
@@ -186,7 +190,9 @@ export default function ClientBook() {
               className="rounded-lg border border-ciruela/20 px-4 py-6 text-center font-body text-sm text-ciruela hover:bg-ciruela/5"
             >
               <p className="font-display text-lg">Targeted</p>
-              <p className="mt-1 text-ciruela/50">30 min · $850 MXN</p>
+              <p className="mt-1 text-ciruela/50">
+                {targetedProtocol ? `${targetedProtocol.duration} min · $${targetedProtocol.price} MXN` : "—"}
+              </p>
             </button>
             <button
               onClick={() => {
@@ -197,7 +203,11 @@ export default function ClientBook() {
               className="rounded-lg border border-ciruela/20 px-4 py-6 text-center font-body text-sm text-ciruela hover:bg-ciruela/5"
             >
               <p className="font-display text-lg">Signature</p>
-              <p className="mt-1 text-ciruela/50">60 min · $1,900 MXN</p>
+              <p className="mt-1 text-ciruela/50">
+                {signatureProtocols[0]
+                  ? `${signatureProtocols[0].duration} min · $${signatureProtocols[0].price.toLocaleString()} MXN`
+                  : "—"}
+              </p>
             </button>
           </div>
           <p className="mt-3 font-body text-xs text-ciruela/50">
@@ -209,7 +219,7 @@ export default function ClientBook() {
       {step === "facial" && (
         <Card title="Elige tu facial">
           <div className="space-y-2">
-            {SIGNATURE_PROTOCOLS.map((p) => (
+            {signatureProtocols.map((p) => (
               <button
                 key={p.name}
                 onClick={() => {

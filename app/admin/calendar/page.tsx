@@ -1,12 +1,20 @@
 import { TopBar } from "@/components/panel/TopBar";
 import { Card } from "@/components/panel/Card";
-import { OWNER, CALENDAR_ROOMS, CALENDAR_APPOINTMENTS, CALENDAR_HOURS } from "@/lib/mock-data";
+import { prisma } from "@/lib/prisma";
+import { OWNER, CALENDAR_APPOINTMENTS, CALENDAR_HOURS } from "@/lib/mock-data";
 
 // All-location calendar — reassign/override, device-conflict flags (spec §6.3).
 // The room+esthetician+device conflict check itself is server-side logic
 // (implementation plan Phase 2); this is the read-only view shell.
-export default function AdminCalendar() {
+// Rooms are real (Catalog phase); appointments are still mock — Booking is
+// the next domain to convert, not this one.
+export default async function AdminCalendar() {
   const colWidth = 100 / CALENDAR_HOURS.length;
+  const romaNorte = await prisma.location.findFirst({
+    where: { name: "Roma Norte" },
+    include: { rooms: { orderBy: { name: "asc" } } },
+  });
+  const rooms = romaNorte?.rooms.map((r) => r.name) ?? [];
 
   return (
     <>
@@ -28,7 +36,7 @@ export default function AdminCalendar() {
                 ))}
               </div>
 
-              {CALENDAR_ROOMS.map((room) => (
+              {rooms.map((room) => (
                 <div key={room} className="flex items-center border-b border-ciruela/8 py-3">
                   <div className="w-32 shrink-0 font-body text-sm text-ciruela/70">{room}</div>
                   <div className="relative h-12 flex-1">

@@ -1,7 +1,11 @@
 "use client";
 
 import { createContext, useContext, useState, type ReactNode } from "react";
-import { PROTOCOLS as SEED_PROTOCOLS } from "@/lib/mock-data";
+import {
+  updateProtocolAction,
+  addProtocolAction,
+  removeProtocolAction,
+} from "@/lib/actions/catalog";
 
 export type ProtocolTier = "Targeted" | "Signature";
 
@@ -21,41 +25,44 @@ const ProtocolsContext = createContext<{
   removeProtocol: (id: string) => void;
 } | null>(null);
 
-// "+" would be meaningful in a protocol name (e.g. a future "Glow+" distinct
-// from "Glow") so it maps to "-plus" rather than being stripped, to avoid
-// two differently-named protocols colliding on the same slug and React
-// throwing duplicate key warnings.
-function slugify(name: string) {
-  return (
-    name
-      .toLowerCase()
-      .normalize("NFD")
-      .replace(/[̀-ͯ]/g, "")
-      .replace(/\+/g, "-plus")
-      .replace(/[^a-z0-9]+/g, "-")
-      .replace(/(^-|-$)/g, "") || `protocolo-${Date.now()}`
-  );
-}
-
 // App-wide protocol menu state — the single place duration/price/cost live.
-// Editing them in Admin Settings updates this, and Treatment Record (and
-// any other consumer) re-renders from the same source instead of each
-// reading a frozen mock constant — same pattern as LocationsContext.
-export function ProtocolsProvider({ children }: { children: ReactNode }) {
-  const [protocols, setProtocols] = useState<ProtocolRecord[]>(
-    SEED_PROTOCOLS.map((p) => ({ ...p, id: slugify(p.name) })),
-  );
+// Seeded from a real Protocol query (see app/layout.tsx). Editing in Admin
+// Settings persists to Postgres via lib/actions/catalog.ts; "remove"
+// deactivates rather than deletes (a protocol with real appointment/
+// treatment-record history can't be hard-deleted, and shouldn't be).
+export function ProtocolsProvider({
+  initialProtocols,
+  children,
+}: {
+  initialProtocols: ProtocolRecord[];
+  children: ReactNode;
+}) {
+  const [protocols, setProtocols] = useState<ProtocolRecord[]>(initialProtocols);
 
   function updateProtocol(id: string, patch: Partial<ProtocolRecord>) {
     setProtocols((prev) => prev.map((p) => (p.id === id ? { ...p, ...patch } : p)));
+    updateProtocolAction(id, patch).catch((err) => {
+      console.error("Failed to persist protocol update:", err);
+    });
   }
 
   function addProtocol(protocol: Omit<ProtocolRecord, "id">) {
-    setProtocols((prev) => [...prev, { ...protocol, id: slugify(protocol.name) }]);
+    const tempId = crypto.randomUUID();
+    setProtocols((prev) => [...prev, { ...protocol, id: tempId }]);
+    addProtocolAction(protocol)
+      .then((realId) => {
+        setProtocols((prev) => prev.map((p) => (p.id === tempId ? { ...p, id: realId } : p)));
+      })
+      .catch((err) => {
+        console.error("Failed to persist new protocol:", err);
+      });
   }
 
   function removeProtocol(id: string) {
     setProtocols((prev) => prev.filter((p) => p.id !== id));
+    removeProtocolAction(id).catch((err) => {
+      console.error("Failed to persist protocol removal:", err);
+    });
   }
 
   return (

@@ -4,7 +4,7 @@ import { useState } from "react";
 import { TopBar } from "@/components/panel/TopBar";
 import { Card } from "@/components/panel/Card";
 import { Badge } from "@/components/panel/Badge";
-import { OWNER, SETTINGS, ADD_ONS, KPI_TARGETS, PERMISSIONS_MATRIX } from "@/lib/mock-data";
+import { OWNER, SETTINGS, KPI_TARGETS, PERMISSIONS_MATRIX } from "@/lib/mock-data";
 import {
   useLocations,
   type LocationRecord,
@@ -15,6 +15,7 @@ import {
   type ProtocolRecord,
   type ProtocolTier,
 } from "@/components/panel/ProtocolsContext";
+import { useAddOns } from "@/components/panel/AddOnsContext";
 import { useBusinessRules } from "@/components/panel/BusinessRulesContext";
 
 // Locations, protocols/menu, deposit rules, cancellation policy (spec §6.1).
@@ -75,6 +76,7 @@ export default function AdminSettings() {
   const [newLocation, setNewLocation] = useState(emptyNewLocation);
 
   const { protocols, updateProtocol, addProtocol, removeProtocol } = useProtocols();
+  const addOns = useAddOns();
   const [protocolEditModal, setProtocolEditModal] = useState<{
     id: string;
     name: string;
@@ -689,7 +691,7 @@ export default function AdminSettings() {
               </tr>
             </thead>
             <tbody>
-              {ADD_ONS.map((a) => (
+              {addOns.map((a) => (
                 <tr key={a.id} className="border-t border-ciruela/8">
                   <td className="py-2.5">{a.name}</td>
                   <td className="py-2.5 text-ciruela/60">{a.function}</td>

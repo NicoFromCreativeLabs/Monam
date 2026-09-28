@@ -1,8 +1,10 @@
 import type { Metadata } from "next";
 import { Fraunces, Inter, Prata, Beau_Rivage } from "next/font/google";
-import { LocationsProvider } from "@/components/panel/LocationsContext";
+import { prisma } from "@/lib/prisma";
+import { LocationsProvider, type LocationRecord } from "@/components/panel/LocationsContext";
 import { PeriodProvider } from "@/components/panel/PeriodContext";
-import { ProtocolsProvider } from "@/components/panel/ProtocolsContext";
+import { ProtocolsProvider, type ProtocolRecord } from "@/components/panel/ProtocolsContext";
+import { AddOnsProvider, type AddOnRecord } from "@/components/panel/AddOnsContext";
 import { PanelAlertsProvider } from "@/components/panel/PanelAlertsContext";
 import { StaffRosterProvider } from "@/components/panel/StaffRosterContext";
 import { ClientBookingProvider } from "@/components/panel/ClientBookingContext";
@@ -64,7 +66,48 @@ export const metadata: Metadata = {
   },
 };
 
-export default function RootLayout({ children }: LayoutProps<"/">) {
+const TIER_FROM_DB = { TARGETED: "Targeted", SIGNATURE: "Signature" } as const;
+
+// Catalog data (Locations, Protocols, Add-ons) is small, public-ish menu
+// data read on every request regardless of panel or auth state — fetched
+// once here and handed to each Context as its initial value, instead of
+// each panel re-fetching or reading a frozen mock array. Write paths
+// (lib/actions/catalog.ts) persist to the same tables and revalidate this
+// layout's cache.
+export default async function RootLayout({ children }: LayoutProps<"/">) {
+  const [locations, protocols, addOns] = await Promise.all([
+    prisma.location.findMany({ include: { rooms: true }, orderBy: { createdAt: "asc" } }),
+    prisma.protocol.findMany({ where: { isActive: true }, include: { addOns: { include: { addOn: true } } } }),
+    prisma.addOn.findMany({ include: { protocols: { include: { protocol: true } } } }),
+  ]);
+
+  const initialLocations: LocationRecord[] = locations.map((l) => ({
+    id: l.id,
+    name: l.name,
+    address: l.address,
+    isActive: l.isActive,
+    rentCost: l.rentCostMxn,
+    maintenanceCost: l.maintenanceCostMxn,
+    rooms: l.rooms.map((r) => ({ id: r.id, name: r.name })),
+  }));
+
+  const initialProtocols: ProtocolRecord[] = protocols.map((p) => ({
+    id: p.id,
+    name: p.name,
+    tier: TIER_FROM_DB[p.tier],
+    duration: p.durationMin,
+    price: p.priceMxn,
+    cost: p.costMxn,
+  }));
+
+  const initialAddOns: AddOnRecord[] = addOns.map((a) => ({
+    id: a.id,
+    name: a.name,
+    function: a.function,
+    extraMinutes: a.extraMinutes,
+    availableOn: a.protocols.map((link) => link.protocol.name),
+  }));
+
   return (
     <html
       lang="es"
@@ -72,22 +115,24 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
     >
       <body className="min-h-full flex flex-col">
         <LoadingCurtain />
-        <LocationsProvider>
+        <LocationsProvider initialLocations={initialLocations}>
           <PeriodProvider>
-            <ProtocolsProvider>
-              <StaffRosterProvider>
-                <PanelAlertsProvider>
-                  <ClientBookingProvider>
-                    <BusinessRulesProvider>
-                      <AnomaliesProvider>
-                        <ApprovalsProvider>
-                          <PendingCheckoutsProvider>{children}</PendingCheckoutsProvider>
-                        </ApprovalsProvider>
-                      </AnomaliesProvider>
-                    </BusinessRulesProvider>
-                  </ClientBookingProvider>
-                </PanelAlertsProvider>
-              </StaffRosterProvider>
+            <ProtocolsProvider initialProtocols={initialProtocols}>
+              <AddOnsProvider addOns={initialAddOns}>
+                <StaffRosterProvider>
+                  <PanelAlertsProvider>
+                    <ClientBookingProvider>
+                      <BusinessRulesProvider>
+                        <AnomaliesProvider>
+                          <ApprovalsProvider>
+                            <PendingCheckoutsProvider>{children}</PendingCheckoutsProvider>
+                          </ApprovalsProvider>
+                        </AnomaliesProvider>
+                      </BusinessRulesProvider>
+                    </ClientBookingProvider>
+                  </PanelAlertsProvider>
+                </StaffRosterProvider>
+              </AddOnsProvider>
             </ProtocolsProvider>
           </PeriodProvider>
         </LocationsProvider>

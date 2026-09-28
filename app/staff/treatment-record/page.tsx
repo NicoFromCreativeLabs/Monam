@@ -5,11 +5,11 @@ import { TopBar } from "@/components/panel/TopBar";
 import { Card } from "@/components/panel/Card";
 import { staffIdentity, useStaffRole } from "@/components/panel/StaffRoleContext";
 import { useProtocols } from "@/components/panel/ProtocolsContext";
+import { useAddOns } from "@/components/panel/AddOnsContext";
 import { usePendingCheckouts } from "@/components/panel/PendingCheckoutsContext";
 import {
   TODAY_APPOINTMENTS,
   BACKBAR_INVENTORY,
-  ADD_ONS,
   CLIENTS_LIST,
   CLIENT_DETAILS_BY_ID,
   CHECKOUT_TICKET,
@@ -25,6 +25,7 @@ export default function StaffTreatmentRecord() {
   const { role } = useStaffRole();
   const identity = staffIdentity(role);
   const { protocols } = useProtocols();
+  const addOns = useAddOns();
   const { addPendingCheckout } = usePendingCheckouts();
   const client = TODAY_APPOINTMENTS[0];
   // Same per-client lookup fix as the Esthetician "Hoy" dashboard — this
@@ -39,7 +40,7 @@ export default function StaffTreatmentRecord() {
   const [selectedAddOns, setSelectedAddOns] = useState<string[]>([]);
   const [clinicalNotes, setClinicalNotes] = useState("");
   const [completed, setCompleted] = useState(false);
-  const availableAddOns = ADD_ONS.filter((a) => a.availableOn.includes(protocol));
+  const availableAddOns = addOns.filter((a) => a.availableOn.includes(protocol));
 
   function toggleAddOn(id: string) {
     setSelectedAddOns((prev) => (prev.includes(id) ? prev.filter((a) => a !== id) : [...prev, id]));
