@@ -3,17 +3,18 @@
 import Link from "next/link";
 import { Card } from "@/components/panel/Card";
 import { useClientBooking } from "@/components/panel/ClientBookingContext";
-import { CLIENT } from "@/lib/mock-data";
+import { useCurrentClient } from "@/components/panel/CurrentClientContext";
 
 export default function ClientHome() {
   const { upcoming, packageBalance: pack } = useClientBooking();
+  const client = useCurrentClient();
   const apt = upcoming[0];
 
   return (
     <div className="space-y-6">
       <div>
         <p className="font-body text-sm text-ciruela/60">Hola,</p>
-        <h1 className="font-display text-2xl text-ciruela">{CLIENT.name.split(" ")[0]}</h1>
+        <h1 className="font-display text-2xl text-ciruela">{client.name.split(" ")[0]}</h1>
       </div>
 
       <Card title="Próxima cita">

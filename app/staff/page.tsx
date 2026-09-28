@@ -8,7 +8,8 @@ import { staffIdentity, useStaffRole } from "@/components/panel/StaffRoleContext
 import { usePendingCheckouts } from "@/components/panel/PendingCheckoutsContext";
 import {
   TODAY_APPOINTMENTS,
-  CLIENT_SKIN_ID_PREVIEW,
+  CLIENTS_LIST,
+  CLIENT_DETAILS_BY_ID,
   LOW_STOCK_ALERTS,
 } from "@/lib/mock-data";
 
@@ -132,16 +133,26 @@ function FrontDeskToday() {
 
 function EstheticianToday() {
   const next = TODAY_APPOINTMENTS[0];
+  // Looks up the real next client's own record instead of one shared static
+  // preview — found during the persona QA pass showing "Compositae" as an
+  // allergy alert for whoever happened to be next.client, even when the
+  // real allergy (per CLIENTS_LIST) belonged to a client later in the queue.
+  const nextListing = CLIENTS_LIST.find((c) => c.name === next.client);
+  const nextDetail = nextListing ? CLIENT_DETAILS_BY_ID[nextListing.id] : undefined;
+  const lastTreatment = nextDetail?.treatmentHistory[0]
+    ? `${nextDetail.treatmentHistory[0].protocol} — ${nextDetail.treatmentHistory[0].date}`
+    : "Sin tratamientos previos";
+
   return (
     <div className="mx-auto max-w-xl space-y-4">
       {/* Safety flags — unmissable, at the very top. Spec §7.2. */}
-      {CLIENT_SKIN_ID_PREVIEW.allergies.length > 0 && (
+      {nextDetail && nextDetail.skinId.allergies.length > 0 && (
         <div className="rounded-[18px] border-2 border-crepe bg-crepe/15 px-6 py-4">
           <p className="font-body text-xs font-semibold uppercase tracking-[0.14em] text-ciruela">
             Alerta de alergia
           </p>
           <p className="mt-1 font-body text-sm text-ciruela">
-            {CLIENT_SKIN_ID_PREVIEW.allergies.join(", ")}
+            {nextDetail.skinId.allergies.join(", ")}
           </p>
         </div>
       )}
@@ -154,7 +165,7 @@ function EstheticianToday() {
         <dl className="mt-4 space-y-2 font-body text-sm">
           <div className="flex justify-between border-t border-ciruela/8 pt-2">
             <dt className="text-ciruela/50">Tipo de piel</dt>
-            <dd className="text-ciruela">{CLIENT_SKIN_ID_PREVIEW.skinType}</dd>
+            <dd className="text-ciruela">{nextDetail?.skinId.skinType ?? "—"}</dd>
           </div>
           <div className="flex justify-between border-t border-ciruela/8 pt-2">
             <dt className="text-ciruela/50">Protocolo</dt>
@@ -162,16 +173,16 @@ function EstheticianToday() {
           </div>
           <div className="flex justify-between border-t border-ciruela/8 pt-2">
             <dt className="text-ciruela/50">Último tratamiento</dt>
-            <dd className="text-ciruela">{CLIENT_SKIN_ID_PREVIEW.lastTreatment}</dd>
+            <dd className="text-ciruela">{lastTreatment}</dd>
           </div>
           <div className="flex justify-between border-t border-ciruela/8 pt-2">
             <dt className="text-ciruela/50">Preferencias</dt>
-            <dd className="text-ciruela">{CLIENT_SKIN_ID_PREVIEW.beverage}</dd>
+            <dd className="text-ciruela">{nextDetail?.preferences.beverage ?? "—"}</dd>
           </div>
         </dl>
         <div className="mt-5 flex gap-3">
           <Link
-            href="/staff/clients"
+            href={nextListing ? `/staff/clients?id=${nextListing.id}` : "/staff/clients"}
             className="rounded-full bg-ciruela px-4 py-2 font-body text-xs text-hueso"
           >
             Abrir perfil del cliente

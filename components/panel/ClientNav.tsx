@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { CLIENT } from "@/lib/mock-data";
+import { useCurrentClient } from "./CurrentClientContext";
 import { UserMenu } from "./UserMenu";
 import { useScrollEdgeFade } from "./useScrollEdgeFade";
 
@@ -26,6 +26,7 @@ const PROFILE_LINKS = [
 
 export function ClientNav() {
   const pathname = usePathname();
+  const client = useCurrentClient();
   const { ref, showLeft, showRight } = useScrollEdgeFade<HTMLElement>();
   return (
     <header className="sticky top-0 z-40 border-b border-ciruela/10 bg-hueso">
@@ -34,8 +35,8 @@ export function ClientNav() {
           MONÂM
         </Link>
         <UserMenu
-          userName={CLIENT.name}
-          userRole={CLIENT.role}
+          userName={client.name}
+          userRole="Cliente"
           profileHref="/my/profile"
           links={PROFILE_LINKS}
         />

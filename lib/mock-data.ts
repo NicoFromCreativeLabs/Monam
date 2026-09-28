@@ -347,6 +347,192 @@ export const CLIENT_DETAIL = {
   ],
 };
 
+// One full record per CLIENTS_LIST entry — added after the persona QA pass
+// found admin/clients/[id] (and the single-client staff/clients view) always
+// rendering CLIENT_DETAIL ("Valentina Reyes") regardless of which client's
+// record was actually opened. Each entry's skinId/flags stay consistent with
+// CLIENTS_LIST (Renata's Compositae allergy, Camila's active package
+// matching CLIENT_PACKAGE_BALANCE, Daniela's topical retinoid).
+export const CLIENT_DETAILS_BY_ID: Record<string, Omit<typeof CLIENT_DETAIL, "id">> = {
+  "cl-1": {
+    name: "Sofía Marín",
+    phone: "+52 55 1234 5678",
+    email: "sofia.marin@example.com",
+    location: "Roma Norte",
+    skinId: {
+      skinType: "Grasa",
+      allergies: [],
+      medications: [],
+      pregnancyOrBreastfeeding: false,
+      recentProcedures: "Ninguno en los últimos 6 meses",
+      sunExposure: "Alta",
+      visitObjective: "Limpieza",
+    },
+    preferences: {
+      preferredEsthetician: "Ana Torres",
+      beverage: "Té verde",
+      music: "Sin preferencia",
+      aromatherapy: "Naranja",
+      conversation: "Conversación",
+      productsOwned: [] as string[],
+      wishlist: ["Beauty of Joseon Sunscreen"],
+    },
+    consents: [
+      { type: "Tratamiento y responsabilidad", version: "v2.1", acceptedAt: "2026-09-21", status: "Vigente" },
+      { type: "Uso de fotografía", version: "v1.0", acceptedAt: "2026-09-21", status: "Vigente" },
+      { type: "Aviso de privacidad", version: "v1.3", acceptedAt: "2026-09-21", status: "Vigente" },
+    ],
+    treatmentHistory: [] as { date: string; protocol: string; esthetician: string; location: string }[],
+    auditTrail: [{ user: "Camila Ruiz", action: "Registró llegada", timestamp: "2026-09-28 09:00" }],
+  },
+  "cl-2": {
+    name: "Renata Lugo",
+    phone: "+52 55 2345 6789",
+    email: "renata.lugo@example.com",
+    location: "Roma Norte",
+    skinId: {
+      skinType: "Sensible",
+      allergies: ["Compositae"],
+      medications: [] as string[],
+      pregnancyOrBreastfeeding: false,
+      recentProcedures: "Ninguno en los últimos 6 meses",
+      sunExposure: "Moderada",
+      visitObjective: "Calmar",
+    },
+    preferences: {
+      preferredEsthetician: "Ana Torres",
+      beverage: "Té de menta/hierbabuena",
+      music: "Instrumental, volumen bajo",
+      aromatherapy: "Eucalipto",
+      conversation: "Silencio",
+      productsOwned: ["Anua Heartleaf Toner"],
+      wishlist: [] as string[],
+    },
+    consents: [
+      { type: "Tratamiento y responsabilidad", version: "v2.1", acceptedAt: "2026-05-10", status: "Vigente" },
+      { type: "Uso de fotografía", version: "v1.0", acceptedAt: "2026-05-10", status: "Vigente" },
+      { type: "Aviso de privacidad", version: "v1.3", acceptedAt: "2026-05-10", status: "Vigente" },
+    ],
+    treatmentHistory: [
+      { date: "2026-09-21", protocol: "Targeted", esthetician: "Ana Torres", location: "Roma Norte" },
+      { date: "2026-08-20", protocol: "Targeted", esthetician: "Ana Torres", location: "Roma Norte" },
+    ],
+    auditTrail: [{ user: "Ana Torres", action: "Vio el expediente", timestamp: "2026-09-21 09:25" }],
+  },
+  "cl-3": {
+    name: CLIENT_DETAIL.name,
+    phone: CLIENT_DETAIL.phone,
+    email: CLIENT_DETAIL.email,
+    location: CLIENT_DETAIL.location,
+    skinId: CLIENT_DETAIL.skinId,
+    preferences: CLIENT_DETAIL.preferences,
+    consents: CLIENT_DETAIL.consents,
+    treatmentHistory: CLIENT_DETAIL.treatmentHistory,
+    auditTrail: CLIENT_DETAIL.auditTrail,
+  },
+  "cl-4": {
+    name: "Camila Fuentes",
+    phone: "+52 55 4567 8901",
+    email: "camila.fuentes@example.com",
+    location: "Roma Norte",
+    skinId: {
+      skinType: "Seca",
+      allergies: [] as string[],
+      medications: [] as string[],
+      pregnancyOrBreastfeeding: false,
+      recentProcedures: "Ninguno en los últimos 6 meses",
+      sunExposure: "Leve",
+      visitObjective: "Hidratación",
+    },
+    preferences: {
+      preferredEsthetician: "Diana Cruz",
+      beverage: "Té de manzanilla",
+      music: "Pop suave",
+      aromatherapy: "Lemongrass",
+      conversation: "Conversación",
+      productsOwned: ["SKIN1004 Centella Cream"],
+      wishlist: ["Anua Heartleaf Toner"],
+    },
+    consents: [
+      { type: "Tratamiento y responsabilidad", version: "v2.1", acceptedAt: "2026-04-02", status: "Vigente" },
+      { type: "Uso de fotografía", version: "v1.0", acceptedAt: "2026-04-02", status: "Vigente" },
+      { type: "Aviso de privacidad", version: "v1.3", acceptedAt: "2026-04-02", status: "Vigente" },
+    ],
+    treatmentHistory: [
+      { date: "2026-09-14", protocol: "Targeted", esthetician: "Diana Cruz", location: "Roma Norte" },
+      { date: "2026-08-17", protocol: "Targeted", esthetician: "Diana Cruz", location: "Roma Norte" },
+      { date: "2026-07-20", protocol: "Targeted", esthetician: "Diana Cruz", location: "Roma Norte" },
+    ],
+    auditTrail: [{ user: "Diana Cruz", action: "Vio el expediente", timestamp: "2026-09-14 11:35" }],
+  },
+  "cl-5": {
+    name: "Mariana Solís",
+    phone: "+52 55 5678 9012",
+    email: "mariana.solis@example.com",
+    location: "Roma Norte",
+    skinId: {
+      skinType: "Normal",
+      allergies: [] as string[],
+      medications: [] as string[],
+      pregnancyOrBreastfeeding: false,
+      recentProcedures: "Ninguno en los últimos 6 meses",
+      sunExposure: "Moderada",
+      visitObjective: "Prevención",
+    },
+    preferences: {
+      preferredEsthetician: "Ana Torres",
+      beverage: "Té verde",
+      music: "Sin preferencia",
+      aromatherapy: "Menta",
+      conversation: "Conversación",
+      productsOwned: [] as string[],
+      wishlist: [] as string[],
+    },
+    consents: [
+      { type: "Tratamiento y responsabilidad", version: "v2.1", acceptedAt: "2026-03-15", status: "Vigente" },
+      { type: "Uso de fotografía", version: "v1.0", acceptedAt: "2026-03-15", status: "Vigente" },
+      { type: "Aviso de privacidad", version: "v1.3", acceptedAt: "2026-03-15", status: "Vigente" },
+    ],
+    treatmentHistory: [
+      { date: "2026-08-30", protocol: "Purify", esthetician: "Ana Torres", location: "Roma Norte" },
+    ],
+    auditTrail: [{ user: "Ana Torres", action: "Vio el expediente", timestamp: "2026-08-30 13:10" }],
+  },
+  "cl-6": {
+    name: "Daniela Ponce",
+    phone: "+52 55 6789 0123",
+    email: "daniela.ponce@example.com",
+    location: "Roma Norte",
+    skinId: {
+      skinType: "Grasa",
+      allergies: [] as string[],
+      medications: ["Retinoide tópico"],
+      pregnancyOrBreastfeeding: false,
+      recentProcedures: "Retinoide tópico — confirmar con dermatólogo antes de peelings",
+      sunExposure: "Moderada",
+      visitObjective: "Recuperación",
+    },
+    preferences: {
+      preferredEsthetician: "Ana Torres",
+      beverage: "Té de manzanilla",
+      music: "Instrumental, volumen bajo",
+      aromatherapy: "Lavanda",
+      conversation: "Silencio",
+      productsOwned: [] as string[],
+      wishlist: [] as string[],
+    },
+    consents: [
+      { type: "Tratamiento y responsabilidad", version: "v2.0", acceptedAt: "2026-01-20", status: "Vigente" },
+      { type: "Uso de fotografía", version: "v1.0", acceptedAt: "2026-01-20", status: "Revocado" },
+      { type: "Aviso de privacidad", version: "v1.3", acceptedAt: "2026-01-20", status: "Vigente" },
+    ],
+    treatmentHistory: [
+      { date: "2026-08-12", protocol: "Targeted", esthetician: "Ana Torres", location: "Roma Norte" },
+    ],
+    auditTrail: [{ user: "Emiliano Alvear Ocampo", action: "Rechazó cortesía", timestamp: "2026-09-19 16:40" }],
+  },
+};
+
 // ---------------------------------------------------------------------------
 // Admin — Inventory ledgers
 // ---------------------------------------------------------------------------

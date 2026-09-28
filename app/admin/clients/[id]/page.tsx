@@ -4,22 +4,26 @@ import { use, useState } from "react";
 import { TopBar } from "@/components/panel/TopBar";
 import { Card } from "@/components/panel/Card";
 import { Badge } from "@/components/panel/Badge";
-import { OWNER, CLIENT_DETAIL } from "@/lib/mock-data";
+import { notFound } from "next/navigation";
+import { OWNER, CLIENT_DETAILS_BY_ID } from "@/lib/mock-data";
 
 // Record detail — audit trail is mandatory, not optional (spec §6.3).
-// This mock always renders the one seeded client regardless of :id.
-// Contact, Skin ID, and Preferences are all editable here (Owner/staff
-// entering clinical data is exactly what spec §5.1 describes); Historial
-// and Consentimientos stay read-only since they're append-only records, not
-// settings — "editing" them would mean creating a new entry elsewhere
-// (Treatment Record, Consent Center), not rewriting history here.
+// Looks up the specific client by :id — found during the persona QA pass
+// always rendering the one seeded client ("Valentina Reyes") regardless of
+// which "Ver expediente" link was actually clicked. Contact, Skin ID, and
+// Preferences are all editable here (Owner/staff entering clinical data is
+// exactly what spec §5.1 describes); Historial and Consentimientos stay
+// read-only since they're append-only records, not settings — "editing"
+// them would mean creating a new entry elsewhere (Treatment Record, Consent
+// Center), not rewriting history here.
 export default function AdminClientDetail({
   params,
 }: {
   params: Promise<{ id: string }>;
 }) {
-  use(params);
-  const c = CLIENT_DETAIL;
+  const { id } = use(params);
+  const c = CLIENT_DETAILS_BY_ID[id];
+  if (!c) notFound();
 
   const [contact, setContact] = useState({
     phone: c.phone,
@@ -291,7 +295,7 @@ export default function AdminClientDetail({
                       {con.version} · aceptado {con.acceptedAt}
                     </p>
                   </div>
-                  <Badge tone="positive">{con.status}</Badge>
+                  <Badge tone={con.status === "Vigente" ? "positive" : "neutral"}>{con.status}</Badge>
                 </li>
               ))}
             </ul>

@@ -10,7 +10,8 @@ import {
   TODAY_APPOINTMENTS,
   BACKBAR_INVENTORY,
   ADD_ONS,
-  CLIENT_SKIN_ID_PREVIEW,
+  CLIENTS_LIST,
+  CLIENT_DETAILS_BY_ID,
   CHECKOUT_TICKET,
 } from "@/lib/mock-data";
 
@@ -26,6 +27,11 @@ export default function StaffTreatmentRecord() {
   const { protocols } = useProtocols();
   const { addPendingCheckout } = usePendingCheckouts();
   const client = TODAY_APPOINTMENTS[0];
+  // Same per-client lookup fix as the Esthetician "Hoy" dashboard — this
+  // banner used to read one shared static preview regardless of which
+  // client's record was actually open.
+  const clientListing = CLIENTS_LIST.find((c) => c.name === client.client);
+  const clientDetail = clientListing ? CLIENT_DETAILS_BY_ID[clientListing.id] : undefined;
   const tierProtocols = protocols.filter((p) => p.tier === client.tier);
   const [protocol, setProtocol] = useState(tierProtocols[0]?.name ?? "");
   const backbarAtLocation = BACKBAR_INVENTORY.filter((b) => b.location === identity.location);
@@ -75,13 +81,13 @@ export default function StaffTreatmentRecord() {
       <TopBar title="Registro de tratamiento" userName={identity.name} userRole={identity.role} />
       <div className="flex-1 px-8 py-6">
         <div className="mx-auto max-w-xl space-y-4">
-          {CLIENT_SKIN_ID_PREVIEW.allergies.length > 0 && (
+          {clientDetail && clientDetail.skinId.allergies.length > 0 && (
             <div className="rounded-[18px] border-2 border-crepe bg-crepe/15 px-6 py-4">
               <p className="font-body text-xs font-semibold uppercase tracking-[0.14em] text-ciruela">
                 Alerta de alergia
               </p>
               <p className="mt-1 font-body text-sm text-ciruela">
-                {CLIENT_SKIN_ID_PREVIEW.allergies.join(", ")}
+                {clientDetail.skinId.allergies.join(", ")}
               </p>
             </div>
           )}

@@ -1,8 +1,9 @@
 import { ProfileForm } from "@/components/panel/ProfileForm";
-import { CLIENT } from "@/lib/mock-data";
+import { requireClient } from "@/lib/auth/dal";
 
-export default function ClientProfile() {
+export default async function ClientProfile() {
+  const client = await requireClient();
   return (
-    <ProfileForm name={CLIENT.name} email={CLIENT.email} phone={CLIENT.phone} role={CLIENT.role} />
+    <ProfileForm name={client.name} email={client.email ?? ""} phone={client.phone} role="Cliente" />
   );
 }
