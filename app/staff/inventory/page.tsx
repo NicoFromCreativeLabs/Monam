@@ -9,8 +9,10 @@ import { useAnomalies } from "@/components/panel/AnomaliesContext";
 import {
   RETAIL_INVENTORY,
   BACKBAR_INVENTORY,
+  WAREHOUSE_INVENTORY,
   type RetailInventoryItem,
   type BackbarInventoryItem,
+  type WarehouseInventoryItem,
 } from "@/lib/mock-data";
 
 // Front Desk owns stock levels at their own location — receiving shipments,
@@ -27,13 +29,17 @@ export default function StaffInventory() {
       <TopBar title="Inventario" userName={identity.name} userRole={identity.role} />
       <div className="flex-1 space-y-6 px-8 py-6">
         <InventoryCard
-          title={`Retail — ${identity.location}`}
+          title={`Piso — ${identity.location}`}
           items={RETAIL_INVENTORY.filter((i) => i.location === identity.location)}
         />
         <InventoryCard
           title={`Backbar — ${identity.location}`}
           items={BACKBAR_INVENTORY.filter((i) => i.location === identity.location)}
           showPao
+        />
+        <InventoryCard
+          title={`Warehouse — ${identity.location}`}
+          items={WAREHOUSE_INVENTORY.filter((i) => i.location === identity.location)}
         />
       </div>
     </>
@@ -46,7 +52,7 @@ function InventoryCard({
   showPao = false,
 }: {
   title: string;
-  items: (RetailInventoryItem | BackbarInventoryItem)[];
+  items: (RetailInventoryItem | BackbarInventoryItem | WarehouseInventoryItem)[];
   showPao?: boolean;
 }) {
   const { addAlert } = usePanelAlerts();

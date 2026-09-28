@@ -387,6 +387,28 @@ export const BACKBAR_INVENTORY: BackbarInventoryItem[] = [
   { sku: "S1004-CA-30B-PN", product: "SKIN1004 Centella Ampoule", location: "Prado Norte", qty: 4, par: 8, opensOn: "2026-09-18", pao: "6 meses" },
 ];
 
+// A third ledger, distinct from Piso (retail floor) and Backbar (opened,
+// in active clinic use): sealed bulk stock received but not yet moved to
+// either — no price (nothing's sold straight from the warehouse) and no
+// opensOn/PAO (unopened), but still tracks cost (for inventory valuation)
+// and a lot expiry, same as Piso.
+export interface WarehouseInventoryItem {
+  sku: string;
+  product: string;
+  location: string;
+  qty: number;
+  par: number;
+  cost: number;
+  expiresOn: string;
+}
+
+export const WAREHOUSE_INVENTORY: WarehouseInventoryItem[] = [
+  { sku: "BOJ-GS-30-WH", product: "Beauty of Joseon Glow Serum", location: "Roma Norte", qty: 24, par: 12, cost: 260, expiresOn: "2027-11-01" },
+  { sku: "AN-HT-150-WH", product: "Anua Heartleaf Toner", location: "Roma Norte", qty: 18, par: 10, cost: 230, expiresOn: "2027-10-20" },
+  { sku: "S1004-CA-30B-WH", product: "SKIN1004 Centella Ampoule", location: "Roma Norte", qty: 15, par: 10, cost: 190, expiresOn: "2027-12-15" },
+  { sku: "PUR-CS-200B-WH", product: "Purito Centella Serum (backbar)", location: "Roma Norte", qty: 4, par: 8, cost: 175, expiresOn: "2027-09-05" },
+];
+
 // ---------------------------------------------------------------------------
 // Admin — Financials
 // ---------------------------------------------------------------------------

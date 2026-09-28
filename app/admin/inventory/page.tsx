@@ -10,21 +10,37 @@ import {
   OWNER,
   RETAIL_INVENTORY,
   BACKBAR_INVENTORY,
+  WAREHOUSE_INVENTORY,
   type RetailInventoryItem,
   type BackbarInventoryItem,
+  type WarehouseInventoryItem,
 } from "@/lib/mock-data";
 
-// One screen for both ledgers — easier to actually use day to day — but the
-// underlying data stays logically separate (spec §5.3: "never merge into
-// one stock line", i.e. never sum a product's retail and backbar quantities
-// together; each row still belongs to exactly one ledger). This matches the
-// planned data model too: Product.ledger is a discriminator column on one
-// table, not two unrelated tables.
+// Three ledgers now, kept logically separate (spec §5.3: "never merge into
+// one stock line", i.e. never sum a product's quantities across ledgers —
+// each row still belongs to exactly one). Piso (retail floor stock for
+// sale), Backbar (opened, in active clinic use), and Warehouse (sealed bulk
+// stock received but not yet moved to either). This matches the planned
+// data model too: Product.ledger is a discriminator column on one table,
+// not three unrelated tables.
 //
 // Edits are local component state, not persisted — a real save would be a
 // Server Action writing an InventoryTransaction row (implementation plan
 // Phase 5), which is backend work outside this UI-first pass.
-type Tab = "todos" | "retail" | "backbar";
+type Tab = "todos" | "retail" | "backbar" | "warehouse";
+type LedgerName = "Retail" | "Backbar" | "Warehouse";
+
+const LEDGER_LABEL: Record<LedgerName, string> = {
+  Retail: "Piso",
+  Backbar: "Backbar",
+  Warehouse: "Warehouse",
+};
+
+const LEDGER_TONE: Record<LedgerName, "info" | "neutral" | "positive"> = {
+  Retail: "info",
+  Backbar: "neutral",
+  Warehouse: "positive",
+};
 
 function DownloadButton({ onClick }: { onClick: () => void }) {
   return (
@@ -37,14 +53,12 @@ function DownloadButton({ onClick }: { onClick: () => void }) {
   );
 }
 
-type LedgerChoice = "Retail" | "Backbar" | "Ambos";
-
 interface EditDraft {
   sku: string;
-  originalLedger: "Retail" | "Backbar";
+  originalLedger: LedgerName;
   product: string;
   location: string;
-  ledger: "Retail" | "Backbar";
+  ledger: LedgerName;
   qty: string;
   par: string;
   price: string;
@@ -57,7 +71,7 @@ interface EditDraft {
 const emptyNewProduct = {
   name: "",
   location: "",
-  ledger: "Retail" as LedgerChoice,
+  ledgers: ["Retail"] as LedgerName[],
   retailSku: "",
   retailQty: "",
   retailPar: "",
@@ -69,6 +83,11 @@ const emptyNewProduct = {
   backbarPar: "",
   backbarOpens: "",
   backbarPao: "",
+  warehouseSku: "",
+  warehouseQty: "",
+  warehousePar: "",
+  warehouseCost: "",
+  warehouseExpires: "",
 };
 
 export default function AdminInventory() {
@@ -76,6 +95,7 @@ export default function AdminInventory() {
   const [tab, setTab] = useState<Tab>("todos");
   const [retailAll, setRetail] = useState<RetailInventoryItem[]>(RETAIL_INVENTORY);
   const [backbarAll, setBackbar] = useState<BackbarInventoryItem[]>(BACKBAR_INVENTORY);
+  const [warehouseAll, setWarehouse] = useState<WarehouseInventoryItem[]>(WAREHOUSE_INVENTORY);
   const [editModal, setEditModal] = useState<EditDraft | null>(null);
   const [restockOnly, setRestockOnly] = useState(false);
   const [addProductOpen, setAddProductOpen] = useState(false);
@@ -88,28 +108,31 @@ export default function AdminInventory() {
   // selected — edits still write to the full unfiltered arrays above.
   const retailByLocation = retailAll.filter((i) => selectedNames.includes(i.location));
   const backbarByLocation = backbarAll.filter((i) => selectedNames.includes(i.location));
+  const warehouseByLocation = warehouseAll.filter((i) => selectedNames.includes(i.location));
 
   // Then optionally narrowed to just what needs restocking, for the tables.
   const retail = retailByLocation.filter((i) => !restockOnly || i.qty < i.par);
   const backbar = backbarByLocation.filter((i) => !restockOnly || i.qty < i.par);
+  const warehouse = warehouseByLocation.filter((i) => !restockOnly || i.qty < i.par);
 
   const retailLow = retailByLocation.filter((i) => i.qty < i.par).length;
   const backbarLow = backbarByLocation.filter((i) => i.qty < i.par).length;
+  const warehouseLow = warehouseByLocation.filter((i) => i.qty < i.par).length;
   const retailValue = retailByLocation.reduce((sum, i) => sum + i.qty * i.price, 0);
   const locationLabel =
     selectedNames.length > 1 ? selectedNames.join(" + ") : selectedNames[0];
 
-  // Editing happens in a single modal shared by all three tables/tabs,
+  // Editing happens in a single modal shared by all four tables/tabs,
   // rather than turning a table row into inline inputs — that inline
   // pattern squeezed a select + two number inputs + two buttons into one
   // row, which broke down badly below desktop width.
   function openEdit(
-    item: RetailInventoryItem | BackbarInventoryItem,
-    ledger: "Retail" | "Backbar",
+    item: RetailInventoryItem | BackbarInventoryItem | WarehouseInventoryItem,
+    ledger: LedgerName,
   ) {
-    const isRetail = ledger === "Retail";
-    const retailItem = isRetail ? (item as RetailInventoryItem) : null;
-    const backbarItem = !isRetail ? (item as BackbarInventoryItem) : null;
+    const retailItem = ledger === "Retail" ? (item as RetailInventoryItem) : null;
+    const backbarItem = ledger === "Backbar" ? (item as BackbarInventoryItem) : null;
+    const warehouseItem = ledger === "Warehouse" ? (item as WarehouseInventoryItem) : null;
     setEditModal({
       sku: item.sku,
       originalLedger: ledger,
@@ -119,8 +142,8 @@ export default function AdminInventory() {
       qty: String(item.qty),
       par: String(item.par),
       price: retailItem ? String(retailItem.price) : "",
-      cost: retailItem ? String(retailItem.cost) : "",
-      expiresOn: retailItem ? retailItem.expiresOn : "",
+      cost: retailItem ? String(retailItem.cost) : warehouseItem ? String(warehouseItem.cost) : "",
+      expiresOn: retailItem ? retailItem.expiresOn : warehouseItem ? warehouseItem.expiresOn : "",
       opensOn: backbarItem ? backbarItem.opensOn : "",
       pao: backbarItem ? backbarItem.pao : "",
     });
@@ -130,39 +153,44 @@ export default function AdminInventory() {
     setEditModal(null);
   }
 
+  function removeFromLedger(ledger: LedgerName, sku: string) {
+    if (ledger === "Retail") setRetail((prev) => prev.filter((i) => i.sku !== sku));
+    else if (ledger === "Backbar") setBackbar((prev) => prev.filter((i) => i.sku !== sku));
+    else setWarehouse((prev) => prev.filter((i) => i.sku !== sku));
+  }
+
+  function addToLedger(ledger: LedgerName, draft: EditDraft, qtyNum: number, parNum: number) {
+    const { sku, product, location, price, cost, expiresOn, opensOn, pao } = draft;
+    if (ledger === "Retail") {
+      setRetail((prev) => [
+        ...prev,
+        { sku, product, location, qty: qtyNum, par: parNum, price: Number(price) || 0, cost: Number(cost) || 0, expiresOn: expiresOn || "—" },
+      ]);
+    } else if (ledger === "Backbar") {
+      setBackbar((prev) => [
+        ...prev,
+        { sku, product, location, qty: qtyNum, par: parNum, opensOn: opensOn || "—", pao: pao || "—" },
+      ]);
+    } else {
+      setWarehouse((prev) => [
+        ...prev,
+        { sku, product, location, qty: qtyNum, par: parNum, cost: Number(cost) || 0, expiresOn: expiresOn || "—" },
+      ]);
+    }
+  }
+
   // Moving a product between ledgers removes it from one array and adds it
-  // to the other — per spec §5.3 retail and backbar are never one stock
-  // line, this just lets a mis-categorized product be corrected.
+  // to another — per spec §5.3 ledgers are never one stock line, this just
+  // lets a mis-categorized product be corrected.
   function saveEditModal() {
     if (!editModal) return;
-    const { sku, originalLedger, ledger, product, location, qty, par, price, cost, expiresOn, opensOn, pao } =
-      editModal;
+    const { sku, originalLedger, ledger, qty, par, price, cost, expiresOn, opensOn, pao } = editModal;
     const qtyNum = Number(qty) || 0;
     const parNum = Number(par) || 0;
 
     if (ledger !== originalLedger) {
-      if (originalLedger === "Retail") {
-        setRetail((prev) => prev.filter((i) => i.sku !== sku));
-        setBackbar((prev) => [
-          ...prev,
-          { sku, product, location, qty: qtyNum, par: parNum, opensOn: opensOn || "—", pao: pao || "—" },
-        ]);
-      } else {
-        setBackbar((prev) => prev.filter((i) => i.sku !== sku));
-        setRetail((prev) => [
-          ...prev,
-          {
-            sku,
-            product,
-            location,
-            qty: qtyNum,
-            par: parNum,
-            price: Number(price) || 0,
-            cost: Number(cost) || 0,
-            expiresOn: expiresOn || "—",
-          },
-        ]);
-      }
+      removeFromLedger(originalLedger, sku);
+      addToLedger(ledger, editModal, qtyNum, parNum);
     } else if (ledger === "Retail") {
       setRetail((prev) =>
         prev.map((i) =>
@@ -171,25 +199,36 @@ export default function AdminInventory() {
             : i,
         ),
       );
-    } else {
+    } else if (ledger === "Backbar") {
       setBackbar((prev) =>
         prev.map((i) => (i.sku === sku ? { ...i, qty: qtyNum, par: parNum, opensOn, pao } : i)),
+      );
+    } else {
+      setWarehouse((prev) =>
+        prev.map((i) => (i.sku === sku ? { ...i, qty: qtyNum, par: parNum, cost: Number(cost) || 0, expiresOn } : i)),
       );
     }
     setEditModal(null);
   }
 
-  // A brand can supply both retail and backbar versions of a product, but
-  // per spec §5.3 they're never one stock line — "Ambos" writes two
-  // independent entries (different SKUs, qty, par, cost), one per ledger.
+  function toggleNewProductLedger(choice: LedgerName) {
+    setNewProduct((f) => ({
+      ...f,
+      ledgers: f.ledgers.includes(choice)
+        ? f.ledgers.filter((l) => l !== choice)
+        : [...f.ledgers, choice],
+    }));
+  }
+
+  // A brand can supply retail, backbar, and warehouse versions of the same
+  // product, but per spec §5.3 they're never one stock line — checking more
+  // than one box writes one independent entry per ledger (different SKUs,
+  // qty, par, cost), never a shared quantity.
   function submitNewProduct(e: React.FormEvent) {
     e.preventDefault();
-    if (!newProduct.name.trim() || !newProduct.location) return;
+    if (!newProduct.name.trim() || !newProduct.location || newProduct.ledgers.length === 0) return;
 
-    const wantsRetail = newProduct.ledger === "Retail" || newProduct.ledger === "Ambos";
-    const wantsBackbar = newProduct.ledger === "Backbar" || newProduct.ledger === "Ambos";
-
-    if (wantsRetail) {
+    if (newProduct.ledgers.includes("Retail")) {
       setRetail((prev) => [
         ...prev,
         {
@@ -205,7 +244,7 @@ export default function AdminInventory() {
       ]);
     }
 
-    if (wantsBackbar) {
+    if (newProduct.ledgers.includes("Backbar")) {
       setBackbar((prev) => [
         ...prev,
         {
@@ -220,6 +259,21 @@ export default function AdminInventory() {
       ]);
     }
 
+    if (newProduct.ledgers.includes("Warehouse")) {
+      setWarehouse((prev) => [
+        ...prev,
+        {
+          sku: newProduct.warehouseSku.trim() || `SKU-${Date.now()}-W`,
+          product: newProduct.name.trim(),
+          location: newProduct.location,
+          qty: Number(newProduct.warehouseQty) || 0,
+          par: Number(newProduct.warehousePar) || 0,
+          cost: Number(newProduct.warehouseCost) || 0,
+          expiresOn: newProduct.warehouseExpires || "—",
+        },
+      ]);
+    }
+
     setNewProduct({ ...emptyNewProduct, location: newProduct.location });
     setAddProductOpen(false);
   }
@@ -229,7 +283,7 @@ export default function AdminInventory() {
       ...retail.map((i) => ({
         SKU: i.sku,
         Producto: i.product,
-        Ledger: "Retail",
+        Ledger: "Piso",
         Ubicacion: i.location,
         Cantidad: i.qty,
         Par: i.par,
@@ -242,12 +296,20 @@ export default function AdminInventory() {
         Cantidad: i.qty,
         Par: i.par,
       })),
+      ...warehouse.map((i) => ({
+        SKU: i.sku,
+        Producto: i.product,
+        Ledger: "Warehouse",
+        Ubicacion: i.location,
+        Cantidad: i.qty,
+        Par: i.par,
+      })),
     ]);
   }
 
   function exportRetail() {
     downloadCsv(
-      "inventario-retail-monam.csv",
+      "inventario-piso-monam.csv",
       retail.map((i) => ({
         SKU: i.sku,
         Producto: i.product,
@@ -275,15 +337,38 @@ export default function AdminInventory() {
     );
   }
 
+  function exportWarehouse() {
+    downloadCsv(
+      "inventario-warehouse-monam.csv",
+      warehouse.map((i) => ({
+        SKU: i.sku,
+        Producto: i.product,
+        Ubicacion: i.location,
+        Cantidad: i.qty,
+        Par: i.par,
+        Costo: i.cost,
+        Vence: i.expiresOn,
+      })),
+    );
+  }
+
+  const exportForTab = {
+    todos: exportTodos,
+    retail: exportRetail,
+    backbar: exportBackbar,
+    warehouse: exportWarehouse,
+  }[tab];
+
   return (
     <>
       <TopBar title="Inventario" userName={OWNER.name} userRole={OWNER.role} allowBothLocations />
       <div className="flex-1 space-y-6 px-8 py-6">
-        <div className="grid grid-cols-2 gap-4 min-[1100px]:grid-cols-4">
-          <StatTile label="SKUs — Retail" value={`${retail.length}`} sub={`${retailLow} bajo par`} />
+        <div className="grid grid-cols-2 gap-4 min-[1100px]:grid-cols-5">
+          <StatTile label="SKUs — Piso" value={`${retail.length}`} sub={`${retailLow} bajo par`} />
           <StatTile label="SKUs — Backbar" value={`${backbar.length}`} sub={`${backbarLow} bajo par`} />
-          <StatTile label="Valor retail en anaquel" value={`$${retailValue.toLocaleString()} MXN`} />
-          <StatTile label="Total bajo par" value={`${retailLow + backbarLow}`} />
+          <StatTile label="SKUs — Warehouse" value={`${warehouse.length}`} sub={`${warehouseLow} bajo par`} />
+          <StatTile label="Valor en piso" value={`$${retailValue.toLocaleString()} MXN`} />
+          <StatTile label="Total bajo par" value={`${retailLow + backbarLow + warehouseLow}`} />
         </div>
 
         <div className="flex flex-wrap items-center justify-between gap-3">
@@ -291,8 +376,9 @@ export default function AdminInventory() {
             {(
               [
                 ["todos", "Todos"],
-                ["retail", "Retail"],
+                ["retail", "Piso"],
                 ["backbar", "Backbar"],
+                ["warehouse", "Warehouse"],
               ] as [Tab, string][]
             ).map(([value, label]) => (
               <button
@@ -319,9 +405,7 @@ export default function AdminInventory() {
             >
               {restockOnly ? "✓ " : ""}Necesita restock
             </button>
-            <DownloadButton
-              onClick={tab === "todos" ? exportTodos : tab === "retail" ? exportRetail : exportBackbar}
-            />
+            <DownloadButton onClick={exportForTab} />
             <button
               onClick={() => setAddProductOpen((v) => !v)}
               className="rounded-full bg-ciruela px-4 py-1.5 font-body text-xs text-hueso"
@@ -369,33 +453,36 @@ export default function AdminInventory() {
                 <label className="mb-1 block font-body text-xs uppercase tracking-[0.14em] text-ciruela/50">
                   ¿Dónde vive este producto?
                 </label>
-                <div className="flex gap-1 rounded-full border border-ciruela/20 p-1 font-body text-xs w-fit">
-                  {(["Retail", "Backbar", "Ambos"] as LedgerChoice[]).map((choice) => (
-                    <button
+                <div className="flex flex-wrap gap-2">
+                  {(["Retail", "Backbar", "Warehouse"] as LedgerName[]).map((choice) => (
+                    <label
                       key={choice}
-                      type="button"
-                      onClick={() => setNewProduct((f) => ({ ...f, ledger: choice }))}
-                      aria-pressed={newProduct.ledger === choice}
-                      className={`rounded-full px-4 py-1.5 ${
-                        newProduct.ledger === choice
-                          ? "bg-ciruela text-hueso"
-                          : "text-ciruela/70 hover:bg-ciruela/8"
+                      className={`flex cursor-pointer items-center gap-1.5 rounded-full border px-4 py-1.5 font-body text-xs ${
+                        newProduct.ledgers.includes(choice)
+                          ? "border-ciruela bg-ciruela text-hueso"
+                          : "border-ciruela/20 text-ciruela/70 hover:bg-ciruela/8"
                       }`}
                     >
-                      {choice === "Backbar" ? "En cabina" : choice}
-                    </button>
+                      <input
+                        type="checkbox"
+                        checked={newProduct.ledgers.includes(choice)}
+                        onChange={() => toggleNewProductLedger(choice)}
+                        className="sr-only"
+                      />
+                      {LEDGER_LABEL[choice]}
+                    </label>
                   ))}
                 </div>
                 <p className="mt-1 font-body text-[11px] text-ciruela/40">
-                  &quot;Ambos&quot; crea dos líneas de stock independientes — retail y backbar
-                  nunca se mezclan en una sola (spec §5.3), aunque sea la misma marca.
+                  Marcar más de una crea líneas de stock independientes — nunca se mezclan en
+                  una sola (spec §5.3), aunque sea la misma marca.
                 </p>
               </div>
 
-              {(newProduct.ledger === "Retail" || newProduct.ledger === "Ambos") && (
+              {newProduct.ledgers.includes("Retail") && (
                 <div className="rounded-lg border border-pastel/60 bg-pastel/10 p-4">
                   <p className="mb-3 font-body text-xs font-medium uppercase tracking-[0.14em] text-ciruela/60">
-                    Línea Retail
+                    Línea Piso
                   </p>
                   <div className="grid grid-cols-2 gap-3 min-[700px]:grid-cols-3">
                     <TextInput
@@ -437,7 +524,7 @@ export default function AdminInventory() {
                 </div>
               )}
 
-              {(newProduct.ledger === "Backbar" || newProduct.ledger === "Ambos") && (
+              {newProduct.ledgers.includes("Backbar") && (
                 <div className="rounded-lg border border-ciruela/15 bg-ciruela/5 p-4">
                   <p className="mb-3 font-body text-xs font-medium uppercase tracking-[0.14em] text-ciruela/60">
                     Línea Backbar
@@ -470,6 +557,45 @@ export default function AdminInventory() {
                 </div>
               )}
 
+              {newProduct.ledgers.includes("Warehouse") && (
+                <div className="rounded-lg border border-oliva/25 bg-oliva/5 p-4">
+                  <p className="mb-3 font-body text-xs font-medium uppercase tracking-[0.14em] text-ciruela/60">
+                    Línea Warehouse
+                  </p>
+                  <div className="grid grid-cols-2 gap-3 min-[700px]:grid-cols-3">
+                    <TextInput
+                      label="SKU"
+                      value={newProduct.warehouseSku}
+                      onChange={(v) => setNewProduct((f) => ({ ...f, warehouseSku: v }))}
+                    />
+                    <TextInput
+                      label="Cantidad"
+                      type="number"
+                      value={newProduct.warehouseQty}
+                      onChange={(v) => setNewProduct((f) => ({ ...f, warehouseQty: v }))}
+                    />
+                    <TextInput
+                      label="Par"
+                      type="number"
+                      value={newProduct.warehousePar}
+                      onChange={(v) => setNewProduct((f) => ({ ...f, warehousePar: v }))}
+                    />
+                    <TextInput
+                      label="Costo (MXN)"
+                      type="number"
+                      value={newProduct.warehouseCost}
+                      onChange={(v) => setNewProduct((f) => ({ ...f, warehouseCost: v }))}
+                    />
+                    <TextInput
+                      label="Vence"
+                      type="date"
+                      value={newProduct.warehouseExpires}
+                      onChange={(v) => setNewProduct((f) => ({ ...f, warehouseExpires: v }))}
+                    />
+                  </div>
+                </div>
+              )}
+
               <button
                 type="submit"
                 className="rounded-full bg-ciruela px-5 py-2.5 font-body text-sm text-hueso"
@@ -482,7 +608,7 @@ export default function AdminInventory() {
 
         {tab === "todos" && (
           <Card title={`${locationLabel} — todos los productos`}>
-            {retail.length + backbar.length === 0 ? (
+            {retail.length + backbar.length + warehouse.length === 0 ? (
               <p className="py-6 text-center font-body text-sm text-ciruela/50">
                 {restockOnly
                   ? "Nada necesita restock ahora mismo en esta sucursal."
@@ -507,6 +633,7 @@ export default function AdminInventory() {
                 {[
                   ...retail.map((i) => ({ ...i, ledger: "Retail" as const })),
                   ...backbar.map((i) => ({ ...i, ledger: "Backbar" as const })),
+                  ...warehouse.map((i) => ({ ...i, ledger: "Warehouse" as const })),
                 ].map((item) => {
                   const low = item.qty < item.par;
                   return (
@@ -514,13 +641,11 @@ export default function AdminInventory() {
                       <td className="py-3 text-ciruela/50">{item.sku}</td>
                       <td className="py-3">{item.product}</td>
                       <td className="py-3">
-                        <Badge tone={item.ledger === "Retail" ? "info" : "neutral"}>
-                          {item.ledger}
-                        </Badge>
+                        <Badge tone={LEDGER_TONE[item.ledger]}>{LEDGER_LABEL[item.ledger]}</Badge>
                       </td>
                       <td className="py-3 pr-6 text-ciruela/60">{item.location}</td>
                       <td className="py-3 pr-6 text-ciruela/50">
-                        {item.ledger === "Retail" ? item.expiresOn : `PAO ${item.pao}`}
+                        {item.ledger === "Backbar" ? `PAO ${item.pao}` : item.expiresOn}
                       </td>
                       <td className="py-3 pr-3 text-right">{item.qty}</td>
                       <td className="py-3 pr-6 text-right text-ciruela/50">{item.par}</td>
@@ -546,12 +671,12 @@ export default function AdminInventory() {
         )}
 
         {tab === "retail" && (
-          <Card title={`${locationLabel} — retail`}>
+          <Card title={`${locationLabel} — piso`}>
             {retail.length === 0 ? (
               <p className="py-6 text-center font-body text-sm text-ciruela/50">
                 {restockOnly
                   ? "Nada necesita restock ahora mismo en esta sucursal."
-                  : "Sin productos retail registrados en esta sucursal todavía."}
+                  : "Sin productos de piso registrados en esta sucursal todavía."}
               </p>
             ) : (
             <div className="overflow-x-auto">
@@ -660,6 +785,66 @@ export default function AdminInventory() {
             </p>
           </Card>
         )}
+
+        {tab === "warehouse" && (
+          <Card title={`${locationLabel} — warehouse`}>
+            {warehouse.length === 0 ? (
+              <p className="py-6 text-center font-body text-sm text-ciruela/50">
+                {restockOnly
+                  ? "Nada necesita restock ahora mismo en esta sucursal."
+                  : "Sin stock de warehouse registrado en esta sucursal todavía."}
+              </p>
+            ) : (
+            <div className="overflow-x-auto">
+            <table className="w-full min-w-[640px] whitespace-nowrap font-body text-sm text-ciruela">
+              <thead>
+                <tr className="text-left text-xs uppercase tracking-wide text-ciruela/40">
+                  <th className="pb-2">SKU</th>
+                  <th className="pb-2">Producto</th>
+                  <th className="pb-2 pr-6">Ubicación</th>
+                  <th className="pb-2 pr-3 text-right">Cant.</th>
+                  <th className="pb-2 pr-6 text-right">Par</th>
+                  <th className="pb-2 pr-6 text-right">Costo</th>
+                  <th className="pb-2">Vence</th>
+                  <th className="pb-2" />
+                </tr>
+              </thead>
+              <tbody>
+                {warehouse.map((item) => {
+                  const low = item.qty < item.par;
+                  return (
+                    <tr key={item.sku} className="border-t border-ciruela/8">
+                      <td className="py-3 text-ciruela/50">{item.sku}</td>
+                      <td className="py-3">{item.product}</td>
+                      <td className="py-3 pr-6 text-ciruela/60">{item.location}</td>
+                      <td className="py-3 pr-3 text-right">{item.qty}</td>
+                      <td className="py-3 pr-6 text-right text-ciruela/50">{item.par}</td>
+                      <td className="py-3 pr-6 text-right">${item.cost} MXN</td>
+                      <td className="py-3 text-ciruela/50">{item.expiresOn}</td>
+                      <td className="py-3 text-right">
+                        <div className="flex items-center justify-end gap-2">
+                          {low && <Badge tone="warning">Bajo par</Badge>}
+                          <button
+                            onClick={() => openEdit(item, "Warehouse")}
+                            className="font-body text-[11px] text-ciruela underline"
+                          >
+                            Editar
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+            </div>
+            )}
+            <p className="mt-4 font-body text-xs text-ciruela/40">
+              Stock sellado, sin abrir — recibido pero aún no movido a piso ni a backbar. No se
+              vende directo ni se descuenta en tratamientos.
+            </p>
+          </Card>
+        )}
       </div>
 
       {editModal && (
@@ -685,8 +870,8 @@ export default function AdminInventory() {
               <label className="mb-1 block font-body text-xs uppercase tracking-[0.14em] text-ciruela/50">
                 Ledger
               </label>
-              <div className="flex gap-1 rounded-full border border-ciruela/20 p-1 font-body text-xs w-fit">
-                {(["Retail", "Backbar"] as const).map((choice) => (
+              <div className="flex flex-wrap gap-1 rounded-full border border-ciruela/20 p-1 font-body text-xs w-fit">
+                {(["Retail", "Backbar", "Warehouse"] as LedgerName[]).map((choice) => (
                   <button
                     key={choice}
                     type="button"
@@ -698,14 +883,14 @@ export default function AdminInventory() {
                         : "text-ciruela/70 hover:bg-ciruela/8"
                     }`}
                   >
-                    {choice}
+                    {LEDGER_LABEL[choice]}
                   </button>
                 ))}
               </div>
               {editModal.ledger !== editModal.originalLedger && (
                 <p className="mt-1 font-body text-[11px] text-ciruela/40">
-                  Guardar moverá este producto al ledger {editModal.ledger} — nunca se mezclan en
-                  una sola línea (spec §5.3).
+                  Guardar moverá este producto al ledger {LEDGER_LABEL[editModal.ledger]} — nunca
+                  se mezclan en una sola línea (spec §5.3).
                 </p>
               )}
             </div>
@@ -723,7 +908,7 @@ export default function AdminInventory() {
                 value={editModal.par}
                 onChange={(v) => setEditModal((m) => (m ? { ...m, par: v } : m))}
               />
-              {editModal.ledger === "Retail" ? (
+              {editModal.ledger === "Retail" && (
                 <>
                   <TextInput
                     label="Precio (MXN)"
@@ -744,7 +929,8 @@ export default function AdminInventory() {
                     onChange={(v) => setEditModal((m) => (m ? { ...m, expiresOn: v } : m))}
                   />
                 </>
-              ) : (
+              )}
+              {editModal.ledger === "Backbar" && (
                 <>
                   <TextInput
                     label="Abierto"
@@ -757,6 +943,22 @@ export default function AdminInventory() {
                     value={editModal.pao}
                     placeholder="p. ej. 6 meses"
                     onChange={(v) => setEditModal((m) => (m ? { ...m, pao: v } : m))}
+                  />
+                </>
+              )}
+              {editModal.ledger === "Warehouse" && (
+                <>
+                  <TextInput
+                    label="Costo (MXN)"
+                    type="number"
+                    value={editModal.cost}
+                    onChange={(v) => setEditModal((m) => (m ? { ...m, cost: v } : m))}
+                  />
+                  <TextInput
+                    label="Vence"
+                    type="date"
+                    value={editModal.expiresOn}
+                    onChange={(v) => setEditModal((m) => (m ? { ...m, expiresOn: v } : m))}
                   />
                 </>
               )}
