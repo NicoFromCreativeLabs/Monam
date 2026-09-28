@@ -50,15 +50,31 @@ const CARGAS_SOCIALES_RATIO = 20400 / 68000;
 
 // The mock dataset only ever represents one snapshot (spec: no target model
 // (v9) exists yet, hence Objetivo/Var./Mes ant. reading "—" everywhere) — so
-// picking a different Periodo doesn't recompute the figures, just the label,
-// same honesty the "—" columns already carry. Anchored on "Mes en curso" =
-// Agosto 2026, the period this mock data represents.
-const PERIOD_LABEL: Record<Period, string> = {
-  "Mes en curso": "Agosto 2026",
-  "Mes anterior": "Julio 2026",
-  "Trimestre en curso": "Q3 2026 (jul–sep)",
-  "Año en curso": "2026",
-};
+// picking a different Periodo doesn't recompute the figures, just the label.
+// The label is computed from the real current date rather than a hardcoded
+// month, so "Mes en curso" doesn't quietly go stale the next time someone
+// opens this page in a different month.
+function monthLabel(date: Date) {
+  const months = [
+    "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
+    "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre",
+  ];
+  return `${months[date.getMonth()]} ${date.getFullYear()}`;
+}
+
+function quarterLabel(date: Date) {
+  const abbr = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
+  const quarterStartMonth = Math.floor(date.getMonth() / 3) * 3;
+  return `Q${quarterStartMonth / 3 + 1} ${date.getFullYear()} (${abbr[quarterStartMonth]}–${abbr[quarterStartMonth + 2]})`;
+}
+
+function periodLabel(period: Period): string {
+  const now = new Date();
+  if (period === "Mes en curso") return monthLabel(now);
+  if (period === "Mes anterior") return monthLabel(new Date(now.getFullYear(), now.getMonth() - 1, 1));
+  if (period === "Trimestre en curso") return quarterLabel(now);
+  return `${now.getFullYear()}`;
+}
 
 // P&L — exact line-item structure per client spec (16-page admin review,
 // Sep 2026): a real accounting structure, ordered exactly as specified.
@@ -156,7 +172,7 @@ export default function AdminPnl() {
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <h2 className="font-display text-xl text-ciruela">
-              {scopeLabel} · {PERIOD_LABEL[period]}
+              {scopeLabel} · {periodLabel(period)}
             </h2>
             <p className="mt-1 font-body text-xs italic text-ciruela/50">
               Las cifras son ilustrativas — no son datos reales.
