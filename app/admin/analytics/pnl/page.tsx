@@ -6,6 +6,7 @@ import { Card } from "@/components/panel/Card";
 import { Badge } from "@/components/panel/Badge";
 import { useStaffRoster } from "@/components/panel/StaffRosterContext";
 import { useLocations } from "@/components/panel/LocationsContext";
+import { usePeriod, type Period } from "@/components/panel/PeriodContext";
 import { downloadCsv } from "@/lib/csv";
 import { OWNER, PNL_LINES, PNL_LINES_BY_LOCATION, type PnlRow } from "@/lib/mock-data";
 
@@ -47,6 +48,18 @@ const OPERATIONAL_LABELS = new Set([
 // of sync with it.
 const CARGAS_SOCIALES_RATIO = 20400 / 68000;
 
+// The mock dataset only ever represents one snapshot (spec: no target model
+// (v9) exists yet, hence Objetivo/Var./Mes ant. reading "—" everywhere) — so
+// picking a different Periodo doesn't recompute the figures, just the label,
+// same honesty the "—" columns already carry. Anchored on "Mes en curso" =
+// Agosto 2026, the period this mock data represents.
+const PERIOD_LABEL: Record<Period, string> = {
+  "Mes en curso": "Agosto 2026",
+  "Mes anterior": "Julio 2026",
+  "Trimestre en curso": "Q3 2026 (jul–sep)",
+  "Año en curso": "2026",
+};
+
 // P&L — exact line-item structure per client spec (16-page admin review,
 // Sep 2026): a real accounting structure, ordered exactly as specified.
 // Figures are illustrative mock data, not a live rollup — no target model
@@ -60,6 +73,7 @@ const CARGAS_SOCIALES_RATIO = 20400 / 68000;
 export default function AdminPnl() {
   const { roster } = useStaffRoster();
   const { locations, selectedNames } = useLocations();
+  const { period } = usePeriod();
 
   const scopeLabel = selectedNames.length > 1 ? "Consolidado" : selectedNames[0];
 
@@ -141,7 +155,9 @@ export default function AdminPnl() {
       <div className="flex-1 space-y-4 px-4 py-6 min-[860px]:px-8">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h2 className="font-display text-xl text-ciruela">{scopeLabel} · Agosto 2026</h2>
+            <h2 className="font-display text-xl text-ciruela">
+              {scopeLabel} · {PERIOD_LABEL[period]}
+            </h2>
             <p className="mt-1 font-body text-xs italic text-ciruela/50">
               Las cifras son ilustrativas — no son datos reales.
             </p>

@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Fraunces, Inter, Prata, Beau_Rivage } from "next/font/google";
 import { LocationsProvider } from "@/components/panel/LocationsContext";
+import { PeriodProvider } from "@/components/panel/PeriodContext";
 import { ProtocolsProvider } from "@/components/panel/ProtocolsContext";
 import { PanelAlertsProvider } from "@/components/panel/PanelAlertsContext";
 import { StaffRosterProvider } from "@/components/panel/StaffRosterContext";
@@ -72,21 +73,23 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       <body className="min-h-full flex flex-col">
         <LoadingCurtain />
         <LocationsProvider>
-          <ProtocolsProvider>
-            <StaffRosterProvider>
-              <PanelAlertsProvider>
-                <ClientBookingProvider>
-                  <BusinessRulesProvider>
-                    <AnomaliesProvider>
-                      <ApprovalsProvider>
-                        <PendingCheckoutsProvider>{children}</PendingCheckoutsProvider>
-                      </ApprovalsProvider>
-                    </AnomaliesProvider>
-                  </BusinessRulesProvider>
-                </ClientBookingProvider>
-              </PanelAlertsProvider>
-            </StaffRosterProvider>
-          </ProtocolsProvider>
+          <PeriodProvider>
+            <ProtocolsProvider>
+              <StaffRosterProvider>
+                <PanelAlertsProvider>
+                  <ClientBookingProvider>
+                    <BusinessRulesProvider>
+                      <AnomaliesProvider>
+                        <ApprovalsProvider>
+                          <PendingCheckoutsProvider>{children}</PendingCheckoutsProvider>
+                        </ApprovalsProvider>
+                      </AnomaliesProvider>
+                    </BusinessRulesProvider>
+                  </ClientBookingProvider>
+                </PanelAlertsProvider>
+              </StaffRosterProvider>
+            </ProtocolsProvider>
+          </PeriodProvider>
         </LocationsProvider>
       </body>
     </html>
