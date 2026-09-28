@@ -94,3 +94,38 @@ export async function getTodayAppointments(locationId: string): Promise<TodayApp
     };
   });
 }
+
+export interface PendingCheckoutView {
+  appointmentId: string;
+  clientName: string;
+  service: { name: string; price: number };
+  finishedAt: string;
+}
+
+// The esthetician→front-desk hand-off, as a real query instead of an
+// in-memory queue: today's completed treatments at this location with no
+// real "checked out" marker yet. Until the Commerce phase adds a real Sale
+// row per appointment, every COMPLETED appointment today reads as pending —
+// correct for now since nothing else can close one out yet.
+export async function getPendingCheckouts(locationId: string): Promise<PendingCheckoutView[]> {
+  const { start, end } = todayRange();
+
+  const appointments = await prisma.appointment.findMany({
+    where: {
+      locationId,
+      status: "COMPLETED",
+      startAt: { gte: start, lt: end },
+    },
+    include: { client: true, protocol: true, treatmentRecord: true },
+  });
+
+  return appointments
+    .filter((a) => a.treatmentRecord)
+    .sort((a, b) => a.treatmentRecord!.completedAt.getTime() - b.treatmentRecord!.completedAt.getTime())
+    .map((a) => ({
+      appointmentId: a.id,
+      clientName: a.client.name,
+      service: { name: a.protocol?.name ?? "Facial", price: a.protocol?.priceMxn ?? 0 },
+      finishedAt: formatTime(a.treatmentRecord!.completedAt),
+    }));
+}

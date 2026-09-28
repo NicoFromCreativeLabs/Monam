@@ -1,40 +1,46 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useTransition } from "react";
 import { TopBar } from "@/components/panel/TopBar";
 import { Card } from "@/components/panel/Card";
 import { staffIdentity, useStaffRole } from "@/components/panel/StaffRoleContext";
 import { useProtocols } from "@/components/panel/ProtocolsContext";
 import { useAddOns } from "@/components/panel/AddOnsContext";
-import { usePendingCheckouts } from "@/components/panel/PendingCheckoutsContext";
-import { BACKBAR_INVENTORY, CHECKOUT_TICKET } from "@/lib/mock-data";
+import { completeTreatmentAction } from "@/lib/actions/treatment";
+import { BACKBAR_INVENTORY } from "@/lib/mock-data";
 
 type UsedProduct = { sku: string; amountMl: string };
 
 export interface TreatmentClient {
+  appointmentId: string;
   clientName: string;
   tier: "Targeted" | "Signature";
   allergies: string[];
 }
 
+const REVISIT_OPTIONS = ["2 semanas", "4 semanas", "6 semanas"];
+
 // Protocol assessed on arrival, not pre-booked (spec §5.2/§7.3). Reads the
 // live protocol menu from ProtocolsContext. `client` is the real next
-// appointment for this esthetician today (Booking phase) — "Completar
-// tratamiento" still writes to PendingCheckoutsContext's mock hand-off
-// queue pending the Treatment phase's real TreatmentRecord table.
+// appointment for this esthetician today (Booking phase). "Completar
+// tratamiento" writes a real TreatmentRecord (Treatment phase) — the
+// esthetician→front-desk hand-off is now getPendingCheckouts() reading the
+// newly COMPLETED appointment, not an in-memory queue.
 export function StaffTreatmentRecordView({ client }: { client: TreatmentClient | null }) {
   const { role } = useStaffRole();
   const identity = staffIdentity(role);
   const { protocols } = useProtocols();
   const addOns = useAddOns();
-  const { addPendingCheckout } = usePendingCheckouts();
+  const [isPending, startTransition] = useTransition();
   const tierProtocols = client ? protocols.filter((p) => p.tier === client.tier) : [];
   const [protocol, setProtocol] = useState(tierProtocols[0]?.name ?? "");
   const backbarAtLocation = BACKBAR_INVENTORY.filter((b) => b.location === identity.location);
   const [usedProducts, setUsedProducts] = useState<UsedProduct[]>([{ sku: "", amountMl: "" }]);
   const [selectedAddOns, setSelectedAddOns] = useState<string[]>([]);
   const [clinicalNotes, setClinicalNotes] = useState("");
+  const [revisitInterval, setRevisitInterval] = useState(REVISIT_OPTIONS[0]);
   const [completed, setCompleted] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
   const availableAddOns = addOns.filter((a) => a.availableOn.includes(protocol));
 
   function toggleAddOn(id: string) {
@@ -53,16 +59,21 @@ export function StaffTreatmentRecordView({ client }: { client: TreatmentClient |
   // different people, two different moments — this is the hand-off.
   function finishSession() {
     if (!client) return;
-    const selectedProtocol = protocols.find((p) => p.name === protocol);
-    const isKnownTicket = client.clientName === CHECKOUT_TICKET.client;
-    addPendingCheckout({
-      clientName: client.clientName,
-      service: { name: protocol, price: selectedProtocol?.price ?? 0 },
-      retailItems: isKnownTicket ? CHECKOUT_TICKET.retailItems : [],
-      wishlist: isKnownTicket ? CHECKOUT_TICKET.wishlist : [],
-      depositCredit: isKnownTicket ? CHECKOUT_TICKET.depositCredit : 0,
+    setSubmitError(null);
+    startTransition(async () => {
+      const result = await completeTreatmentAction({
+        appointmentId: client.appointmentId,
+        protocolName: protocol,
+        usedProducts,
+        clinicalNotes,
+        revisitInterval,
+      });
+      if ("error" in result) {
+        setSubmitError(result.error);
+        return;
+      }
+      setCompleted(true);
     });
-    setCompleted(true);
   }
 
   if (!client) {
@@ -217,10 +228,14 @@ export function StaffTreatmentRecordView({ client }: { client: TreatmentClient |
               <p className="mb-2 font-body text-xs uppercase tracking-[0.14em] text-ciruela/50">
                 Intervalo de revisita recomendado
               </p>
-              <select className="w-full rounded-lg border border-ciruela/20 bg-hueso px-3 py-2 font-body text-sm text-ciruela">
-                <option>2 semanas</option>
-                <option>4 semanas</option>
-                <option>6 semanas</option>
+              <select
+                value={revisitInterval}
+                onChange={(e) => setRevisitInterval(e.target.value)}
+                className="w-full rounded-lg border border-ciruela/20 bg-hueso px-3 py-2 font-body text-sm text-ciruela"
+              >
+                {REVISIT_OPTIONS.map((o) => (
+                  <option key={o}>{o}</option>
+                ))}
               </select>
             </div>
 
@@ -233,11 +248,14 @@ export function StaffTreatmentRecordView({ client }: { client: TreatmentClient |
               <>
                 <button
                   onClick={finishSession}
-                  disabled={!canComplete}
+                  disabled={!canComplete || isPending}
                   className="mt-6 w-full rounded-full bg-ciruela px-5 py-3 font-body text-sm text-hueso disabled:cursor-not-allowed disabled:opacity-40"
                 >
-                  Completar tratamiento
+                  {isPending ? "Guardando…" : "Completar tratamiento"}
                 </button>
+                {submitError && (
+                  <p className="mt-2 font-body text-xs text-crepe">{submitError}</p>
+                )}
                 {!canComplete && (
                   <p className="mt-2 font-body text-xs text-ciruela/50">
                     {!hasLoggedProduct && !hasNotes

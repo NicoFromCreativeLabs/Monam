@@ -1,22 +1,22 @@
 import { prisma } from "@/lib/prisma";
 import { getCurrentAppUser } from "@/lib/auth/dal";
-import { getTodayAppointments } from "@/lib/appointments";
+import { getTodayAppointments, getPendingCheckouts } from "@/lib/appointments";
 import { StaffTodayView, type EstheticianNextClient } from "@/components/panel/StaffTodayView";
 
 export default async function StaffToday() {
   const romaNorte = await prisma.location.findFirst({ where: { name: "Roma Norte" } });
   const agenda = romaNorte ? await getTodayAppointments(romaNorte.id) : [];
+  const pendingCheckouts = romaNorte ? await getPendingCheckouts(romaNorte.id) : [];
   const currentUser = await getCurrentAppUser();
 
   // Scoped to the real logged-in AppUser's own appointments when they
-  // actually are the assigned esthetician; falls back to the location's
-  // earliest appointment so the role-toggle preview (any staff account can
-  // preview the Esthetician view without re-authenticating) still shows
-  // something representative.
-  const ownAppointments = currentUser
-    ? agenda.filter((a) => a.estheticianId === currentUser.id)
-    : [];
-  const next = ownAppointments[0] ?? agenda[0] ?? null;
+  // actually are the assigned esthetician, excluding ones already treated;
+  // falls back to the location's earliest undone appointment so the
+  // role-toggle preview (any staff account can preview the Esthetician view
+  // without re-authenticating) still shows something representative.
+  const undone = agenda.filter((a) => a.statusRaw !== "COMPLETED");
+  const ownAppointments = currentUser ? undone.filter((a) => a.estheticianId === currentUser.id) : [];
+  const next = ownAppointments[0] ?? undone[0] ?? null;
 
   let nextClient: EstheticianNextClient = {
     listingId: null,
@@ -54,5 +54,5 @@ export default async function StaffToday() {
     };
   }
 
-  return <StaffTodayView agenda={agenda} nextClient={nextClient} />;
+  return <StaffTodayView agenda={agenda} nextClient={nextClient} pendingCheckouts={pendingCheckouts} />;
 }

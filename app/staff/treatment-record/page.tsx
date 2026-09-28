@@ -8,13 +8,14 @@ export default async function StaffTreatmentRecord() {
   const agenda = romaNorte ? await getTodayAppointments(romaNorte.id) : [];
   const currentUser = await getCurrentAppUser();
 
-  // Same "which appointment is up next" scoping as app/staff/page.tsx: the
-  // real logged-in esthetician's own next appointment, falling back to the
-  // location's earliest for the role-toggle preview.
-  const ownAppointments = currentUser
-    ? agenda.filter((a) => a.estheticianId === currentUser.id)
-    : [];
-  const next = ownAppointments[0] ?? agenda[0] ?? null;
+  // Same "which appointment is up next" scoping as app/staff/page.tsx,
+  // excluding appointments already completed (already recorded, nothing
+  // left to do here): the real logged-in esthetician's own next
+  // appointment, falling back to the location's earliest for the
+  // role-toggle preview.
+  const undone = agenda.filter((a) => a.statusRaw !== "COMPLETED");
+  const ownAppointments = currentUser ? undone.filter((a) => a.estheticianId === currentUser.id) : [];
+  const next = ownAppointments[0] ?? undone[0] ?? null;
 
   let client: TreatmentClient | null = null;
 
@@ -24,6 +25,7 @@ export default async function StaffTreatmentRecord() {
       include: { skinId: true },
     });
     client = {
+      appointmentId: next.id,
       clientName: next.clientName,
       tier: next.tier,
       allergies: record?.skinId?.allergies ?? [],

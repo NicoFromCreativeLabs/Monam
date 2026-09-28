@@ -5,9 +5,8 @@ import { TopBar } from "@/components/panel/TopBar";
 import { Card } from "@/components/panel/Card";
 import { RoleToggle } from "@/components/panel/RoleToggle";
 import { staffIdentity, useStaffRole } from "@/components/panel/StaffRoleContext";
-import { usePendingCheckouts } from "@/components/panel/PendingCheckoutsContext";
 import { LOW_STOCK_ALERTS } from "@/lib/mock-data";
-import type { TodayAppointmentView } from "@/lib/appointments";
+import type { TodayAppointmentView, PendingCheckoutView } from "@/lib/appointments";
 
 const STATUS_STYLE: Record<string, string> = {
   Registrado: "bg-oliva/15 text-oliva",
@@ -33,9 +32,11 @@ export interface EstheticianNextClient {
 export function StaffTodayView({
   agenda,
   nextClient,
+  pendingCheckouts,
 }: {
   agenda: TodayAppointmentView[];
   nextClient: EstheticianNextClient;
+  pendingCheckouts: PendingCheckoutView[];
 }) {
   const { role } = useStaffRole();
   const identity = staffIdentity(role);
@@ -44,15 +45,23 @@ export function StaffTodayView({
     <>
       <TopBar title="Hoy" userName={identity.name} userRole={identity.role} extra={<RoleToggle />} />
       <div className="flex-1 px-8 py-6">
-        {role === "Front Desk" ? <FrontDeskToday agenda={agenda} /> : <EstheticianToday nextClient={nextClient} />}
+        {role === "Front Desk" ? (
+          <FrontDeskToday agenda={agenda} pending={pendingCheckouts} />
+        ) : (
+          <EstheticianToday nextClient={nextClient} />
+        )}
       </div>
     </>
   );
 }
 
-function FrontDeskToday({ agenda }: { agenda: TodayAppointmentView[] }) {
-  const { pending } = usePendingCheckouts();
-
+function FrontDeskToday({
+  agenda,
+  pending,
+}: {
+  agenda: TodayAppointmentView[];
+  pending: PendingCheckoutView[];
+}) {
   return (
     <div className="grid grid-cols-1 gap-6 min-[1100px]:grid-cols-3">
       <div className="min-[1100px]:col-span-2 space-y-6">
@@ -65,9 +74,9 @@ function FrontDeskToday({ agenda }: { agenda: TodayAppointmentView[] }) {
           ) : (
             <ul className="divide-y divide-ciruela/8">
               {pending.map((p) => (
-                <li key={p.id}>
+                <li key={p.appointmentId}>
                   <Link
-                    href={`/staff/checkout?session=${p.id}`}
+                    href={`/staff/checkout?session=${p.appointmentId}`}
                     className="flex items-center justify-between py-3 hover:bg-ciruela/[0.03]"
                   >
                     <div>

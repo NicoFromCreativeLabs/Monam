@@ -11,7 +11,6 @@ import { ClientBookingProvider } from "@/components/panel/ClientBookingContext";
 import { ApprovalsProvider } from "@/components/panel/ApprovalsContext";
 import { BusinessRulesProvider } from "@/components/panel/BusinessRulesContext";
 import { AnomaliesProvider } from "@/components/panel/AnomaliesContext";
-import { PendingCheckoutsProvider } from "@/components/panel/PendingCheckoutsContext";
 import { LoadingCurtain } from "@/components/LoadingCurtain";
 import "./globals.css";
 
@@ -124,9 +123,7 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
                     <ClientBookingProvider>
                       <BusinessRulesProvider>
                         <AnomaliesProvider>
-                          <ApprovalsProvider>
-                            <PendingCheckoutsProvider>{children}</PendingCheckoutsProvider>
-                          </ApprovalsProvider>
+                          <ApprovalsProvider>{children}</ApprovalsProvider>
                         </AnomaliesProvider>
                       </BusinessRulesProvider>
                     </ClientBookingProvider>

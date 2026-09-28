@@ -1,76 +1,44 @@
-"use client";
+import { prisma } from "@/lib/prisma";
+import { getCurrentAppUser } from "@/lib/auth/dal";
+import { getTodayAppointments } from "@/lib/appointments";
+import {
+  StaffRetailTagsView,
+  type RetailCatalogItem,
+  type RetailTagsClient,
+} from "@/components/panel/StaffRetailTagsView";
 
-import { useState } from "react";
-import { TopBar } from "@/components/panel/TopBar";
-import { Card } from "@/components/panel/Card";
-import { staffIdentity, useStaffRole } from "@/components/panel/StaffRoleContext";
-import { RETAIL_INVENTORY, TODAY_APPOINTMENTS } from "@/lib/mock-data";
+export default async function StaffRetailTags() {
+  const romaNorte = await prisma.location.findFirst({ where: { name: "Roma Norte" } });
+  const agenda = romaNorte ? await getTodayAppointments(romaNorte.id) : [];
+  const currentUser = await getCurrentAppUser();
 
-// One shared feature feeding Checkout, commission attribution, and the
-// attach-rate metric — not three separate implementations (spec §7.3).
-export default function StaffRetailTags() {
-  const { role } = useStaffRole();
-  const identity = staffIdentity(role);
-  const client = TODAY_APPOINTMENTS[0];
-  // Scoped to this staff member's own location — unscoped, this mixed in
-  // every other location's retail catalog too, showing e.g. Prado Norte's
-  // own "Beauty of Joseon Glow Serum" as a second, confusing duplicate of
-  // Roma Norte's (found during the persona QA pass).
-  const catalog = RETAIL_INVENTORY.filter((item) => item.location === identity.location);
-  const [selected, setSelected] = useState<string[]>(catalog[0] ? [catalog[0].sku] : []);
-  const [saved, setSaved] = useState(false);
+  // The esthetician's own most recently completed treatment today (last in
+  // time order); falls back to the location's most recent completed
+  // treatment for the role-toggle preview.
+  const completed = agenda.filter((a) => a.statusRaw === "COMPLETED");
+  const ownCompleted = currentUser ? completed.filter((a) => a.estheticianId === currentUser.id) : [];
+  const target = ownCompleted[ownCompleted.length - 1] ?? completed[completed.length - 1] ?? null;
 
-  function toggle(sku: string) {
-    setSelected((prev) => {
-      if (prev.includes(sku)) return prev.filter((s) => s !== sku);
-      if (prev.length >= 3) return prev;
-      return [...prev, sku];
+  let client: RetailTagsClient | null = null;
+  let catalog: RetailCatalogItem[] = [];
+  let initialSelected: string[] = [];
+
+  if (target && romaNorte) {
+    client = { appointmentId: target.id, clientName: target.clientName };
+
+    const items = await prisma.inventoryItem.findMany({
+      where: { locationId: romaNorte.id, product: { ledger: "RETAIL", isActive: true } },
+      include: { product: true },
+      orderBy: { product: { name: "asc" } },
     });
-    setSaved(false);
+    catalog = items.map((i) => ({ sku: i.product.sku, product: i.product.name, price: i.priceMxn ?? 0 }));
+
+    const record = await prisma.treatmentRecord.findUnique({
+      where: { appointmentId: target.id },
+      include: { retailTags: { include: { product: true } } },
+    });
+    initialSelected = record?.retailTags.map((t) => t.product.sku) ?? [];
   }
 
-  return (
-    <>
-      <TopBar title="Recomendaciones de compra" userName={identity.name} userRole={identity.role} />
-      <div className="flex-1 px-8 py-6">
-        <div className="mx-auto max-w-xl">
-          <Card title={`${client.client} — recomienda hasta 3 productos`}>
-            <ul className="space-y-2">
-              {catalog.map((item) => {
-                const active = selected.includes(item.sku);
-                return (
-                  <li key={item.sku}>
-                    <button
-                      onClick={() => toggle(item.sku)}
-                      className={`flex w-full items-center justify-between rounded-lg border px-4 py-3 text-left font-body text-sm ${
-                        active
-                          ? "border-ciruela bg-ciruela text-hueso"
-                          : "border-ciruela/20 text-ciruela hover:bg-ciruela/5"
-                      }`}
-                    >
-                      <span>{item.product}</span>
-                      <span className={active ? "text-hueso/80" : "text-ciruela/50"}>
-                        ${item.price} MXN
-                      </span>
-                    </button>
-                  </li>
-                );
-              })}
-            </ul>
-            <button
-              onClick={() => setSaved(true)}
-              className="mt-6 w-full rounded-full bg-ciruela px-5 py-3 font-body text-sm text-hueso"
-            >
-              Guardar recomendaciones
-            </button>
-            {saved && (
-              <p className="mt-2 text-center font-body text-xs text-oliva">
-                Recomendaciones guardadas.
-              </p>
-            )}
-          </Card>
-        </div>
-      </div>
-    </>
-  );
+  return <StaffRetailTagsView client={client} catalog={catalog} initialSelected={initialSelected} />;
 }
