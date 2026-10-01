@@ -1,24 +1,98 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { TopBar } from "@/components/panel/TopBar";
 import { GlobalFilterBar } from "@/components/panel/GlobalFilterBar";
 import { Card } from "@/components/panel/Card";
 import { KpiCard } from "@/components/panel/KpiCard";
+import { useLocations } from "@/components/panel/LocationsContext";
+import { usePeriod } from "@/components/panel/PeriodContext";
+import { useCompare } from "@/components/panel/CompareContext";
 import {
   OWNER,
   ANALYTICS_VENTAS,
-  REVENUE_BY_CATEGORY,
-  WEEKLY_REVENUE_TREND,
-  PROTOCOL_PERFORMANCE,
+  REVENUE_BY_CATEGORY_BY_LOCATION,
+  WEEKLY_REVENUE_TREND_BY_LOCATION,
+  PROTOCOL_PERFORMANCE_BY_LOCATION,
 } from "@/lib/mock-data";
+import { COMPARE_TO_LABEL } from "@/lib/analytics";
+import { getReportingSnapshotAction } from "@/lib/actions/reporting";
+import { ingresoNetoFromBreakdown } from "@/lib/pnl-math";
 
 // Análisis → Ventas. Nivel 1 (headline) + Nivel 2 (supporting KPIs) per
 // spec; the revenue detail below folds in what used to live on the old
 // /admin/financials page (categoría, tendencia, margen por protocolo) so
 // that content isn't left on an orphaned route.
+//
+// Nivel 1 reads the same real reporting snapshot as Panel/P&L
+// (lib/reporting.ts) — real Sale/SaleLineItem aggregation, scoped to
+// Local/Periodo/Comparar con. Nivel 2 and the category/trend/protocol
+// detail below still read illustrative mock figures — real equivalents for
+// those would need a much larger historical dataset to mean anything yet.
 export default function AnalyticsVentas() {
-  const maxWeek = Math.max(...WEEKLY_REVENUE_TREND.map((w) => w.revenue));
-  const maxCategory = Math.max(...REVENUE_BY_CATEGORY.map((r) => r.amount));
+  const { selectedNames } = useLocations();
+  const { period } = usePeriod();
+  const { compareTo } = useCompare();
+
+  const [displayed, setDisplayed] = useState(0);
+  const [periodTarget, setPeriodTarget] = useState<number | null>(null);
+  const [baseline, setBaseline] = useState<number | null>(null);
+
+  useEffect(() => {
+    getReportingSnapshotAction(selectedNames, period, compareTo).then((snapshot) => {
+      setDisplayed(ingresoNetoFromBreakdown(snapshot.pnl));
+      setPeriodTarget(snapshot.kpiTargets["Ingreso neto (MTD)"]?.value ?? null);
+      setBaseline(snapshot.pnlBaseline ? ingresoNetoFromBreakdown(snapshot.pnlBaseline) : null);
+    });
+  }, [selectedNames.join(","), period, compareTo]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const progressPct = periodTarget ? Math.round((displayed / periodTarget) * 100) : 0;
+  const diff = baseline !== null ? displayed - baseline : null;
+  const deltaLabel =
+    diff === null
+      ? "Sin datos previos"
+      : diff === 0
+        ? `Sin cambio vs. ${COMPARE_TO_LABEL[compareTo]}`
+        : `${diff > 0 ? "▲" : "▼"} ${Math.abs(diff).toLocaleString()} MXN vs. ${COMPARE_TO_LABEL[compareTo]}`;
+  const deltaTone = diff === null || diff === 0 ? "neutral" : diff > 0 ? "positive" : "negative";
+
+  const revenueByCategory = Object.entries(
+    selectedNames.reduce<Record<string, number>>((acc, name) => {
+      const byCategory = REVENUE_BY_CATEGORY_BY_LOCATION[name] ?? {};
+      for (const [category, amount] of Object.entries(byCategory)) {
+        acc[category] = (acc[category] ?? 0) + amount;
+      }
+      return acc;
+    }, {}),
+  ).map(([category, amount]) => ({ category, amount }));
+
+  const weeklyRevenueTrend = (WEEKLY_REVENUE_TREND_BY_LOCATION["Roma Norte"] ?? []).map((w, i) => ({
+    week: w.week,
+    revenue: selectedNames.reduce(
+      (sum, name) => sum + (WEEKLY_REVENUE_TREND_BY_LOCATION[name]?.[i]?.revenue ?? 0),
+      0,
+    ),
+  }));
+
+  const protocolPerformance = (PROTOCOL_PERFORMANCE_BY_LOCATION["Roma Norte"] ?? []).map((p, i) => ({
+    protocol: p.protocol,
+    tier: p.tier,
+    timesPerformed: selectedNames.reduce(
+      (sum, name) => sum + (PROTOCOL_PERFORMANCE_BY_LOCATION[name]?.[i]?.timesPerformed ?? 0),
+      0,
+    ),
+    revenue: selectedNames.reduce(
+      (sum, name) => sum + (PROTOCOL_PERFORMANCE_BY_LOCATION[name]?.[i]?.revenue ?? 0),
+      0,
+    ),
+    cost: selectedNames.reduce(
+      (sum, name) => sum + (PROTOCOL_PERFORMANCE_BY_LOCATION[name]?.[i]?.cost ?? 0),
+      0,
+    ),
+  }));
+
+  const maxWeek = Math.max(...weeklyRevenueTrend.map((w) => w.revenue));
+  const maxCategory = Math.max(...revenueByCategory.map((r) => r.amount));
 
   return (
     <>
@@ -28,14 +102,13 @@ export default function AnalyticsVentas() {
         <KpiCard
           label={ANALYTICS_VENTAS.nivel1.label}
           info={ANALYTICS_VENTAS.nivel1.info}
-          value={ANALYTICS_VENTAS.nivel1.value}
-          sub={ANALYTICS_VENTAS.nivel1.sub}
-          deltaLabel={ANALYTICS_VENTAS.nivel1.deltaLabel}
-          deltaTone={ANALYTICS_VENTAS.nivel1.deltaTone}
-          target={ANALYTICS_VENTAS.nivel1.target}
-          progressPct={ANALYTICS_VENTAS.nivel1.progressPct}
-          semaphore={ANALYTICS_VENTAS.nivel1.semaphore}
-          sparkline={ANALYTICS_VENTAS.nivel1.sparkline}
+          value={`$${displayed.toLocaleString()}`}
+          sub={periodTarget ? `vs. objetivo $${periodTarget.toLocaleString()}` : "sin objetivo configurado"}
+          deltaLabel={deltaLabel}
+          deltaTone={deltaTone}
+          target={periodTarget ? `Objetivo $${periodTarget.toLocaleString()} · ${progressPct}% de avance` : ""}
+          progressPct={progressPct}
+          semaphore={progressPct >= 100 ? "green" : progressPct >= 70 ? "yellow" : "red"}
         />
 
         <div className="grid grid-cols-1 gap-4 min-[700px]:grid-cols-2 min-[1200px]:grid-cols-4">
@@ -58,7 +131,7 @@ export default function AnalyticsVentas() {
         <div className="grid grid-cols-1 gap-6 min-[1100px]:grid-cols-2">
           <Card title="Ingresos por categoría">
             <ul className="space-y-3">
-              {REVENUE_BY_CATEGORY.map((r) => (
+              {revenueByCategory.map((r) => (
                 <li key={r.category}>
                   <div className="mb-1 flex justify-between font-body text-xs text-ciruela/60">
                     <span>{r.category}</span>
@@ -77,7 +150,7 @@ export default function AnalyticsVentas() {
 
           <Card title="Tendencia de ingresos — últimas 8 semanas">
             <div className="flex items-end gap-2">
-              {WEEKLY_REVENUE_TREND.map((w) => (
+              {weeklyRevenueTrend.map((w) => (
                 <div key={w.week} className="flex flex-1 flex-col items-center gap-1">
                   <span className="font-body text-[10px] text-ciruela/50">
                     ${Math.round(w.revenue / 1000)}k
@@ -106,9 +179,9 @@ export default function AnalyticsVentas() {
               </tr>
             </thead>
             <tbody>
-              {PROTOCOL_PERFORMANCE.map((p) => {
+              {protocolPerformance.map((p) => {
                 const margin = p.revenue - p.cost;
-                const marginPct = margin / p.revenue;
+                const marginPct = p.revenue ? margin / p.revenue : 0;
                 return (
                   <tr key={p.protocol} className="border-t border-ciruela/8">
                     <td className="py-2">
@@ -127,7 +200,8 @@ export default function AnalyticsVentas() {
           </table>
           <p className="mt-3 font-body text-xs text-ciruela/40">
             Margen = ingreso − costo de producto backbar por tratamiento. No incluye mano de obra,
-            comisión ni renta.
+            comisión ni renta. Ingresos y costos se suman por sucursal según lo seleccionado en
+            &ldquo;Local&rdquo; — Consolidado es la suma real de las sucursales activas.
           </p>
         </Card>
       </div>

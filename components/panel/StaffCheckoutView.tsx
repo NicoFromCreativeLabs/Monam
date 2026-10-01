@@ -1,15 +1,16 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { TopBar } from "@/components/panel/TopBar";
 import { Card } from "@/components/panel/Card";
 import { staffIdentity, useStaffRole } from "@/components/panel/StaffRoleContext";
-import { usePanelAlerts } from "@/components/panel/PanelAlertsContext";
-import { useAnomalies } from "@/components/panel/AnomaliesContext";
 import { CFDI_ENABLED } from "@/lib/feature-flags";
+import { createSaleAction, flagRetailRemovalAction } from "@/lib/actions/commerce";
 
 export interface CheckoutRetailItem {
+  sku: string;
   name: string;
   price: number;
   recommendedBy: string;
@@ -17,6 +18,7 @@ export interface CheckoutRetailItem {
 
 export interface CheckoutSession {
   appointmentId: string;
+  locationName: string;
   clientName: string;
   service: { name: string; price: number };
   retailItems: CheckoutRetailItem[];
@@ -30,28 +32,30 @@ export interface CheckoutCatalogItem {
   qty: number;
 }
 
-type AddedItem = { product: string; price: number; qty: number };
+type AddedItem = { sku: string; product: string; price: number; qty: number };
 
 // Two genuinely different flows share this screen, per how the studio
 // actually works: (1) a specific client's ticket, reached ONLY from the
 // "lista para cobro" item an esthetician's finished session put on the
-// front-desk dashboard (now a real query, getPendingCheckouts() — Treatment
-// phase); (2) navigating to Cobro/POS directly, with no session selected, a
-// walk-in retail sale with no client record attached. The "Cobrar" write
-// itself still doesn't create a real Sale row — that's the Commerce phase;
-// charging here shows a confirmation but the appointment keeps showing as
-// pending checkout on reload until that phase lands.
+// front-desk dashboard (a real query, getPendingCheckouts()); (2) navigating
+// to Cobro/POS directly, with no session selected, a walk-in retail sale
+// with no client record attached. "Cobrar" writes a real Sale/SaleLineItem
+// via createSaleAction — inventory decrements, the deposit (if any) gets
+// credited, and commission entries are generated server-side, so the
+// appointment stops showing as pending checkout once this succeeds.
 export function StaffCheckoutView({
   session,
   catalog,
+  locationName,
 }: {
   session: CheckoutSession | null;
   catalog: CheckoutCatalogItem[];
+  locationName: string;
 }) {
   const { role } = useStaffRole();
   const identity = staffIdentity(role);
-  const { addAlert } = usePanelAlerts();
-  const { addAnomaly } = useAnomalies();
+  const router = useRouter();
+  const [isPending, startTransition] = useTransition();
 
   const isRetailOnly = !session;
 
@@ -63,21 +67,24 @@ export function StaffCheckoutView({
   const [search, setSearch] = useState("");
   const [pendingRemove, setPendingRemove] = useState<CheckoutRetailItem | null>(null);
   const [charged, setCharged] = useState(false);
+  const [paymentMethod, setPaymentMethod] = useState<"CASH" | "CARD" | "SPEI">("CASH");
+  const [checkoutError, setCheckoutError] = useState<string | null>(null);
   // Products whose recommendation tag was removed this session — re-adding
   // one of these needs the same warning removal got, closing the two-step
   // gap a front-desk-persona pentest found: removal was guarded, but
   // re-adding the identical product afterward silently dropped attribution
   // with zero confirmation, moving the commission off whoever recommended it.
   const [removedRecommendations, setRemovedRecommendations] = useState<CheckoutRetailItem[]>([]);
-  const [pendingReAdd, setPendingReAdd] = useState<{ product: string; price: number } | null>(
+  const [reAddedSkus, setReAddedSkus] = useState<string[]>([]);
+  const [pendingReAdd, setPendingReAdd] = useState<{ sku: string; product: string; price: number } | null>(
     null,
   );
 
-  const addToSale = (item: { product: string; price: number }) => {
+  const addToSale = (item: { sku: string; product: string; price: number }) => {
     setAddedItems((prev) => [...prev, { ...item, qty: 1 }]);
   };
-  const requestAddToSale = (item: { product: string; price: number }) => {
-    const removed = removedRecommendations.find((r) => r.name === item.product);
+  const requestAddToSale = (item: { sku: string; product: string; price: number }) => {
+    const removed = removedRecommendations.find((r) => r.sku === item.sku);
     if (removed) {
       setPendingReAdd(item);
       return;
@@ -86,29 +93,31 @@ export function StaffCheckoutView({
   };
   const confirmReAdd = () => {
     if (!pendingReAdd || !session) return;
-    const removed = removedRecommendations.find((r) => r.name === pendingReAdd.product);
+    const removed = removedRecommendations.find((r) => r.sku === pendingReAdd.sku);
     addToSale(pendingReAdd);
     if (removed) {
-      addAlert(
-        `"${pendingReAdd.product}" fue re-agregado al ticket de ${session.clientName} después de quitarse la recomendación de ${removed.recommendedBy} — confirmar a quién se atribuye la comisión.`,
-      );
-      addAnomaly(
-        "Comisión reasignada manualmente",
-        `"${pendingReAdd.product}" re-agregado al ticket de ${session.clientName} tras quitar la recomendación de ${removed.recommendedBy}.`,
-      );
+      setReAddedSkus((prev) => [...prev, pendingReAdd.sku]);
+      // The definitive anomaly record is written server-side by
+      // createSaleAction once the sale actually completes (not here — the
+      // ticket could still be abandoned before charging).
+      startTransition(() => {
+        flagRetailRemovalAction(
+          `"${pendingReAdd.product}" fue re-agregado al ticket de ${session.clientName} después de quitarse la recomendación de ${removed.recommendedBy} — confirmar a quién se atribuye la comisión.`,
+        );
+      });
     }
     setPendingReAdd(null);
   };
-  const removeAddedItem = (product: string) => {
-    setAddedItems((prev) => prev.filter((a) => a.product !== product));
+  const removeAddedItem = (sku: string) => {
+    setAddedItems((prev) => prev.filter((a) => a.sku !== sku));
   };
-  const setAddedQty = (product: string, qty: number, stockLimit: number) => {
+  const setAddedQty = (sku: string, qty: number, stockLimit: number) => {
     if (qty < 1) {
-      removeAddedItem(product);
+      removeAddedItem(sku);
       return;
     }
     setAddedItems((prev) =>
-      prev.map((a) => (a.product === product ? { ...a, qty: Math.min(qty, stockLimit) } : a))
+      prev.map((a) => (a.sku === sku ? { ...a, qty: Math.min(qty, stockLimit) } : a))
     );
   };
   const closePicker = () => {
@@ -118,11 +127,13 @@ export function StaffCheckoutView({
 
   const confirmRemoveRecommended = () => {
     if (!pendingRemove || !session) return;
-    setRecommendedItems((prev) => prev.filter((r) => r.name !== pendingRemove.name));
+    setRecommendedItems((prev) => prev.filter((r) => r.sku !== pendingRemove.sku));
     setRemovedRecommendations((prev) => [...prev, pendingRemove]);
-    addAlert(
-      `"${pendingRemove.name}" (recomendado por ${pendingRemove.recommendedBy}) fue quitado del ticket de ${session.clientName} — revisar atribución de comisión.`
-    );
+    startTransition(() => {
+      flagRetailRemovalAction(
+        `"${pendingRemove.name}" (recomendado por ${pendingRemove.recommendedBy}) fue quitado del ticket de ${session.clientName} — revisar atribución de comisión.`,
+      );
+    });
     setPendingRemove(null);
   };
 
@@ -132,7 +143,7 @@ export function StaffCheckoutView({
     recommendedItems.reduce((sum, i) => sum + i.price, 0) +
     addedItems.reduce((sum, i) => sum + i.price * i.qty, 0);
   const subtotal = servicePrice + retailTotal;
-  const total = subtotal + depositCredit;
+  const total = Math.max(0, subtotal + depositCredit);
 
   const [chargedSummary, setChargedSummary] = useState<{
     clientName: string | null;
@@ -140,8 +151,27 @@ export function StaffCheckoutView({
   } | null>(null);
 
   function chargeSale() {
-    setChargedSummary({ clientName: session?.clientName ?? null, total });
-    setCharged(true);
+    setCheckoutError(null);
+    const retailItems = [
+      ...recommendedItems.map((r) => ({ sku: r.sku, qty: 1 })),
+      ...addedItems.map((a) => ({ sku: a.sku, qty: a.qty })),
+    ];
+    startTransition(async () => {
+      const result = await createSaleAction({
+        appointmentId: session?.appointmentId ?? null,
+        locationName: session?.locationName ?? locationName,
+        retailItems,
+        reAddedAfterRemovalSkus: reAddedSkus,
+        paymentMethod,
+      });
+      if ("error" in result) {
+        setCheckoutError(result.error);
+        return;
+      }
+      setChargedSummary({ clientName: session?.clientName ?? null, total: result.totalMxn });
+      setCharged(true);
+      router.refresh();
+    });
   }
 
   function startNextRetailSale() {
@@ -215,7 +245,7 @@ export function StaffCheckoutView({
                 </li>
               )}
               {recommendedItems.map((item) => (
-                <li key={item.name} className="flex justify-between py-2">
+                <li key={item.sku} className="flex justify-between py-2">
                   <div>
                     <p>{item.name}</p>
                     <p className="text-xs text-ciruela/50">Recomendado por {item.recommendedBy}</p>
@@ -233,9 +263,9 @@ export function StaffCheckoutView({
                 </li>
               ))}
               {addedItems.map((item) => {
-                const stock = catalog.find((r) => r.product === item.product)?.qty ?? item.qty;
+                const stock = catalog.find((r) => r.sku === item.sku)?.qty ?? item.qty;
                 return (
-                  <li key={item.product} className="flex justify-between py-2">
+                  <li key={item.sku} className="flex justify-between py-2">
                     <span>
                       {item.product}
                       {item.qty > 1 && <span className="text-ciruela/50"> ×{item.qty}</span>}
@@ -243,7 +273,7 @@ export function StaffCheckoutView({
                     <div className="flex items-center gap-3">
                       <div className="flex items-center gap-1.5">
                         <button
-                          onClick={() => setAddedQty(item.product, item.qty - 1, stock)}
+                          onClick={() => setAddedQty(item.sku, item.qty - 1, stock)}
                           aria-label={`Quitar una unidad de ${item.product}`}
                           className="flex h-5 w-5 items-center justify-center rounded-full border border-ciruela/30 text-xs text-ciruela hover:border-ciruela"
                         >
@@ -252,7 +282,7 @@ export function StaffCheckoutView({
                         <span className="w-4 text-center text-xs">{item.qty}</span>
                         <button
                           disabled={item.qty >= stock}
-                          onClick={() => setAddedQty(item.product, item.qty + 1, stock)}
+                          onClick={() => setAddedQty(item.sku, item.qty + 1, stock)}
                           aria-label={`Agregar una unidad de ${item.product}`}
                           className="flex h-5 w-5 items-center justify-center rounded-full border border-ciruela/30 text-xs text-ciruela hover:border-ciruela disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:border-ciruela/30"
                         >
@@ -261,7 +291,7 @@ export function StaffCheckoutView({
                       </div>
                       <span className="w-16 text-right">${item.price * item.qty} MXN</span>
                       <button
-                        onClick={() => removeAddedItem(item.product)}
+                        onClick={() => removeAddedItem(item.sku)}
                         aria-label={`Quitar ${item.product}`}
                         className="text-ciruela/40 hover:text-ciruela"
                       >
@@ -297,12 +327,20 @@ export function StaffCheckoutView({
             </div>
 
             <div className="mt-6 grid grid-cols-3 gap-2">
-              {["Efectivo", "Tarjeta", "SPEI"].map((m) => (
+              {([
+                ["CASH", "Efectivo"],
+                ["CARD", "Tarjeta"],
+                ["SPEI", "SPEI"],
+              ] as const).map(([value, label]) => (
                 <button
-                  key={m}
-                  className="rounded-full border border-ciruela px-3 py-2 font-body text-xs text-ciruela hover:bg-ciruela hover:text-hueso"
+                  key={value}
+                  onClick={() => setPaymentMethod(value)}
+                  aria-pressed={paymentMethod === value}
+                  className={`rounded-full border border-ciruela px-3 py-2 font-body text-xs ${
+                    paymentMethod === value ? "bg-ciruela text-hueso" : "text-ciruela hover:bg-ciruela hover:text-hueso"
+                  }`}
                 >
-                  {m}
+                  {label}
                 </button>
               ))}
             </div>
@@ -312,12 +350,17 @@ export function StaffCheckoutView({
                 Solicitar factura (CFDI)
               </label>
             )}
+            {checkoutError && (
+              <p className="mt-4 rounded-lg bg-[#b3392f]/10 px-3 py-2 font-body text-xs text-[#b3392f]">
+                {checkoutError}
+              </p>
+            )}
             <button
               onClick={chargeSale}
-              disabled={total === 0}
+              disabled={total === 0 || isPending}
               className="mt-6 w-full rounded-full bg-ciruela px-5 py-3 font-body text-sm text-hueso disabled:cursor-not-allowed disabled:opacity-40"
             >
-              {session ? "Cobrar y reagendar" : "Cobrar"}
+              {isPending ? "Cobrando…" : session ? "Cobrar y reagendar" : "Cobrar"}
             </button>
           </Card>
         </div>
@@ -360,7 +403,7 @@ export function StaffCheckoutView({
               )}
               {filteredCatalog.map((item) => {
                 const outOfStock = item.qty <= 0;
-                const added = addedItems.find((a) => a.product === item.product);
+                const added = addedItems.find((a) => a.sku === item.sku);
                 return (
                   <li key={item.sku} className="flex items-center justify-between py-3">
                     <div>
@@ -372,7 +415,7 @@ export function StaffCheckoutView({
                     {added ? (
                       <div className="flex items-center gap-2 rounded-full bg-oliva/10 px-2 py-1">
                         <button
-                          onClick={() => setAddedQty(item.product, added.qty - 1, item.qty)}
+                          onClick={() => setAddedQty(item.sku, added.qty - 1, item.qty)}
                           aria-label={`Quitar una unidad de ${item.product}`}
                           className="flex h-5 w-5 items-center justify-center rounded-full text-sm text-oliva hover:bg-oliva/20"
                         >
@@ -381,7 +424,7 @@ export function StaffCheckoutView({
                         <span className="w-4 text-center font-body text-xs text-oliva">{added.qty}</span>
                         <button
                           disabled={added.qty >= item.qty}
-                          onClick={() => setAddedQty(item.product, added.qty + 1, item.qty)}
+                          onClick={() => setAddedQty(item.sku, added.qty + 1, item.qty)}
                           aria-label={`Agregar una unidad de ${item.product}`}
                           className="flex h-5 w-5 items-center justify-center rounded-full text-sm text-oliva hover:bg-oliva/20 disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:bg-transparent"
                         >
@@ -391,7 +434,7 @@ export function StaffCheckoutView({
                     ) : (
                       <button
                         disabled={outOfStock}
-                        onClick={() => requestAddToSale({ product: item.product, price: item.price })}
+                        onClick={() => requestAddToSale({ sku: item.sku, product: item.product, price: item.price })}
                         className="rounded-full border border-ciruela px-3 py-1.5 font-body text-xs text-ciruela hover:bg-ciruela hover:text-hueso disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-ciruela"
                       >
                         Agregar

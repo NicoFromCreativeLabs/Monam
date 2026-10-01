@@ -44,12 +44,14 @@ export default async function StaffCheckout({
       const priceBySku = new Map(catalog.map((c) => [c.sku, c.price]));
       session = {
         appointmentId: appointment.id,
+        locationName: "Roma Norte",
         clientName: appointment.client.name,
         service: {
           name: appointment.protocol?.name ?? "Facial",
           price: appointment.protocol?.priceMxn ?? 0,
         },
         retailItems: appointment.treatmentRecord.retailTags.map((t) => ({
+          sku: t.product.sku,
           name: t.product.name,
           price: priceBySku.get(t.product.sku) ?? 0,
           recommendedBy: appointment.treatmentRecord!.esthetician.name,
@@ -59,5 +61,5 @@ export default async function StaffCheckout({
     }
   }
 
-  return <StaffCheckoutView session={session} catalog={catalog} />;
+  return <StaffCheckoutView session={session} catalog={catalog} locationName="Roma Norte" />;
 }

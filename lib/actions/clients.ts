@@ -165,3 +165,46 @@ export async function updateClientPreferencesAction(
   revalidatePath(`/admin/clients/${clientId}`);
   revalidatePath("/staff/clients");
 }
+
+// ARCO deletion (spec §5.6) — anonymizes in place rather than hard-deleting:
+// the appointment/sale/commission history a real business needs for
+// accounting stays intact, it just stops being linkable to a real person.
+// Owner-only, not Clinic Manager — the client database being
+// un-exportable/undeletable by anyone but the Owners is a stated
+// non-negotiable. Does NOT delete the Supabase Auth user itself (a separate,
+// more irreversible operation) or the ClientPhoto storage objects (only
+// their DB rows) — both are flagged here as manual follow-up, not silently
+// skipped.
+export async function anonymizeClientAction(clientId: string) {
+  const owner = await requireStaffRole(["OWNER"]);
+
+  const client = await prisma.client.findUnique({ where: { id: clientId } });
+  if (!client || client.anonymizedAt) return;
+
+  await prisma.$transaction([
+    prisma.clientPhoto.deleteMany({ where: { clientId } }),
+    prisma.client.update({
+      where: { id: clientId },
+      data: {
+        name: "Cliente anonimizado",
+        email: null,
+        phone: `anon-${clientId}`,
+        authUserId: null,
+        anonymizedAt: new Date(),
+      },
+    }),
+    prisma.auditLog.create({
+      data: {
+        actorUserId: owner.id,
+        actorRole: owner.role,
+        action: "ANONYMIZE",
+        entityType: "Client",
+        entityId: clientId,
+        reason: "Solicitud ARCO — derecho de cancelación/oposición",
+      },
+    }),
+  ]);
+
+  revalidatePath("/admin/clients");
+  revalidatePath(`/admin/clients/${clientId}`);
+}

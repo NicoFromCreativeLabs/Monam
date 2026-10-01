@@ -1,0 +1,48 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+
+      - name: Type-check
+        run: npx tsc --noEmit
+
+      - name: Lint
+        run: npx eslint .
+
+      - name: Test
+        run: npm test
+
+      - name: Build
+        # Root layout (app/layout.tsx) queries Location/Protocol/CommissionRule/
+        # Setting/AppUser directly to seed its Context providers, and every
+        # route — including the static marketing/auth pages — renders inside
+        # that layout. That means `next build` needs a real, reachable
+        # database even to prerender /login, confirmed by testing a build
+        # with placeholder credentials: it fails with ECONNREFUSED. These
+        # must be real secrets (Settings → Secrets and variables → Actions in
+        # this repo), not placeholders — Supabase's own project connection
+        # strings/keys are fine to use here since this reaches the real
+        # Supabase project either way.
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DIRECT_URL: ${{ secrets.DIRECT_URL }}
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: npm run build

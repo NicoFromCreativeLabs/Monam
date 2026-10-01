@@ -1,147 +1,65 @@
-"use client";
+import { prisma } from "@/lib/prisma";
+import { AdminSalesView, type PaymentMethodRow } from "@/components/panel/AdminSalesView";
+import { OWNER } from "@/lib/mock-data";
 
-import { useState } from "react";
-import { TopBar } from "@/components/panel/TopBar";
-import { Card, StatTile } from "@/components/panel/Card";
-import { Badge } from "@/components/panel/Badge";
-import { OWNER, CASH_CUT_SUMMARY, PAYMENT_METHOD_BREAKDOWN, CFDI_QUEUE } from "@/lib/mock-data";
-import { CFDI_ENABLED } from "@/lib/feature-flags";
+const PAYMENT_LABEL: Record<string, string> = { CASH: "Efectivo", CARD: "Tarjeta", SPEI: "SPEI" };
 
-const CFDI_TONE: Record<string, "warning" | "positive"> = {
-  "Pendiente de timbrado": "warning",
-  Timbrado: "positive",
-};
+function todayRange() {
+  const now = new Date();
+  const start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const end = new Date(start.getTime() + 24 * 60 * 60 * 1000);
+  return { start, end };
+}
 
-// Caja y cobros — new page under Ventas (client spec: admin-side view of the
-// day's cash cut, payment-method mix, and CFDI queue). No dedicated
-// admin-side "Cobro/POS" screen existed before this — checkout itself lives
-// on the Staff side (/staff/checkout); this is the owner-facing summary of
-// what that checkout activity produced today. UI-only mock data, same
-// fidelity as the rest of the admin build.
-export default function AdminSales() {
-  const c = CASH_CUT_SUMMARY;
-  const total = PAYMENT_METHOD_BREAKDOWN.reduce((sum, p) => sum + p.amount, 0);
-  const maxAmount = Math.max(...PAYMENT_METHOD_BREAKDOWN.map((p) => p.amount));
-  const [status, setStatus] = useState<"Abierto" | "Cerrado">(c.status);
-  const [confirmClose, setConfirmClose] = useState(false);
+function formatTime(d: Date) {
+  return d.toLocaleTimeString("es-MX", { hour: "2-digit", minute: "2-digit" });
+}
+
+// Caja y cobros — owner-facing summary of what today's Cobro/POS activity
+// produced: the open/closed CashRegisterSession for this location, and a
+// real payment-method breakdown over today's Sale rows (replacing the
+// CASH_CUT_SUMMARY/PAYMENT_METHOD_BREAKDOWN mocks). CFDI queue stays behind
+// CFDI_ENABLED (feature flag, PAC vendor still TBD — spec §14).
+export default async function AdminSales() {
+  const { start, end } = todayRange();
+  const location = await prisma.location.findFirst({ where: { name: "Roma Norte" } });
+
+  const [session, sales] = await Promise.all([
+    location
+      ? prisma.cashRegisterSession.findFirst({
+          where: { locationId: location.id, status: "OPEN" },
+          include: { openedBy: true },
+        })
+      : null,
+    location
+      ? prisma.sale.findMany({ where: { locationId: location.id, createdAt: { gte: start, lt: end } } })
+      : [],
+  ]);
+
+  const breakdown = new Map<string, { count: number; amount: number }>();
+  for (const s of sales) {
+    const entry = breakdown.get(s.paymentMethod) ?? { count: 0, amount: 0 };
+    entry.count += 1;
+    entry.amount += s.totalMxn;
+    breakdown.set(s.paymentMethod, entry);
+  }
+  const paymentMethodBreakdown: PaymentMethodRow[] = (["CASH", "CARD", "SPEI"] as const).map((m) => ({
+    method: PAYMENT_LABEL[m],
+    count: breakdown.get(m)?.count ?? 0,
+    amount: breakdown.get(m)?.amount ?? 0,
+  }));
 
   return (
-    <>
-      <TopBar title="Caja y cobros" userName={OWNER.name} userRole={OWNER.role} allowBothLocations />
-      <div className="flex-1 space-y-6 px-4 py-6 min-[860px]:px-8">
-        <Card
-          title={`Corte de caja — ${c.location}`}
-          action={<Badge tone={status === "Abierto" ? "positive" : "neutral"}>{status}</Badge>}
-        >
-          <div className="grid grid-cols-2 gap-4 min-[700px]:grid-cols-4">
-            <StatTile label="Abierta desde" value={c.openedAt} sub={c.openedBy} />
-            <StatTile label="Fondo de apertura" value={`$${c.openingFloat.toLocaleString()} MXN`} />
-            <StatTile label="Cobrado hoy" value={`$${total.toLocaleString()} MXN`} />
-            <StatTile
-              label="Transacciones"
-              value={`${PAYMENT_METHOD_BREAKDOWN.reduce((s, p) => s + p.count, 0)}`}
-            />
-          </div>
-          {status === "Abierto" ? (
-            <button
-              onClick={() => setConfirmClose(true)}
-              className="mt-5 rounded-full bg-ciruela px-5 py-2.5 font-body text-sm text-hueso"
-            >
-              Cerrar caja
-            </button>
-          ) : (
-            <p className="mt-5 font-body text-sm text-oliva">Caja cerrada — corte registrado.</p>
-          )}
-        </Card>
-
-        <Card title="Cobros por método de pago — hoy">
-          <ul className="space-y-3">
-            {PAYMENT_METHOD_BREAKDOWN.map((p) => (
-              <li key={p.method}>
-                <div className="mb-1 flex justify-between font-body text-xs text-ciruela/60">
-                  <span>
-                    {p.method}{" "}
-                    <span className="text-ciruela/40">
-                      · {p.count} {p.count === 1 ? "cobro" : "cobros"}
-                    </span>
-                  </span>
-                  <span>${p.amount.toLocaleString()} MXN</span>
-                </div>
-                <div className="h-2 rounded-full bg-ciruela/8">
-                  <div
-                    className="h-2 rounded-full bg-ciruela"
-                    style={{ width: `${(p.amount / maxAmount) * 100}%` }}
-                  />
-                </div>
-              </li>
-            ))}
-          </ul>
-        </Card>
-
-        {CFDI_ENABLED && (
-          <Card title="CFDI — cola de timbrado">
-            <table className="w-full font-body text-sm text-ciruela">
-              <thead>
-                <tr className="text-left text-xs uppercase tracking-wide text-ciruela/40">
-                  <th className="pb-2">Clienta</th>
-                  <th className="pb-2 text-right">Monto</th>
-                  <th className="pb-2 text-right">Estado</th>
-                </tr>
-              </thead>
-              <tbody>
-                {CFDI_QUEUE.map((c) => (
-                  <tr key={c.id} className="border-t border-ciruela/8">
-                    <td className="py-2.5">{c.client}</td>
-                    <td className="py-2.5 text-right">${c.amount.toLocaleString()} MXN</td>
-                    <td className="py-2.5 text-right">
-                      <Badge tone={CFDI_TONE[c.status]}>{c.status}</Badge>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            <p className="mt-3 font-body text-xs text-ciruela/40">
-              Facturación (CFDI 4.0) — placeholder de integración con PAC. No timbra facturas reales.
-            </p>
-          </Card>
-        )}
-      </div>
-
-      {confirmClose && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-ciruela/40 px-4"
-          onClick={() => setConfirmClose(false)}
-        >
-          <div
-            onClick={(e) => e.stopPropagation()}
-            className="w-full max-w-xs rounded-2xl bg-hueso p-5 shadow-xl"
-          >
-            <p className="font-display text-sm text-ciruela">¿Cerrar la caja?</p>
-            <p className="mt-2 font-body text-sm text-ciruela/70">
-              Total cobrado hoy: ${total.toLocaleString()} MXN en{" "}
-              {PAYMENT_METHOD_BREAKDOWN.reduce((s, p) => s + p.count, 0)} transacciones. Esto
-              registra el corte de caja y no se puede reabrir desde aquí.
-            </p>
-            <div className="mt-5 flex justify-end gap-2">
-              <button
-                onClick={() => setConfirmClose(false)}
-                className="rounded-full border border-ciruela px-4 py-1.5 font-body text-xs text-ciruela hover:bg-ciruela hover:text-hueso"
-              >
-                Cancelar
-              </button>
-              <button
-                onClick={() => {
-                  setStatus("Cerrado");
-                  setConfirmClose(false);
-                }}
-                className="rounded-full bg-ciruela px-4 py-1.5 font-body text-xs text-hueso"
-              >
-                Cerrar caja
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-    </>
+    <AdminSalesView
+      ownerName={OWNER.name}
+      ownerRole={OWNER.role}
+      locationName="Roma Norte"
+      session={
+        session
+          ? { id: session.id, openedAt: formatTime(session.openedAt), openedBy: session.openedBy.name, openingFloat: session.openingFloatMxn }
+          : null
+      }
+      paymentMethodBreakdown={paymentMethodBreakdown}
+    />
   );
 }

@@ -1,7 +1,7 @@
 "use client";
 
 import { createContext, useContext, useState, type ReactNode } from "react";
-import { BUSINESS_RULES_EXTRA } from "@/lib/mock-data";
+import { updateBusinessRulesAction } from "@/lib/actions/settings";
 
 export interface BusinessRules {
   commissionServicePct: number;
@@ -17,14 +17,25 @@ const BusinessRulesContext = createContext<{
 
 // Same pattern as LocationsContext — the anomaly thresholds an Owner edits
 // in Settings need to be readable somewhere other than that page, so
-// ApprovalsContext can actually compare a decided Descuento/Reembolso
-// against them and auto-flag an anomaly. A local useState in Settings
-// (the original implementation) can't be read from outside that page.
-export function BusinessRulesProvider({ children }: { children: ReactNode }) {
-  const [rules, setRules] = useState<BusinessRules>({ ...BUSINESS_RULES_EXTRA });
+// decideApprovalAction can actually compare a decided Descuento/Reembolso
+// against them and auto-flag an anomaly. Seeded from real CommissionRule/
+// Setting rows (see app/layout.tsx); edits persist via
+// updateBusinessRulesAction, same fire-and-forget pattern as
+// ProtocolsContext/LocationsContext.
+export function BusinessRulesProvider({
+  initialRules,
+  children,
+}: {
+  initialRules: BusinessRules;
+  children: ReactNode;
+}) {
+  const [rules, setRules] = useState<BusinessRules>(initialRules);
 
   function updateRules(patch: Partial<BusinessRules>) {
     setRules((prev) => ({ ...prev, ...patch }));
+    updateBusinessRulesAction(patch).catch((err) => {
+      console.error("Failed to persist business rules update:", err);
+    });
   }
 
   return (

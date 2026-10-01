@@ -18,6 +18,7 @@ export interface TodayAppointmentView {
   clientId: string;
   clientName: string;
   tier: "Targeted" | "Signature";
+  roomId: string;
   room: string;
   estheticianId: string;
   esthetician: string;
@@ -85,6 +86,7 @@ export async function getTodayAppointments(locationId: string): Promise<TodayApp
       clientId: a.clientId,
       clientName: a.client.name,
       tier: a.durationTier === "SIGNATURE" ? "Signature" : "Targeted",
+      roomId: a.roomId,
       room: a.room.name,
       estheticianId: a.estheticianId,
       esthetician: a.esthetician.name,

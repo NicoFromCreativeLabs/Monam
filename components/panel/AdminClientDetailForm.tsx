@@ -1,12 +1,14 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { Card } from "@/components/panel/Card";
 import { Badge } from "@/components/panel/Badge";
 import {
   updateClientContactAction,
   updateClientSkinIdAction,
   updateClientPreferencesAction,
+  anonymizeClientAction,
 } from "@/lib/actions/clients";
 
 export interface AdminClientDetailData {
@@ -36,6 +38,17 @@ export interface AdminClientDetailData {
 // read empty today simply because no real appointments or audited actions
 // exist yet, not because they're mocked.
 export function AdminClientDetailForm({ data }: { data: AdminClientDetailData }) {
+  const router = useRouter();
+  const [isPending, startTransition] = useTransition();
+  const [confirmDelete, setConfirmDelete] = useState(false);
+
+  function confirmAnonymize() {
+    startTransition(async () => {
+      await anonymizeClientAction(data.id);
+      router.push("/admin/clients");
+    });
+  }
+
   const [contact, setContact] = useState(data.contact);
   const [editingContact, setEditingContact] = useState(false);
   const [contactDraft, setContactDraft] = useState(contact);
@@ -325,6 +338,50 @@ export function AdminClientDetailForm({ data }: { data: AdminClientDetailData })
           </ul>
         )}
       </Card>
+
+      <Card title="Derechos ARCO — eliminación de datos">
+        <p className="font-body text-sm text-ciruela/70">
+          Anonimiza el nombre, teléfono y correo de esta clienta de forma permanente; el
+          expediente y el historial de citas/ventas se conservan (requerido para contabilidad),
+          pero dejan de poder vincularse a una persona identificable.
+        </p>
+        <button
+          onClick={() => setConfirmDelete(true)}
+          className="mt-4 rounded-full border border-[#b3392f] px-4 py-1.5 font-body text-xs text-[#b3392f] hover:bg-[#b3392f]/10"
+        >
+          Eliminar datos personales
+        </button>
+      </Card>
+
+      {confirmDelete && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-ciruela/40 px-4"
+          onClick={() => setConfirmDelete(false)}
+        >
+          <div onClick={(e) => e.stopPropagation()} className="w-full max-w-sm rounded-2xl bg-hueso p-5 shadow-xl">
+            <p className="font-display text-sm text-ciruela">¿Eliminar los datos de {contact.name}?</p>
+            <p className="mt-2 font-body text-sm text-ciruela/70">
+              Esta acción no se puede deshacer. El nombre, teléfono y correo se borran
+              permanentemente; esta clienta ya no podrá iniciar sesión con su cuenta actual.
+            </p>
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                onClick={() => setConfirmDelete(false)}
+                className="rounded-full border border-ciruela px-4 py-1.5 font-body text-xs text-ciruela hover:bg-ciruela hover:text-hueso"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={confirmAnonymize}
+                disabled={isPending}
+                className="rounded-full bg-[#b3392f] px-4 py-1.5 font-body text-xs text-hueso disabled:opacity-50"
+              >
+                {isPending ? "Eliminando…" : "Eliminar datos"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

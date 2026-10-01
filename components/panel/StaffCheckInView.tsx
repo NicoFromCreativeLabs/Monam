@@ -5,6 +5,7 @@ import { TopBar } from "@/components/panel/TopBar";
 import { Card } from "@/components/panel/Card";
 import { Badge } from "@/components/panel/Badge";
 import { staffIdentity, useStaffRole } from "@/components/panel/StaffRoleContext";
+import { NewAppointmentModal, type BookableClient } from "@/components/panel/NewAppointmentModal";
 import { checkInAction } from "@/lib/actions/booking";
 import type { TodayAppointmentView } from "@/lib/appointments";
 
@@ -18,7 +19,13 @@ const STATUS_TONE: Record<string, "positive" | "info" | "warning" | "neutral"> =
 // Greet by name; confirm Skin ID/consents complete before proceeding to
 // treatment (spec §7.3) — cannot proceed with an incomplete record. Real
 // Appointment rows now (Booking phase) via getTodayAppointments().
-export function StaffCheckInView({ queue }: { queue: TodayAppointmentView[] }) {
+export function StaffCheckInView({
+  queue,
+  clients,
+}: {
+  queue: TodayAppointmentView[];
+  clients: BookableClient[];
+}) {
   const { role } = useStaffRole();
   const identity = staffIdentity(role);
   const [pendingId, setPendingId] = useState<string | null>(null);
@@ -36,6 +43,9 @@ export function StaffCheckInView({ queue }: { queue: TodayAppointmentView[] }) {
     <>
       <TopBar title="Check-in" userName={identity.name} userRole={identity.role} />
       <div className="flex-1 px-8 py-6">
+        <div className="mb-4 flex justify-end">
+          <NewAppointmentModal locationName="Roma Norte" clients={clients} />
+        </div>
         <Card title="Llegadas — Roma Norte">
           {queue.length === 0 ? (
             <p className="py-4 text-center font-body text-sm text-ciruela/50">

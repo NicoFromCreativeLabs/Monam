@@ -76,10 +76,12 @@ model AppUser {
   auditLogEntries           AuditLog[]
   preferredByClients        ClientPreference[]
   commissionEntries         CommissionEntry[]
+  commissionOverridesFrom   CommissionEntry[]         @relation("CommissionOverriddenFrom")
   salesClosed               Sale[]                    @relation("SaleClosedBy")
   cashSessionsOpened        CashRegisterSession[]     @relation("CashSessionOpenedBy")
   approvalRequestsMade      ApprovalRequest[]         @relation("ApprovalRequested")
   approvalRequestsDecided   ApprovalRequest[]         @relation("ApprovalDecided")
+  saleLineItemsPerformed    SaleLineItem[]            @relation("SaleLineItemPerformedBy")
 
   @@map("app_users")
 }
@@ -157,6 +159,7 @@ model Protocol {
   appointments     Appointment[]
   treatmentRecords TreatmentRecord[]
   retailLinks      ProtocolRetailLink[]
+  saleLineItems    SaleLineItem[]
 
   @@map("protocols")
 }
@@ -284,6 +287,7 @@ model Appointment {
   deposit           Deposit?           @relation(fields: [depositId], references: [id])
   treatmentRecord   TreatmentRecord?
   packageRedemption PackageRedemption?
+  sale              Sale?
 
   @@index([locationId, startAt])
   @@index([clientId])
@@ -472,6 +476,7 @@ model ClinicalIncident {
 enum Ledger {
   RETAIL
   BACKBAR
+  WAREHOUSE // sealed bulk stock received but not yet moved to Piso or Backbar — spec §5.3
 }
 
 model Product {
@@ -619,7 +624,8 @@ enum PaymentMethod {
 
 model Sale {
   id                    String        @id @default(uuid())
-  clientId              String
+  clientId              String? // null for a walk-in retail sale with no client record attached
+  appointmentId         String?       @unique // the treatment checkout this sale closed out, if any — lets getPendingCheckouts() tell a charged appointment from a still-pending one
   locationId            String
   closedByUserId        String
   cashRegisterSessionId String?
@@ -631,7 +637,8 @@ model Sale {
   paymentMethod         PaymentMethod
   createdAt             DateTime      @default(now())
 
-  client              Client               @relation(fields: [clientId], references: [id])
+  client              Client?              @relation(fields: [clientId], references: [id])
+  appointment         Appointment?         @relation(fields: [appointmentId], references: [id])
   location            Location             @relation(fields: [locationId], references: [id])
   closedBy            AppUser              @relation("SaleClosedBy", fields: [closedByUserId], references: [id])
   cashRegisterSession CashRegisterSession? @relation(fields: [cashRegisterSessionId], references: [id])
@@ -667,9 +674,11 @@ model SaleLineItem {
 
   sale              Sale                     @relation(fields: [saleId], references: [id])
   product           Product?                 @relation(fields: [productId], references: [id])
+  protocol          Protocol?                @relation(fields: [protocolId], references: [id])
   addOn             AddOn?                   @relation(fields: [addOnId], references: [id])
   packageOption     PackageOption?           @relation(fields: [packageOptionId], references: [id])
   recommendationTag RetailRecommendationTag? @relation(fields: [recommendationTagId], references: [id])
+  performedBy       AppUser?                 @relation("SaleLineItemPerformedBy", fields: [performedByUserId], references: [id])
   commissionEntry   CommissionEntry?
 
   @@index([saleId])
@@ -804,11 +813,12 @@ model CommissionEntry {
   payoutPeriodId       String?
   createdAt            DateTime        @default(now())
 
-  user         AppUser                 @relation(fields: [userId], references: [id])
-  saleLineItem SaleLineItem?           @relation(fields: [saleLineItemId], references: [id])
-  payoutPeriod CommissionPayoutPeriod? @relation(fields: [payoutPeriodId], references: [id])
-  sale         Sale?                   @relation(fields: [saleId], references: [id])
-  saleId       String?
+  user           AppUser                 @relation(fields: [userId], references: [id])
+  overriddenFrom AppUser?                @relation("CommissionOverriddenFrom", fields: [overriddenFromUserId], references: [id])
+  saleLineItem   SaleLineItem?           @relation(fields: [saleLineItemId], references: [id])
+  payoutPeriod   CommissionPayoutPeriod? @relation(fields: [payoutPeriodId], references: [id])
+  sale           Sale?                   @relation(fields: [saleId], references: [id])
+  saleId         String?
 
   @@index([userId, payoutPeriodId])
   @@map("commission_entries")

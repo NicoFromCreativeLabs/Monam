@@ -3,14 +3,13 @@ import { Fraunces, Inter, Prata, Beau_Rivage } from "next/font/google";
 import { prisma } from "@/lib/prisma";
 import { LocationsProvider, type LocationRecord } from "@/components/panel/LocationsContext";
 import { PeriodProvider } from "@/components/panel/PeriodContext";
+import { CompareProvider } from "@/components/panel/CompareContext";
 import { ProtocolsProvider, type ProtocolRecord } from "@/components/panel/ProtocolsContext";
 import { AddOnsProvider, type AddOnRecord } from "@/components/panel/AddOnsContext";
-import { PanelAlertsProvider } from "@/components/panel/PanelAlertsContext";
 import { StaffRosterProvider } from "@/components/panel/StaffRosterContext";
+import type { StaffMember } from "@/lib/mock-data";
 import { ClientBookingProvider } from "@/components/panel/ClientBookingContext";
-import { ApprovalsProvider } from "@/components/panel/ApprovalsContext";
-import { BusinessRulesProvider } from "@/components/panel/BusinessRulesContext";
-import { AnomaliesProvider } from "@/components/panel/AnomaliesContext";
+import { BusinessRulesProvider, type BusinessRules } from "@/components/panel/BusinessRulesContext";
 import { LoadingCurtain } from "@/components/LoadingCurtain";
 import "./globals.css";
 
@@ -73,11 +72,27 @@ const TIER_FROM_DB = { TARGETED: "Targeted", SIGNATURE: "Signature" } as const;
 // each panel re-fetching or reading a frozen mock array. Write paths
 // (lib/actions/catalog.ts) persist to the same tables and revalidate this
 // layout's cache.
+const ROLE_LABEL: Record<string, string> = {
+  OWNER: "Admin",
+  FRONT_DESK: "Recepción",
+  ESTHETICIAN: "Esteticista",
+  CLINIC_MANAGER: "Gerente de clínica",
+  ACCOUNTANT: "Contador",
+};
+const STATUS_LABEL: Record<string, StaffMember["status"]> = {
+  ACTIVE: "Activo",
+  INACTIVE: "Inactivo",
+  INVITED: "Invitado",
+};
+
 export default async function RootLayout({ children }: LayoutProps<"/">) {
-  const [locations, protocols, addOns] = await Promise.all([
+  const [locations, protocols, addOns, commissionRules, anomalySettings, staff] = await Promise.all([
     prisma.location.findMany({ include: { rooms: true }, orderBy: { createdAt: "asc" } }),
     prisma.protocol.findMany({ where: { isActive: true }, include: { addOns: { include: { addOn: true } } } }),
     prisma.addOn.findMany({ include: { protocols: { include: { protocol: true } } } }),
+    prisma.commissionRule.findMany({ where: { calcType: "PERCENTAGE", role: null } }),
+    prisma.setting.findMany({ where: { key: { in: ["anomaly.discountThresholdPct", "anomaly.refundThresholdMxn"] } } }),
+    prisma.appUser.findMany({ include: { locationAssignments: { include: { location: true } } }, orderBy: { name: "asc" } }),
   ]);
 
   const initialLocations: LocationRecord[] = locations.map((l) => ({
@@ -107,6 +122,30 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
     availableOn: a.protocols.map((link) => link.protocol.name),
   }));
 
+  const settingNumber = (key: string, fallback: number) => {
+    const row = anomalySettings.find((s) => s.key === key);
+    return typeof row?.value === "number" ? row.value : fallback;
+  };
+  const initialBusinessRules: BusinessRules = {
+    commissionServicePct: commissionRules.find((r) => r.basis === "SERVICE")?.rateOrAmount ?? 0,
+    commissionRetailPct: commissionRules.find((r) => r.basis === "RETAIL")?.rateOrAmount ?? 0,
+    anomalyDiscountThresholdPct: settingNumber("anomaly.discountThresholdPct", 15),
+    anomalyRefundThresholdMXN: settingNumber("anomaly.refundThresholdMxn", 1500),
+  };
+
+  const initialRoster: StaffMember[] = staff.map((s) => {
+    const locationNames = s.locationAssignments.map((a) => a.location.name);
+    const location = locationNames.length > 1 ? "Ambas" : (locationNames[0] ?? "—");
+    return {
+      id: s.id,
+      name: s.name,
+      role: ROLE_LABEL[s.role] ?? s.role,
+      location,
+      status: STATUS_LABEL[s.status] ?? "Invitado",
+      salary: s.salaryMxn ?? 0,
+    };
+  });
+
   return (
     <html
       lang="es"
@@ -116,21 +155,17 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
         <LoadingCurtain />
         <LocationsProvider initialLocations={initialLocations}>
           <PeriodProvider>
-            <ProtocolsProvider initialProtocols={initialProtocols}>
-              <AddOnsProvider addOns={initialAddOns}>
-                <StaffRosterProvider>
-                  <PanelAlertsProvider>
+            <CompareProvider>
+              <ProtocolsProvider initialProtocols={initialProtocols}>
+                <AddOnsProvider addOns={initialAddOns}>
+                  <StaffRosterProvider initialRoster={initialRoster}>
                     <ClientBookingProvider>
-                      <BusinessRulesProvider>
-                        <AnomaliesProvider>
-                          <ApprovalsProvider>{children}</ApprovalsProvider>
-                        </AnomaliesProvider>
-                      </BusinessRulesProvider>
+                      <BusinessRulesProvider initialRules={initialBusinessRules}>{children}</BusinessRulesProvider>
                     </ClientBookingProvider>
-                  </PanelAlertsProvider>
-                </StaffRosterProvider>
-              </AddOnsProvider>
-            </ProtocolsProvider>
+                  </StaffRosterProvider>
+                </AddOnsProvider>
+              </ProtocolsProvider>
+            </CompareProvider>
           </PeriodProvider>
         </LocationsProvider>
       </body>

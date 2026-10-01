@@ -105,6 +105,22 @@ export const OCCUPANCY_7D = [
   { day: "Dom", roomsBooked: 0, roomsTotal: 0 },
 ];
 
+// Prado Norte isn't active yet (no real rooms/appointments), so its
+// occupancy is illustrative — same ~43% relative-size convention as
+// PNL_LINES_BY_LOCATION, with a smaller room count (2 vs. Roma Norte's 4).
+export const OCCUPANCY_7D_BY_LOCATION: Record<string, typeof OCCUPANCY_7D> = {
+  "Roma Norte": OCCUPANCY_7D,
+  "Prado Norte": [
+    { day: "Lun", roomsBooked: 3, roomsTotal: 14 },
+    { day: "Mar", roomsBooked: 6, roomsTotal: 14 },
+    { day: "Mié", roomsBooked: 8, roomsTotal: 14 },
+    { day: "Jue", roomsBooked: 5, roomsTotal: 14 },
+    { day: "Vie", roomsBooked: 9, roomsTotal: 14 },
+    { day: "Sáb", roomsBooked: 11, roomsTotal: 14 },
+    { day: "Dom", roomsBooked: 0, roomsTotal: 0 },
+  ],
+};
+
 export const RETAIL_ATTACH_RATE = 0.34;
 // Renamed from EXPRESS_SIGNATURE_MIX — the 30-min tier is now "Targeted"
 // (single bookable item), not "Express".
@@ -274,6 +290,21 @@ export const PROTOCOL_PERFORMANCE = [
   { protocol: "Collagen Botox", tier: "Signature" as const, timesPerformed: 5, revenue: 9500, cost: 2800 },
   { protocol: "Vegan Glow", tier: "Signature" as const, timesPerformed: 7, revenue: 13300, cost: 3010 },
 ];
+
+// Same ~43% Prado Norte ratio as the other Ventas breakdowns, so the
+// protocolo table also responds to the "Local" filter.
+export const PROTOCOL_PERFORMANCE_BY_LOCATION: Record<string, typeof PROTOCOL_PERFORMANCE> = {
+  "Roma Norte": PROTOCOL_PERFORMANCE,
+  "Prado Norte": [
+    { protocol: "Targeted", tier: "Targeted" as const, timesPerformed: 21, revenue: 17500, cost: 4540 },
+    { protocol: "Purify", tier: "Signature" as const, timesPerformed: 3, revenue: 6500, cost: 1580 },
+    { protocol: "Lift", tier: "Signature" as const, timesPerformed: 3, revenue: 5700, cost: 1570 },
+    { protocol: "Longevity", tier: "Signature" as const, timesPerformed: 3, revenue: 4900, cost: 1390 },
+    { protocol: "Microbiomic", tier: "Signature" as const, timesPerformed: 4, revenue: 7400, cost: 1820 },
+    { protocol: "Collagen Botox", tier: "Signature" as const, timesPerformed: 2, revenue: 4100, cost: 1200 },
+    { protocol: "Vegan Glow", tier: "Signature" as const, timesPerformed: 3, revenue: 5700, cost: 1290 },
+  ],
+};
 
 // ---------------------------------------------------------------------------
 // Admin — Calendar
@@ -610,6 +641,26 @@ export const REVENUE_BY_CATEGORY = [
   { category: "Paquetes", amount: 19500 },
 ];
 
+// Per-location breakdown so Análisis · Ventas actually responds to the
+// "Local" filter instead of always showing Roma Norte's numbers (same bug
+// class already fixed on P&L — see PNL_LINES_BY_LOCATION). Prado Norte
+// figures are illustrative, ~43% of Roma Norte's — the same ratio already
+// established there, consistent with its smaller footprint.
+export const REVENUE_BY_CATEGORY_BY_LOCATION: Record<string, Record<string, number>> = {
+  "Roma Norte": {
+    "Servicios — Targeted": 41200,
+    "Servicios — Signature": 68300,
+    "Retail": 44800,
+    "Paquetes": 19500,
+  },
+  "Prado Norte": {
+    "Servicios — Targeted": 17700,
+    "Servicios — Signature": 29400,
+    "Retail": 19300,
+    "Paquetes": 8400,
+  },
+};
+
 // Gross margin summary — COGS only (backbar product cost for services,
 // wholesale cost for retail); excludes labor, commission, and rent, which
 // aren't modeled here. Derived from PROTOCOL_PERFORMANCE + a blended
@@ -637,11 +688,29 @@ export const WEEKLY_REVENUE_TREND = [
   { week: "Sem 8", revenue: 49800 },
 ];
 
+// Same ~43% Prado Norte ratio as REVENUE_BY_CATEGORY_BY_LOCATION, so the
+// weekly trend chart also responds to the "Local" filter.
+export const WEEKLY_REVENUE_TREND_BY_LOCATION: Record<string, { week: string; revenue: number }[]> = {
+  "Roma Norte": WEEKLY_REVENUE_TREND,
+  "Prado Norte": [
+    { week: "Sem 1", revenue: 16600 },
+    { week: "Sem 2", revenue: 17700 },
+    { week: "Sem 3", revenue: 17100 },
+    { week: "Sem 4", revenue: 19000 },
+    { week: "Sem 5", revenue: 18300 },
+    { week: "Sem 6", revenue: 20300 },
+    { week: "Sem 7", revenue: 19700 },
+    { week: "Sem 8", revenue: 21400 },
+  ],
+};
+
 // Esthetician occupancy — complements room occupancy on the Dashboard;
-// spec §6.3 asks for room/esthetician occupancy, not room only.
+// spec §6.3 asks for room/esthetician occupancy, not room only. Both are
+// Roma Norte's real staff — Prado Norte has no roster yet (not active), so
+// selecting it alone correctly shows nobody rather than repeating these.
 export const ESTHETICIAN_OCCUPANCY = [
-  { name: "Ana Torres", hoursBooked: 34, hoursAvailable: 40 },
-  { name: "Diana Cruz", hoursBooked: 27, hoursAvailable: 40 },
+  { name: "Ana Torres", location: "Roma Norte", hoursBooked: 34, hoursAvailable: 40 },
+  { name: "Diana Cruz", location: "Roma Norte", hoursBooked: 27, hoursAvailable: 40 },
 ];
 
 // Backbar consumption value this period, alongside on-hand inventory value —
@@ -654,10 +723,12 @@ export const INVENTORY_CONSUMPTION = {
 // ---------------------------------------------------------------------------
 // Admin — Commissions
 // ---------------------------------------------------------------------------
+// All three are Roma Norte's real staff — Prado Norte has no roster yet
+// (not active), so selecting it alone correctly shows nobody.
 export const COMMISSION_ENTRIES = [
-  { staff: "Ana Torres", role: "Esteticista", period: "Sep 2026", service: 8400, retail: 1200, total: 9600 },
-  { staff: "Diana Cruz", role: "Esteticista", period: "Sep 2026", service: 6100, retail: 800, total: 6900 },
-  { staff: "Camila Ruiz", role: "Recepción", period: "Sep 2026", service: 0, retail: 2100, total: 2100 },
+  { staff: "Ana Torres", role: "Esteticista", location: "Roma Norte", period: "Sep 2026", service: 8400, retail: 1200, total: 9600 },
+  { staff: "Diana Cruz", role: "Esteticista", location: "Roma Norte", period: "Sep 2026", service: 6100, retail: 800, total: 6900 },
+  { staff: "Camila Ruiz", role: "Recepción", location: "Roma Norte", period: "Sep 2026", service: 0, retail: 2100, total: 2100 },
 ];
 
 export const ATTRIBUTION_LOG = [
@@ -829,6 +900,60 @@ export interface KpiDef {
   sparkline?: number[];
   href?: string;
 }
+
+// Prado Norte's relative size vs. Roma Norte — same ~43% convention already
+// used for PNL_LINES_BY_LOCATION/REVENUE_BY_CATEGORY_BY_LOCATION, reused
+// here as a weight for combining percentage-based KPIs (occupancy, attach
+// rate, rebooking) into a real weighted average when both locations are
+// selected, instead of just repeating Roma Norte's number.
+export const LOCATION_WEIGHT: Record<string, number> = {
+  "Roma Norte": 1,
+  "Prado Norte": 0.43,
+};
+
+// Panel KPIs 2-4 (Ocupación, Attach retail, Rebooking) are percentages with
+// no per-location source data elsewhere — Prado Norte's figures here are
+// illustrative, a few points off Roma Norte's, consistent with a smaller,
+// newer location. Sparklines scaled by the same ratio as the headline value
+// so the trend shape stays proportional. Ingreso MTD and Contribución are
+// computed live from PNL_LINES_BY_LOCATION instead (see analytics/ventas
+// and this page) — real per-location dollar figures already exist there.
+export const PANEL_KPI_BY_LOCATION: Record<
+  string,
+  Record<string, { value: number; sub7d?: number; sparkline: number[] }>
+> = {
+  ocupacion: {
+    "Roma Norte": { value: 71, sub7d: 78, sparkline: [62, 65, 64, 68, 67, 70, 69, 71] },
+    "Prado Norte": { value: 64, sub7d: 70, sparkline: [56, 58, 58, 61, 60, 63, 62, 64] },
+  },
+  "attach-retail": {
+    "Roma Norte": { value: 34, sparkline: [27, 29, 28, 31, 30, 32, 33, 34] },
+    "Prado Norte": { value: 30, sparkline: [24, 26, 25, 28, 27, 29, 29, 30] },
+  },
+  rebooking: {
+    "Roma Norte": { value: 62, sparkline: [54, 56, 55, 58, 57, 60, 61, 62] },
+    "Prado Norte": { value: 58, sparkline: [50, 52, 51, 54, 53, 56, 57, 58] },
+  },
+  "retencion-90d": {
+    "Roma Norte": { value: 47, sparkline: [40, 41, 43, 42, 44, 45, 46, 47] },
+    "Prado Norte": { value: 43, sparkline: [37, 38, 39, 39, 40, 41, 42, 43] },
+  },
+  "ingreso-hora-esteticista": {
+    "Roma Norte": { value: 742, sparkline: [660, 675, 690, 700, 705, 720, 730, 742] },
+    "Prado Norte": { value: 680, sparkline: [605, 618, 632, 641, 646, 659, 668, 680] },
+  },
+};
+
+// Per-location breakdown of FINANCIALS_SUMMARY's client-mix figures, for
+// Análisis · Clientas' "Nuevas vs. recurrentes" detail — same ~43% Prado
+// Norte convention as everywhere else.
+export const CLIENT_MIX_BY_LOCATION: Record<
+  string,
+  { newPct: number; returningPct: number; outstandingPrepaidLiability: number }
+> = {
+  "Roma Norte": { newPct: 0.31, returningPct: 0.69, outstandingPrepaidLiability: 84200 },
+  "Prado Norte": { newPct: 0.35, returningPct: 0.65, outstandingPrepaidLiability: 36200 },
+};
 
 export const PANEL_KPIS: KpiDef[] = [
   {

@@ -6,6 +6,7 @@ import {
   PACKAGE_OPTIONS,
   RETAIL_INVENTORY,
   BACKBAR_INVENTORY,
+  WAREHOUSE_INVENTORY,
   PROTOCOL_RETAIL_LINK,
   KPI_TARGETS,
   SETTINGS,
@@ -127,17 +128,23 @@ async function main() {
     }
   }
 
-  // --- Retail + backbar catalog (dedupe by product name across locations) --
+  // --- Retail + backbar + warehouse catalog (dedupe by ledger+name across
+  // locations — NOT by name alone: the same product name can legitimately
+  // exist as separate Products on different ledgers, e.g. "Beauty of Joseon
+  // Glow Serum" is both a retail SKU and its own warehouse SKU. Deduping by
+  // name alone would silently collapse those into one product, pointing the
+  // warehouse InventoryItem row at the retail product.) ----------------------
   const productByName = new Map<string, string>();
-  async function upsertProduct(name: string, sku: string, ledger: "RETAIL" | "BACKBAR") {
-    const existing = productByName.get(name);
+  async function upsertProduct(name: string, sku: string, ledger: "RETAIL" | "BACKBAR" | "WAREHOUSE") {
+    const cacheKey = `${ledger}:${name}`;
+    const existing = productByName.get(cacheKey);
     if (existing) return existing;
     const row = await prisma.product.upsert({
       where: { sku },
       create: { sku, name, ledger },
       update: { name, ledger },
     });
-    productByName.set(name, row.id);
+    productByName.set(cacheKey, row.id);
     return row.id;
   }
 
@@ -189,12 +196,35 @@ async function main() {
     });
   }
 
+  for (const item of WAREHOUSE_INVENTORY) {
+    const locationId = locationByName.get(item.location);
+    if (!locationId) continue;
+    const productId = await upsertProduct(item.product, item.sku, "WAREHOUSE");
+    await prisma.inventoryItem.upsert({
+      where: { productId_locationId: { productId, locationId } },
+      create: {
+        productId,
+        locationId,
+        qty: item.qty,
+        par: item.par,
+        costMxn: item.cost,
+        expiresOn: new Date(item.expiresOn),
+      },
+      update: {
+        qty: item.qty,
+        par: item.par,
+        costMxn: item.cost,
+        expiresOn: new Date(item.expiresOn),
+      },
+    });
+  }
+
   // --- Protocol → retail link (reference only; the real attach-rate is a
   // view over TreatmentRecord/RetailRecommendationTag/SaleLineItem, never
   // stored — see the architecture plan) ------------------------------------
   for (const link of PROTOCOL_RETAIL_LINK) {
     const protocolId = protocolByName.get(link.protocol);
-    const productId = productByName.get(link.topProduct);
+    const productId = productByName.get(`RETAIL:${link.topProduct}`);
     if (!protocolId || !productId) continue;
     await prisma.protocolRetailLink.upsert({
       where: { protocolId_productId: { protocolId, productId } },

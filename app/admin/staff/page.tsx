@@ -47,6 +47,7 @@ export default function AdminStaff() {
     if (!form.name.trim() || !form.email.trim()) return;
     addStaff({
       name: form.name.trim(),
+      email: form.email.trim(),
       role: form.role,
       location: form.location,
       status: "Invitado",

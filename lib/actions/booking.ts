@@ -53,22 +53,31 @@ export interface CreateAppointmentInput {
 
 export type CreateAppointmentResult = { error: string } | { appointmentId: string };
 
-export async function createAppointmentAction(
-  input: CreateAppointmentInput,
-): Promise<CreateAppointmentResult> {
-  const client = await requireClient();
-
-  const location = await prisma.location.findFirst({ where: { name: input.locationName } });
+// Shared by the client's own /my/book flow and staff's manual-entry flow
+// below — resolves location/protocol, finds a free room+esthetician, and
+// inserts. The EXCLUDE constraint is still the real safety net against a
+// race this (non-transactional) read misses; a caught insert error reads
+// the same as "no slot found," just a hair later.
+async function insertAppointment(params: {
+  clientId: string;
+  locationName: string;
+  date: string;
+  time: string;
+  durationTier: "Targeted" | "Signature";
+  protocolName: string | null;
+  depositId?: string;
+}): Promise<CreateAppointmentResult> {
+  const location = await prisma.location.findFirst({ where: { name: params.locationName } });
   if (!location) return { error: "Sucursal no encontrada." };
 
-  const [hour, minute] = input.time.split(":").map(Number);
-  const [year, month, day] = input.date.split("-").map(Number);
+  const [hour, minute] = params.time.split(":").map(Number);
+  const [year, month, day] = params.date.split("-").map(Number);
   const startAt = new Date(year, month - 1, day, hour, minute);
-  const durationMin = input.durationTier === "Signature" ? 60 : 30;
+  const durationMin = params.durationTier === "Signature" ? 60 : 30;
   const endAt = new Date(startAt.getTime() + durationMin * 60000);
 
-  const protocol = input.protocolName
-    ? await prisma.protocol.findUnique({ where: { name: input.protocolName } })
+  const protocol = params.protocolName
+    ? await prisma.protocol.findUnique({ where: { name: params.protocolName } })
     : null;
 
   const assignment = await findAvailableAssignment(location.id, startAt, endAt);
@@ -76,27 +85,19 @@ export async function createAppointmentAction(
     return { error: "Ese horario ya no está disponible — elige otro." };
   }
 
-  let depositId: string | undefined;
-  if (input.durationTier === "Signature") {
-    const deposit = await prisma.deposit.create({
-      data: { clientId: client.id, amountMxn: DEPOSIT_AMOUNT_MXN, status: "HELD" },
-    });
-    depositId = deposit.id;
-  }
-
   try {
     const appointment = await prisma.appointment.create({
       data: {
-        clientId: client.id,
+        clientId: params.clientId,
         locationId: location.id,
         roomId: assignment.roomId,
         estheticianId: assignment.estheticianId,
         protocolId: protocol?.id,
-        durationTier: input.durationTier === "Signature" ? "SIGNATURE" : "TARGETED",
+        durationTier: params.durationTier === "Signature" ? "SIGNATURE" : "TARGETED",
         startAt,
         endAt,
         status: "CONFIRMED",
-        depositId,
+        depositId: params.depositId,
       },
     });
     revalidatePath("/my/appointments");
@@ -106,12 +107,46 @@ export async function createAppointmentAction(
     revalidatePath("/admin/calendar");
     return { appointmentId: appointment.id };
   } catch {
-    // The EXCLUDE constraint caught a race that findAvailableAssignment's
-    // own (non-transactional) read missed — same outcome as never finding
-    // a free slot, just a hair later.
-    if (depositId) await prisma.deposit.delete({ where: { id: depositId } }).catch(() => {});
+    if (params.depositId) await prisma.deposit.delete({ where: { id: params.depositId } }).catch(() => {});
     return { error: "Ese horario ya no está disponible — elige otro." };
   }
+}
+
+export async function createAppointmentAction(
+  input: CreateAppointmentInput,
+): Promise<CreateAppointmentResult> {
+  const client = await requireClient();
+
+  let depositId: string | undefined;
+  if (input.durationTier === "Signature") {
+    const deposit = await prisma.deposit.create({
+      data: { clientId: client.id, amountMxn: DEPOSIT_AMOUNT_MXN, status: "HELD" },
+    });
+    depositId = deposit.id;
+  }
+
+  return insertAppointment({ ...input, clientId: client.id, depositId });
+}
+
+export interface CreateManualAppointmentInput extends CreateAppointmentInput {
+  clientId: string;
+}
+
+// Front Desk / Owner / Clinic Manager entering a booking taken by phone,
+// WhatsApp, Instagram DM, or a walk-in — the "one source of truth, zero
+// double entry" constraint (spec, non-negotiable): it must land in the same
+// calendar as a client's own online booking, not a side spreadsheet. No
+// online deposit is collected here — a Signature walk-in's deposit, if any,
+// is taken at the front desk directly, not through this flow.
+export async function createManualAppointmentAction(
+  input: CreateManualAppointmentInput,
+): Promise<CreateAppointmentResult> {
+  await requireStaffRole(["FRONT_DESK", "OWNER", "CLINIC_MANAGER"]);
+
+  const client = await prisma.client.findUnique({ where: { id: input.clientId } });
+  if (!client || client.anonymizedAt) return { error: "Clienta no encontrada." };
+
+  return insertAppointment(input);
 }
 
 // Client self-service cancel — also used by "Reagendar" (cancel, then the
@@ -136,4 +171,38 @@ export async function checkInAction(appointmentId: string) {
   revalidatePath("/staff/check-in");
   revalidatePath("/staff");
   revalidatePath("/admin/calendar");
+}
+
+export type ReassignAppointmentResult = { error: string } | { ok: true };
+
+// Admin calendar's "reassign/override" (spec §6.3) — moving an existing
+// appointment to a different room and/or esthetician, same time slot. The
+// EXCLUDE constraint is still what actually prevents a double-booking; a
+// caught conflict here reads the same as createAppointmentAction's.
+export async function reassignAppointmentAction(
+  appointmentId: string,
+  roomId: string,
+  estheticianId: string,
+): Promise<ReassignAppointmentResult> {
+  await requireStaffRole(["FRONT_DESK", "OWNER", "CLINIC_MANAGER"]);
+
+  const appointment = await prisma.appointment.findUnique({ where: { id: appointmentId } });
+  if (!appointment) return { error: "Cita no encontrada." };
+  if (appointment.status === "CANCELLED" || appointment.status === "COMPLETED") {
+    return { error: "Esta cita ya no se puede reasignar." };
+  }
+
+  try {
+    await prisma.appointment.update({
+      where: { id: appointmentId },
+      data: { roomId, estheticianId },
+    });
+  } catch {
+    return { error: "Ese horario ya no está disponible en la sala o con la esteticista elegida." };
+  }
+
+  revalidatePath("/admin/calendar");
+  revalidatePath("/staff/check-in");
+  revalidatePath("/staff");
+  return { ok: true };
 }
