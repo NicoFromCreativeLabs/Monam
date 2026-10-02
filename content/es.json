@@ -66,9 +66,7 @@
       { "name": "Purify", "tier": "Signature", "duration": "60 min", "price": 1900, "description": "Descongestiona, limpia en profundidad y libera poros con extracciones cuidadosas." },
       { "name": "Lift", "tier": "Signature", "duration": "60 min", "price": 1900, "description": "Un ritual de escultura facial que combina tecnología y masaje para tonificar, definir y favorecer una apariencia más firme." },
       { "name": "Longevity", "tier": "Signature", "duration": "60 min", "price": 1900, "description": "Tratamiento intensivo con productos BABOR, enfocado en signos visibles de edad, luminosidad y vitalidad, ideal también como preparación antes de un evento." },
-      { "name": "Microbiomic", "tier": "Signature", "duration": "60 min", "price": 1900, "description": "Diseñado con productos BABOR para piel sensible, reactiva o estresada. Ayuda a fortalecer la barrera y recuperar confort, hidratación y equilibrio." },
-      { "name": "Collagen Botox", "tier": "Signature", "duration": "60 min", "price": 1900, "description": "Un tratamiento de firmeza y volumen que ayuda a suavizar líneas de expresión y devolver densidad visible a la piel." },
-      { "name": "Vegan Glow", "tier": "Signature", "duration": "60 min", "price": 1900, "description": "Un facial 100% vegano que ilumina e hidrata la piel con ingredientes botánicos, dejando un brillo fresco y natural." }
+      { "name": "Microbiomic", "tier": "Signature", "duration": "60 min", "price": 1900, "description": "Diseñado con productos BABOR para piel sensible, reactiva o estresada. Ayuda a fortalecer la barrera y recuperar confort, hidratación y equilibrio." }
     ],
     "currency": "MXN",
     "cta": "Reservar un tratamiento"

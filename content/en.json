@@ -66,9 +66,7 @@
       { "name": "Purify", "tier": "Signature", "duration": "60 min", "price": 1900, "description": "Decongests, deep-cleanses, and clears pores with careful extractions." },
       { "name": "Lift", "tier": "Signature", "duration": "60 min", "price": 1900, "description": "A facial sculpting ritual that combines technology and massage to tone, define, and support a firmer appearance." },
       { "name": "Longevity", "tier": "Signature", "duration": "60 min", "price": 1900, "description": "An intensive treatment featuring BABOR, focused on visible signs of aging, luminosity, and vitality — also ideal as pre-event prep." },
-      { "name": "Microbiomic", "tier": "Signature", "duration": "60 min", "price": 1900, "description": "Designed with BABOR for sensitive, reactive, or stressed skin. Helps strengthen the skin barrier and restore comfort, hydration, and balance." },
-      { "name": "Collagen Botox", "tier": "Signature", "duration": "60 min", "price": 1900, "description": "A firming, volumizing treatment that helps soften expression lines and restore visible density to the skin." },
-      { "name": "Vegan Glow", "tier": "Signature", "duration": "60 min", "price": 1900, "description": "A 100% vegan facial that brightens and hydrates the skin with botanical ingredients, leaving a fresh, natural glow." }
+      { "name": "Microbiomic", "tier": "Signature", "duration": "60 min", "price": 1900, "description": "Designed with BABOR for sensitive, reactive, or stressed skin. Helps strengthen the skin barrier and restore comfort, hydration, and balance." }
     ],
     "currency": "MXN",
     "cta": "Book a Treatment"

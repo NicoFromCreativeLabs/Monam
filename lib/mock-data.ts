@@ -229,8 +229,6 @@ export const PROTOCOLS = [
   { name: "Lift", tier: "Signature" as const, duration: 60, price: 1900, cost: 520 },
   { name: "Longevity", tier: "Signature" as const, duration: 60, price: 1900, cost: 540 },
   { name: "Microbiomic", tier: "Signature" as const, duration: 60, price: 1900, cost: 470 },
-  { name: "Collagen Botox", tier: "Signature" as const, duration: 60, price: 1900, cost: 560 },
-  { name: "Vegan Glow", tier: "Signature" as const, duration: 60, price: 1900, cost: 430 },
 ];
 
 export interface AddOn {
@@ -248,7 +246,7 @@ export const ADD_ONS: AddOn[] = [
     name: "Neck & Chest Rejuvenating Mask",
     function: "Cuello y escote",
     extraMinutes: 10,
-    availableOn: ["Purify", "Lift", "Collagen Botox", "Vegan Glow"],
+    availableOn: ["Purify", "Lift"],
   },
   {
     id: "theraface-wand",
@@ -269,14 +267,14 @@ export const ADD_ONS: AddOn[] = [
     name: "Cryo sticks",
     function: "Frescura y poro",
     extraMinutes: 10,
-    availableOn: ["Purify", "Collagen Botox"],
+    availableOn: ["Purify"],
   },
   {
     id: "facial-cupping",
     name: "Facial cupping",
     function: "Contorno definido",
     extraMinutes: 10,
-    availableOn: ["Lift", "Vegan Glow"],
+    availableOn: ["Lift"],
   },
 ];
 
@@ -287,8 +285,6 @@ export const PROTOCOL_PERFORMANCE = [
   { protocol: "Lift", tier: "Signature" as const, timesPerformed: 7, revenue: 13300, cost: 3640 },
   { protocol: "Longevity", tier: "Signature" as const, timesPerformed: 6, revenue: 11400, cost: 3240 },
   { protocol: "Microbiomic", tier: "Signature" as const, timesPerformed: 9, revenue: 17100, cost: 4230 },
-  { protocol: "Collagen Botox", tier: "Signature" as const, timesPerformed: 5, revenue: 9500, cost: 2800 },
-  { protocol: "Vegan Glow", tier: "Signature" as const, timesPerformed: 7, revenue: 13300, cost: 3010 },
 ];
 
 // Same ~43% Prado Norte ratio as the other Ventas breakdowns, so the
@@ -301,8 +297,6 @@ export const PROTOCOL_PERFORMANCE_BY_LOCATION: Record<string, typeof PROTOCOL_PE
     { protocol: "Lift", tier: "Signature" as const, timesPerformed: 3, revenue: 5700, cost: 1570 },
     { protocol: "Longevity", tier: "Signature" as const, timesPerformed: 3, revenue: 4900, cost: 1390 },
     { protocol: "Microbiomic", tier: "Signature" as const, timesPerformed: 4, revenue: 7400, cost: 1820 },
-    { protocol: "Collagen Botox", tier: "Signature" as const, timesPerformed: 2, revenue: 4100, cost: 1200 },
-    { protocol: "Vegan Glow", tier: "Signature" as const, timesPerformed: 3, revenue: 5700, cost: 1290 },
   ],
 };
 
