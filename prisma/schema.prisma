@@ -594,24 +594,38 @@ model PackageRedemption {
 }
 
 enum DepositStatus {
+  PENDING_PAYMENT // a real processor (Stripe) checkout was created but hasn't confirmed payment yet — never counts as collected
   HELD
   CREDITED
   FORFEITED
   REFUNDED
 }
 
+// MANUAL covers every deposit the app already creates today (collected at
+// the front desk, or the current /my/book flow that holds a deposit row
+// without a real charge behind it yet) — a real processor is additive, not
+// a replacement, since a studio will always need to take a deposit in
+// person sometimes. See lib/payments/processor.ts.
+enum PaymentProvider {
+  MANUAL
+  STRIPE
+}
+
 model Deposit {
-  id             String        @id @default(uuid())
+  id             String          @id @default(uuid())
   clientId       String
   amountMxn      Int
-  status         DepositStatus @default(HELD)
-  collectedAt    DateTime      @default(now())
-  creditedSaleId String?       @unique
+  status         DepositStatus   @default(HELD)
+  provider       PaymentProvider @default(MANUAL)
+  externalRef    String? // Stripe Checkout Session id while PENDING_PAYMENT, then the PaymentIntent id once paid — never a card number or other cardholder data (that stays entirely inside Stripe)
+  collectedAt    DateTime        @default(now())
+  creditedSaleId String?         @unique
 
   client       Client       @relation(fields: [clientId], references: [id])
   creditedSale Sale?        @relation(fields: [creditedSaleId], references: [id])
   appointment  Appointment?
 
+  @@index([externalRef])
   @@map("deposits")
 }
 
@@ -879,4 +893,38 @@ model Alert {
   readAt     DateTime?
 
   @@map("alerts")
+}
+
+// ---------------------------------------------------------------------------
+// Domain — WhatsApp booking (spec §11.1 "highest priority" integration,
+// §8.2's booking engine reused rather than duplicated: this conversation
+// state machine collects the same inputs the web /my/book flow collects,
+// then calls the exact same insertAppointment() used by every other booking
+// entry point, so a WhatsApp booking lands in the one real calendar — never
+// a side channel — per spec's "one source of truth, zero double entry").
+// One row per phone number holding the in-progress conversation; cleared
+// (not deleted — kept for support/audit) once a booking completes or the
+// person starts over.
+// ---------------------------------------------------------------------------
+
+enum WhatsAppBookingStep {
+  GREETING
+  AWAITING_LOCATION
+  AWAITING_TIER
+  AWAITING_PROTOCOL
+  AWAITING_DATE
+  AWAITING_TIME
+  AWAITING_NAME // only asked the first time this phone number books
+  AWAITING_CONFIRM
+  DONE
+}
+
+model WhatsAppConversation {
+  phone     String              @id // E.164, matches Client.phone
+  step      WhatsAppBookingStep @default(GREETING)
+  draft     Json // partial booking input accumulated across messages — see lib/whatsapp/conversation.ts's BookingDraft type
+  clientId  String? // set once the phone number is matched or created as a real Client
+  updatedAt DateTime            @updatedAt
+
+  @@map("whatsapp_conversations")
 }

@@ -120,3 +120,50 @@ npm install
 cp .env.local.example .env.local   # fill in Supabase + integration keys
 npm run dev
 ```
+
+## WhatsApp & Stripe setup
+
+Both integrations (`lib/whatsapp/`, `lib/payments/stripe.ts`) are fully built and wired into
+the real booking engine (`lib/booking-core.ts` — the same `insertAppointment` every other
+entry point uses), but stay inert until their env vars are set — see
+`lib/feature-flags.ts`'s `WHATSAPP_BOOKING_ENABLED`/`STRIPE_ENABLED`, which auto-detect this.
+No code change is needed to turn either on; just add the keys below and register the webhook
+URLs.
+
+**WhatsApp booking bot** — a numbered-menu conversation (location → duration → protocol →
+date → time → name → confirm) that books directly into the calendar, reusing
+`Client.phone` as the identifier (spec §5.1) and the shared device/room/esthetician conflict
+engine (spec §5.2) exactly like every other booking path. State lives in
+`WhatsAppConversation` (one row per phone number), not in memory, so it survives serverless
+cold starts.
+
+1. In [Meta Business Manager](https://business.facebook.com), create/select an App → add the
+   WhatsApp product.
+2. Under WhatsApp → API Setup, note the **Phone Number ID** → `WHATSAPP_PHONE_NUMBER_ID`, and
+   generate a permanent token under System Users (not the 24h test token) → `WHATSAPP_API_TOKEN`.
+3. Invent any string for `WHATSAPP_VERIFY_TOKEN` — you'll enter the same value in both the env
+   var and Meta's webhook config in the next step.
+4. Under WhatsApp → Configuration, set the webhook URL to
+   `https://<your-domain>/api/whatsapp/webhook`, paste the verify token, and subscribe to the
+   `messages` field.
+5. Set `NEXT_PUBLIC_WHATSAPP_NUMBER` to the real WhatsApp Business number (used by the
+   landing page's "Book via WhatsApp" deep link — opening a chat is what triggers the bot).
+
+**Stripe deposit checkout** — when a Signature appointment needs a deposit (spec §5.2), the
+bot sends a real Stripe Checkout link instead of just holding an unpaid deposit row; the
+appointment itself is only created once `checkout.session.completed` fires (see
+`app/api/stripe/webhook/route.ts`), so a slot is never reserved for an unpaid booking. The
+web `/my/book` flow still creates a manual (unpaid) deposit today — wiring Checkout into that
+flow too is a short follow-up once this is live, not done yet.
+
+1. From the [Stripe Dashboard](https://dashboard.stripe.com) → Developers → API keys, copy
+   the **Secret key** → `STRIPE_SECRET_KEY`.
+2. Under Developers → Webhooks, add an endpoint at `https://<your-domain>/api/stripe/webhook`
+   subscribed to `checkout.session.completed`, then copy its **Signing secret** →
+   `STRIPE_WEBHOOK_SECRET`.
+3. Set `NEXT_PUBLIC_SITE_URL` to the deployed site's origin (used to build the Checkout
+   success/cancel redirect URLs).
+
+Both webhook routes need a public HTTPS URL to register against — a local `npm run dev`
+instance isn't reachable from Meta/Stripe's servers. Use a tunnel (e.g. `ngrok http 3000`)
+for local testing, or test against a deployed preview URL.

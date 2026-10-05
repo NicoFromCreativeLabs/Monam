@@ -3,133 +3,14 @@
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireClient, requireStaffRole } from "@/lib/auth/dal";
+import {
+  insertAppointment,
+  DEPOSIT_AMOUNT_MXN,
+  type CreateAppointmentInput,
+  type CreateAppointmentResult,
+} from "@/lib/booking-core";
 
-const DEPOSIT_AMOUNT_MXN = 500;
-
-// The client never picks a specific esthetician, room, or device (spec:
-// deliberate, so a client can't be steered to one specific esteticista who
-// might leave) — this assigns the first room+esthetician (and, for a
-// Signature appointment, the shared device — spec §5.2: the LED panel is a
-// portable, single-unit resource, not tied to one room) at the location
-// with no real conflicting appointment in this window. The EXCLUDE
-// constraints on `appointments` (btree_gist, prisma/schema.prisma) are the
-// actual safety net against a race between two concurrent bookings; this
-// query is just how a free slot gets *found*, not what makes it safe.
-async function findAvailableAssignment(
-  locationId: string,
-  startAt: Date,
-  endAt: Date,
-  tier: "Targeted" | "Signature",
-) {
-  const [rooms, estheticians, devices] = await Promise.all([
-    prisma.room.findMany({ where: { locationId } }),
-    prisma.appUser.findMany({
-      where: {
-        role: "ESTHETICIAN",
-        status: "ACTIVE",
-        locationAssignments: { some: { locationId } },
-      },
-    }),
-    prisma.device.findMany({ where: { locationId } }),
-  ]);
-
-  const overlapping = await prisma.appointment.findMany({
-    where: {
-      locationId,
-      status: { notIn: ["CANCELLED", "NO_SHOW"] },
-      startAt: { lt: endAt },
-      endAt: { gt: startAt },
-    },
-    select: { roomId: true, estheticianId: true, deviceId: true },
-  });
-  const busyRooms = new Set(overlapping.map((a) => a.roomId));
-  const busyEstheticians = new Set(overlapping.map((a) => a.estheticianId));
-  const busyDevices = new Set(overlapping.map((a) => a.deviceId).filter(Boolean));
-
-  const room = rooms.find((r) => !busyRooms.has(r.id));
-  const esthetician = estheticians.find((e) => !busyEstheticians.has(e.id));
-  if (!room || !esthetician) return null;
-
-  // Targeted appointments don't use the shared device at all — only
-  // Signature does. If every device is busy, the appointment still can't be
-  // booked (same "no slot" outcome as a busy room/esthetician).
-  if (tier !== "Signature" || devices.length === 0) {
-    return { roomId: room.id, estheticianId: esthetician.id, deviceId: null as string | null };
-  }
-  const device = devices.find((d) => !busyDevices.has(d.id));
-  if (!device) return null;
-  return { roomId: room.id, estheticianId: esthetician.id, deviceId: device.id };
-}
-
-export interface CreateAppointmentInput {
-  locationName: string;
-  date: string; // YYYY-MM-DD
-  time: string; // HH:MM
-  durationTier: "Targeted" | "Signature";
-  protocolName: string | null; // the chosen Signature facial; null for Targeted (assigned on arrival)
-}
-
-export type CreateAppointmentResult = { error: string } | { appointmentId: string };
-
-// Shared by the client's own /my/book flow and staff's manual-entry flow
-// below — resolves location/protocol, finds a free room+esthetician, and
-// inserts. The EXCLUDE constraint is still the real safety net against a
-// race this (non-transactional) read misses; a caught insert error reads
-// the same as "no slot found," just a hair later.
-async function insertAppointment(params: {
-  clientId: string;
-  locationName: string;
-  date: string;
-  time: string;
-  durationTier: "Targeted" | "Signature";
-  protocolName: string | null;
-  depositId?: string;
-}): Promise<CreateAppointmentResult> {
-  const location = await prisma.location.findFirst({ where: { name: params.locationName } });
-  if (!location) return { error: "Sucursal no encontrada." };
-
-  const [hour, minute] = params.time.split(":").map(Number);
-  const [year, month, day] = params.date.split("-").map(Number);
-  const startAt = new Date(year, month - 1, day, hour, minute);
-  const durationMin = params.durationTier === "Signature" ? 60 : 30;
-  const endAt = new Date(startAt.getTime() + durationMin * 60000);
-
-  const protocol = params.protocolName
-    ? await prisma.protocol.findUnique({ where: { name: params.protocolName } })
-    : null;
-
-  const assignment = await findAvailableAssignment(location.id, startAt, endAt, params.durationTier);
-  if (!assignment) {
-    return { error: "Ese horario ya no está disponible — elige otro." };
-  }
-
-  try {
-    const appointment = await prisma.appointment.create({
-      data: {
-        clientId: params.clientId,
-        locationId: location.id,
-        roomId: assignment.roomId,
-        estheticianId: assignment.estheticianId,
-        deviceId: assignment.deviceId ?? undefined,
-        protocolId: protocol?.id,
-        durationTier: params.durationTier === "Signature" ? "SIGNATURE" : "TARGETED",
-        startAt,
-        endAt,
-        status: "CONFIRMED",
-        depositId: params.depositId,
-      },
-    });
-    revalidatePath("/my/appointments");
-    revalidatePath("/my");
-    revalidatePath("/staff/check-in");
-    revalidatePath("/staff");
-    revalidatePath("/admin/calendar");
-    return { appointmentId: appointment.id };
-  } catch {
-    if (params.depositId) await prisma.deposit.delete({ where: { id: params.depositId } }).catch(() => {});
-    return { error: "Ese horario ya no está disponible — elige otro." };
-  }
-}
+export type { CreateAppointmentInput, CreateAppointmentResult };
 
 export async function createAppointmentAction(
   input: CreateAppointmentInput,
