@@ -77,7 +77,6 @@ const ROLE_LABEL: Record<string, string> = {
   FRONT_DESK: "Recepción",
   ESTHETICIAN: "Esteticista",
   CLINIC_MANAGER: "Gerente de clínica",
-  ACCOUNTANT: "Contador",
 };
 const STATUS_LABEL: Record<string, StaffMember["status"]> = {
   ACTIVE: "Activo",

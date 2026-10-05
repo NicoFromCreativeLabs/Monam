@@ -11,7 +11,6 @@ const ROLE_FROM_LABEL: Record<string, Role> = {
   "Recepción": "FRONT_DESK",
   Esteticista: "ESTHETICIAN",
   "Gerente de clínica": "CLINIC_MANAGER",
-  Contador: "ACCOUNTANT",
 };
 
 async function resolveLocationIds(locationLabel: string): Promise<string[]> {

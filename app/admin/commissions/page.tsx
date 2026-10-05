@@ -1,14 +1,12 @@
 import { TopBar } from "@/components/panel/TopBar";
 import { Card } from "@/components/panel/Card";
 import { prisma } from "@/lib/prisma";
-import { OWNER } from "@/lib/mock-data";
 
 const ROLE_LABEL: Record<string, string> = {
   OWNER: "Owner",
   CLINIC_MANAGER: "Clinic Manager",
   FRONT_DESK: "Front Desk",
   ESTHETICIAN: "Esteticista",
-  ACCOUNTANT: "Contador",
 };
 
 function monthRange() {
@@ -63,7 +61,7 @@ export default async function AdminCommissions() {
 
   return (
     <>
-      <TopBar title="Comisiones" userName={OWNER.name} userRole={OWNER.role} allowBothLocations />
+      <TopBar title="Comisiones" allowBothLocations />
       <div className="flex-1 space-y-6 px-4 py-6 min-[860px]:px-8">
         <Card title={`${monthLabel()} — por persona`}>
           {perPerson.length === 0 ? (

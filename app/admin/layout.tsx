@@ -1,6 +1,7 @@
 import { Sidebar, type NavSection } from "@/components/panel/Sidebar";
 import { PanelNavProvider } from "@/components/panel/PanelNavContext";
-import { requireStaffRole } from "@/lib/auth/dal";
+import { CurrentAppUserProvider } from "@/components/panel/CurrentAppUserContext";
+import { requireStaffRole, roleLabel } from "@/lib/auth/dal";
 
 // Admin IA — rebuilt per client review (16-page spec, Sep 2026). See
 // MONAM_OS_System_Specification.md §6.1 for the original IA; this
@@ -19,15 +20,11 @@ const SECTIONS: NavSection[] = [
       { href: "/admin/calendar", label: "Calendario" },
       { href: "/admin/clients", label: "Clientes" },
       { href: "/admin/inventory", label: "Inventario" },
-      { href: "/admin/inventory/purchase-orders", label: "Órdenes de compra", disabled: true },
     ],
   },
   {
     heading: "Ventas",
-    items: [
-      { href: "/admin/sales", label: "Caja y cobros" },
-      { href: "/admin/promotions", label: "Paquetes y promociones", disabled: true },
-    ],
+    items: [{ href: "/admin/sales", label: "Caja y cobros" }],
   },
   {
     heading: "Análisis",
@@ -59,17 +56,16 @@ const SECTIONS: NavSection[] = [
 ];
 
 export default async function AdminLayout({ children }: LayoutProps<"/admin">) {
-  // Accountant is included per spec §9's row for this data, though its
-  // fully scoped read-only view (summary/export only, no client records) is
-  // future work — today it just gets the same panel as Owner/Clinic Manager.
-  await requireStaffRole(["OWNER", "CLINIC_MANAGER", "ACCOUNTANT"]);
+  const appUser = await requireStaffRole(["OWNER", "CLINIC_MANAGER"]);
 
   return (
-    <PanelNavProvider>
-      <div className="flex min-h-full flex-1">
-        <Sidebar sections={SECTIONS} brandHref="/admin" />
-        <div className="flex min-w-0 flex-1 flex-col">{children}</div>
-      </div>
-    </PanelNavProvider>
+    <CurrentAppUserProvider value={{ name: appUser.name, roleLabel: roleLabel(appUser.role) }}>
+      <PanelNavProvider>
+        <div className="flex min-h-full flex-1">
+          <Sidebar sections={SECTIONS} brandHref="/admin" />
+          <div className="flex min-w-0 flex-1 flex-col">{children}</div>
+        </div>
+      </PanelNavProvider>
+    </CurrentAppUserProvider>
   );
 }

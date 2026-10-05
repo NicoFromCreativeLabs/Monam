@@ -1513,13 +1513,13 @@ export const KPI_TARGETS = [
 ];
 
 export const PERMISSIONS_MATRIX = {
-  roles: ["Admin", "Gerente de clínica", "Recepción", "Esteticista", "Contador"],
+  roles: ["Admin", "Gerente de clínica", "Recepción", "Esteticista"],
   rows: [
-    { area: "Panel y Análisis", access: ["Total", "Total", "—", "—", "Solo lectura"] },
-    { area: "Caja y cobros", access: ["Total", "Total", "Cobrar", "—", "Solo lectura"] },
-    { area: "Aprobaciones", access: ["Aprobar", "Aprobar", "Solicitar", "Solicitar", "—"] },
-    { area: "Clientas (expediente)", access: ["Total", "Total", "Editar", "Ver", "—"] },
-    { area: "Configuración", access: ["Total", "Parcial", "—", "—", "—"] },
+    { area: "Panel y Análisis", access: ["Total", "Total", "—", "—"] },
+    { area: "Caja y cobros", access: ["Total", "Total", "Cobrar", "—"] },
+    { area: "Aprobaciones", access: ["Aprobar", "Aprobar", "Solicitar", "Solicitar"] },
+    { area: "Clientas (expediente)", access: ["Total", "Total", "Editar", "Ver"] },
+    { area: "Configuración", access: ["Total", "Parcial", "—", "—"] },
   ],
 };
 

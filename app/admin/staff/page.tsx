@@ -4,13 +4,13 @@ import { useState } from "react";
 import { TopBar } from "@/components/panel/TopBar";
 import { Card } from "@/components/panel/Card";
 import { Badge } from "@/components/panel/Badge";
-import { OWNER, ESTHETICIAN_OCCUPANCY, type StaffMember } from "@/lib/mock-data";
+import { ESTHETICIAN_OCCUPANCY, type StaffMember } from "@/lib/mock-data";
 import { useLocations } from "@/components/panel/LocationsContext";
 import { useStaffRoster } from "@/components/panel/StaffRosterContext";
 
 // All roles the roster can hold — Admin included, so ownership/admin rights
 // can be granted or moved between people from this same screen.
-const ROLE_OPTIONS = ["Admin", "Recepción", "Esteticista", "Gerente de clínica", "Contador"] as const;
+const ROLE_OPTIONS = ["Admin", "Recepción", "Esteticista", "Gerente de clínica"] as const;
 
 // Equipo → Personal y horarios (renamed from "Personal" per client admin
 // review). Roster, roles, location assignment (spec §6.1) plus a light
@@ -69,7 +69,7 @@ export default function AdminStaff() {
 
   return (
     <>
-      <TopBar title="Personal y horarios" userName={OWNER.name} userRole={OWNER.role} allowBothLocations />
+      <TopBar title="Personal y horarios" allowBothLocations />
       <div className="flex-1 space-y-6 px-4 py-6 min-[860px]:px-8">
         <Card
           title="Roster"
