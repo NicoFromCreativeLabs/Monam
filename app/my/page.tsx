@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { requireClient } from "@/lib/auth/dal";
+import { requireClientOrPreview } from "@/lib/auth/dal";
 import { ClientHomeView } from "@/components/panel/ClientHomeView";
 import type { UpcomingAppointmentView } from "@/components/panel/ClientAppointmentsView";
 
@@ -11,7 +11,7 @@ function formatTime(d: Date) {
 }
 
 export default async function ClientHomePage() {
-  const client = await requireClient();
+  const { client } = await requireClientOrPreview();
 
   const next = await prisma.appointment.findFirst({
     where: { clientId: client.id, startAt: { gte: new Date() }, status: { notIn: ["CANCELLED", "NO_SHOW"] } },

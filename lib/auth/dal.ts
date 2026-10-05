@@ -69,3 +69,27 @@ export async function requireClient(): Promise<Client> {
 
   return client;
 }
+
+// Lets Owner/Clinic Manager open /my from the navbar's view switcher even
+// though they're an AppUser, not a Client — same "preview, no real auth
+// change" precedent as StaffRoleContext's RoleToggle. Falls back to the
+// earliest real client record so the preview reads live data instead of a
+// mock. Any other signed-in user with no Client row still bounces to /login.
+export async function requireClientOrPreview(): Promise<{ client: Client; isPreview: boolean }> {
+  const claims = await getVerifiedClaims();
+  if (!claims) redirect("/login");
+
+  const client = await getCurrentClient();
+  if (client) return { client, isPreview: false };
+
+  const appUser = await getCurrentAppUser();
+  if (appUser && (appUser.role === "OWNER" || appUser.role === "CLINIC_MANAGER")) {
+    const preview = await prisma.client.findFirst({
+      where: { anonymizedAt: null },
+      orderBy: { createdAt: "asc" },
+    });
+    if (preview) return { client: preview, isPreview: true };
+  }
+
+  redirect("/login");
+}

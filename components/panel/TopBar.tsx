@@ -3,6 +3,7 @@
 import { usePathname } from "next/navigation";
 import { LocationSwitcher } from "./LocationSwitcher";
 import { UserMenu } from "./UserMenu";
+import { ViewSwitcher } from "./ViewSwitcher";
 import { usePanelNav } from "./PanelNavContext";
 
 export function TopBar({
@@ -36,6 +37,9 @@ export function TopBar({
       </div>
       <div className="flex items-center gap-2 min-[860px]:gap-4">
         {extra}
+        <div className="hidden min-[700px]:block">
+          <ViewSwitcher />
+        </div>
         <div className="hidden min-[700px]:block">
           <LocationSwitcher multiple={allowBothLocations} />
         </div>

@@ -4,9 +4,20 @@ import { redirect } from "next/navigation";
 import { headers } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
 import { prisma } from "@/lib/prisma";
-import { homeForRole } from "@/lib/auth/dal";
+import { getCurrentAppUser, homeForRole } from "@/lib/auth/dal";
 
 export type ActionState = { error?: string; message?: string } | undefined;
+
+// Backs the navbar's view switcher (ViewSwitcher.tsx): only Owner/Clinic
+// Manager can hop between Admin/Vendedor/Esteticista/Cliente, since every
+// panel's own gate already allows those two roles through (requireStaffRole
+// calls in lib/actions/*.ts, and requireClientOrPreview for /my) — this just
+// tells the client component whether to render the switcher at all.
+export async function getSwitchableRole(): Promise<"OWNER" | "CLINIC_MANAGER" | null> {
+  const appUser = await getCurrentAppUser();
+  if (appUser?.role === "OWNER" || appUser?.role === "CLINIC_MANAGER") return appUser.role;
+  return null;
+}
 
 export async function signIn(_prevState: ActionState, formData: FormData): Promise<ActionState> {
   const email = String(formData.get("email") ?? "").trim();

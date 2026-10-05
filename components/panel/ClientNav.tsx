@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useCurrentClient } from "./CurrentClientContext";
 import { UserMenu } from "./UserMenu";
+import { ViewSwitcher } from "./ViewSwitcher";
 import { useScrollEdgeFade } from "./useScrollEdgeFade";
 
 const LINKS = [
@@ -34,12 +35,15 @@ export function ClientNav() {
         <Link href="/my" className="font-display text-lg tracking-[0.12em] text-ciruela">
           MONÂM
         </Link>
-        <UserMenu
-          userName={client.name}
-          userRole="Cliente"
-          profileHref="/my/profile"
-          links={PROFILE_LINKS}
-        />
+        <div className="flex items-center gap-3">
+          <ViewSwitcher />
+          <UserMenu
+            userName={client.name}
+            userRole="Cliente"
+            profileHref="/my/profile"
+            links={PROFILE_LINKS}
+          />
+        </div>
       </div>
       <div className="relative">
         <nav ref={ref} className="mx-auto flex max-w-[1000px] gap-1 overflow-x-auto px-6 pb-3">

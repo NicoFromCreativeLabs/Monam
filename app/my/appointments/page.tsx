@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { requireClient } from "@/lib/auth/dal";
+import { requireClientOrPreview } from "@/lib/auth/dal";
 import {
   ClientAppointmentsView,
   type UpcomingAppointmentView,
@@ -14,7 +14,7 @@ function formatTime(d: Date) {
 }
 
 export default async function ClientAppointmentsPage() {
-  const client = await requireClient();
+  const { client } = await requireClientOrPreview();
   const now = new Date();
 
   const [upcomingRows, pastRows] = await Promise.all([
