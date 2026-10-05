@@ -6,7 +6,7 @@ import { TopBar } from "@/components/panel/TopBar";
 import { Card } from "@/components/panel/Card";
 import { NewAppointmentModal, type BookableClient } from "@/components/panel/NewAppointmentModal";
 import { useLocations } from "@/components/panel/LocationsContext";
-import { OWNER, CALENDAR_HOURS } from "@/lib/mock-data";
+import { CALENDAR_HOURS } from "@/lib/mock-data";
 import { reassignAppointmentAction } from "@/lib/actions/booking";
 
 export interface CalendarRoom {
@@ -14,6 +14,10 @@ export interface CalendarRoom {
   name: string;
 }
 export interface CalendarEsthetician {
+  id: string;
+  name: string;
+}
+export interface CalendarDevice {
   id: string;
   name: string;
 }
@@ -26,6 +30,8 @@ export interface CalendarAppointment {
   client: string;
   estheticianId: string;
   esthetician: string;
+  deviceId: string | null;
+  device: string | null;
   tier: "Targeted" | "Signature";
   canReassign: boolean;
 }
@@ -33,6 +39,7 @@ export interface LocationCalendar {
   locationName: string;
   rooms: CalendarRoom[];
   estheticians: CalendarEsthetician[];
+  devices: CalendarDevice[];
   appointments: CalendarAppointment[];
 }
 
@@ -53,23 +60,52 @@ export function AdminCalendarView({
     appointment: CalendarAppointment;
     rooms: CalendarRoom[];
     estheticians: CalendarEsthetician[];
+    devices: CalendarDevice[];
+    otherAppointments: CalendarAppointment[];
   } | null>(null);
   const [draftRoomId, setDraftRoomId] = useState("");
   const [draftEstheticianId, setDraftEstheticianId] = useState("");
+  const [draftDeviceId, setDraftDeviceId] = useState("");
   const [reassignError, setReassignError] = useState<string | null>(null);
 
-  function openReassign(apt: CalendarAppointment, rooms: CalendarRoom[], estheticians: CalendarEsthetician[]) {
+  function openReassign(apt: CalendarAppointment, cal: LocationCalendar) {
     if (!apt.canReassign) return;
-    setReassignTarget({ appointment: apt, rooms, estheticians });
+    setReassignTarget({
+      appointment: apt,
+      rooms: cal.rooms,
+      estheticians: cal.estheticians,
+      devices: cal.devices,
+      otherAppointments: cal.appointments.filter((a) => a.id !== apt.id),
+    });
     setDraftRoomId(apt.roomId);
     setDraftEstheticianId(apt.estheticianId);
+    setDraftDeviceId(apt.deviceId ?? "");
     setReassignError(null);
+  }
+
+  // A device is busy for the dropdown if some *other* appointment today
+  // overlaps this one's time window and already has it assigned — the real
+  // safety net is still the no_device_overlap EXCLUDE constraint; this is
+  // just the "device-conflict flag" spec §6.3 asks the calendar to surface
+  // before the admin even hits submit.
+  function isDeviceBusy(deviceId: string) {
+    if (!reassignTarget) return false;
+    const { appointment, otherAppointments } = reassignTarget;
+    const end = appointment.start + appointment.span;
+    return otherAppointments.some(
+      (a) => a.deviceId === deviceId && a.start < end && a.start + a.span > appointment.start,
+    );
   }
 
   function confirmReassign() {
     if (!reassignTarget) return;
     startTransition(async () => {
-      const result = await reassignAppointmentAction(reassignTarget.appointment.id, draftRoomId, draftEstheticianId);
+      const result = await reassignAppointmentAction(
+        reassignTarget.appointment.id,
+        draftRoomId,
+        draftEstheticianId,
+        draftDeviceId || null,
+      );
       if ("error" in result) {
         setReassignError(result.error);
         return;
@@ -81,7 +117,7 @@ export function AdminCalendarView({
 
   return (
     <>
-      <TopBar title="Calendario" userName={OWNER.name} userRole={OWNER.role} allowBothLocations />
+      <TopBar title="Calendario" allowBothLocations />
       <div className="flex-1 space-y-6 px-8 py-6">
         {visible.length === 0 ? (
           <p className="py-6 text-center font-body text-sm text-ciruela/50">
@@ -121,16 +157,19 @@ export function AdminCalendarView({
                               <button
                                 key={apt.id}
                                 type="button"
-                                onClick={() => openReassign(apt, cal.rooms, cal.estheticians)}
+                                onClick={() => openReassign(apt, cal)}
                                 disabled={!apt.canReassign}
                                 className={`absolute top-0 h-full rounded-lg px-2 py-1 text-left font-body text-[11px] leading-tight text-hueso ${
                                   isSignature ? "bg-ciruela" : "bg-crepe text-ciruela"
                                 } ${apt.canReassign ? "cursor-pointer hover:ring-2 hover:ring-ciruela/40" : "cursor-default"}`}
                                 style={{ left: `${left}%`, width: `${width}%` }}
-                                title={`${apt.client} · ${apt.esthetician}${apt.canReassign ? " — clic para reasignar" : ""}`}
+                                title={`${apt.client} · ${apt.esthetician}${apt.device ? ` · ${apt.device}` : ""}${apt.canReassign ? " — clic para reasignar" : ""}`}
                               >
                                 <p className="truncate font-medium">{apt.client}</p>
-                                <p className="truncate opacity-80">{apt.esthetician}</p>
+                                <p className="truncate opacity-80">
+                                  {apt.esthetician}
+                                  {apt.device ? ` · ${apt.device}` : ""}
+                                </p>
                               </button>
                             );
                           })}
@@ -197,6 +236,30 @@ export function AdminCalendarView({
                 ))}
               </select>
             </div>
+
+            {reassignTarget.devices.length > 0 && (
+              <div className="mb-3">
+                <label className="mb-1 block font-body text-xs uppercase tracking-[0.14em] text-ciruela/50">
+                  Dispositivo
+                </label>
+                <select
+                  value={draftDeviceId}
+                  onChange={(e) => setDraftDeviceId(e.target.value)}
+                  className="w-full rounded-lg border border-ciruela/20 bg-hueso px-3 py-2 font-body text-sm text-ciruela"
+                >
+                  <option value="">Ninguno</option>
+                  {reassignTarget.devices.map((d) => {
+                    const busy = isDeviceBusy(d.id);
+                    return (
+                      <option key={d.id} value={d.id} disabled={busy}>
+                        {d.name}
+                        {busy ? " (ocupado en este horario)" : ""}
+                      </option>
+                    );
+                  })}
+                </select>
+              </div>
+            )}
 
             {reassignError && (
               <p className="mb-3 rounded-lg bg-[#b3392f]/10 px-3 py-2 font-body text-xs text-[#b3392f]">{reassignError}</p>

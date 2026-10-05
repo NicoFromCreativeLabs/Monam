@@ -8,13 +8,20 @@ const DEPOSIT_AMOUNT_MXN = 500;
 
 // The client never picks a specific esthetician, room, or device (spec:
 // deliberate, so a client can't be steered to one specific esteticista who
-// might leave) — this assigns the first room+esthetician at the location
+// might leave) — this assigns the first room+esthetician (and, for a
+// Signature appointment, the shared device — spec §5.2: the LED panel is a
+// portable, single-unit resource, not tied to one room) at the location
 // with no real conflicting appointment in this window. The EXCLUDE
 // constraints on `appointments` (btree_gist, prisma/schema.prisma) are the
 // actual safety net against a race between two concurrent bookings; this
 // query is just how a free slot gets *found*, not what makes it safe.
-async function findAvailableAssignment(locationId: string, startAt: Date, endAt: Date) {
-  const [rooms, estheticians] = await Promise.all([
+async function findAvailableAssignment(
+  locationId: string,
+  startAt: Date,
+  endAt: Date,
+  tier: "Targeted" | "Signature",
+) {
+  const [rooms, estheticians, devices] = await Promise.all([
     prisma.room.findMany({ where: { locationId } }),
     prisma.appUser.findMany({
       where: {
@@ -23,6 +30,7 @@ async function findAvailableAssignment(locationId: string, startAt: Date, endAt:
         locationAssignments: { some: { locationId } },
       },
     }),
+    prisma.device.findMany({ where: { locationId } }),
   ]);
 
   const overlapping = await prisma.appointment.findMany({
@@ -32,15 +40,25 @@ async function findAvailableAssignment(locationId: string, startAt: Date, endAt:
       startAt: { lt: endAt },
       endAt: { gt: startAt },
     },
-    select: { roomId: true, estheticianId: true },
+    select: { roomId: true, estheticianId: true, deviceId: true },
   });
   const busyRooms = new Set(overlapping.map((a) => a.roomId));
   const busyEstheticians = new Set(overlapping.map((a) => a.estheticianId));
+  const busyDevices = new Set(overlapping.map((a) => a.deviceId).filter(Boolean));
 
   const room = rooms.find((r) => !busyRooms.has(r.id));
   const esthetician = estheticians.find((e) => !busyEstheticians.has(e.id));
   if (!room || !esthetician) return null;
-  return { roomId: room.id, estheticianId: esthetician.id };
+
+  // Targeted appointments don't use the shared device at all — only
+  // Signature does. If every device is busy, the appointment still can't be
+  // booked (same "no slot" outcome as a busy room/esthetician).
+  if (tier !== "Signature" || devices.length === 0) {
+    return { roomId: room.id, estheticianId: esthetician.id, deviceId: null as string | null };
+  }
+  const device = devices.find((d) => !busyDevices.has(d.id));
+  if (!device) return null;
+  return { roomId: room.id, estheticianId: esthetician.id, deviceId: device.id };
 }
 
 export interface CreateAppointmentInput {
@@ -80,7 +98,7 @@ async function insertAppointment(params: {
     ? await prisma.protocol.findUnique({ where: { name: params.protocolName } })
     : null;
 
-  const assignment = await findAvailableAssignment(location.id, startAt, endAt);
+  const assignment = await findAvailableAssignment(location.id, startAt, endAt, params.durationTier);
   if (!assignment) {
     return { error: "Ese horario ya no está disponible — elige otro." };
   }
@@ -92,6 +110,7 @@ async function insertAppointment(params: {
         locationId: location.id,
         roomId: assignment.roomId,
         estheticianId: assignment.estheticianId,
+        deviceId: assignment.deviceId ?? undefined,
         protocolId: protocol?.id,
         durationTier: params.durationTier === "Signature" ? "SIGNATURE" : "TARGETED",
         startAt,
@@ -176,13 +195,16 @@ export async function checkInAction(appointmentId: string) {
 export type ReassignAppointmentResult = { error: string } | { ok: true };
 
 // Admin calendar's "reassign/override" (spec §6.3) — moving an existing
-// appointment to a different room and/or esthetician, same time slot. The
-// EXCLUDE constraint is still what actually prevents a double-booking; a
-// caught conflict here reads the same as createAppointmentAction's.
+// appointment to a different room, esthetician, and/or (for a Signature
+// appointment) the shared device, same time slot. The EXCLUDE constraints
+// are still what actually prevent a double-booking; a caught conflict here
+// just gets attributed to whichever resource changed, so the flag on the
+// calendar reads as a device conflict rather than a generic one.
 export async function reassignAppointmentAction(
   appointmentId: string,
   roomId: string,
   estheticianId: string,
+  deviceId: string | null,
 ): Promise<ReassignAppointmentResult> {
   await requireStaffRole(["FRONT_DESK", "OWNER", "CLINIC_MANAGER"]);
 
@@ -195,9 +217,13 @@ export async function reassignAppointmentAction(
   try {
     await prisma.appointment.update({
       where: { id: appointmentId },
-      data: { roomId, estheticianId },
+      data: { roomId, estheticianId, deviceId },
     });
-  } catch {
+  } catch (e) {
+    const message = e instanceof Error ? e.message : "";
+    if (message.includes("no_device_overlap")) {
+      return { error: "Ese dispositivo ya está en uso en ese horario — elige otro o deja sin dispositivo." };
+    }
     return { error: "Ese horario ya no está disponible en la sala o con la esteticista elegida." };
   }
 

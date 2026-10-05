@@ -22,6 +22,8 @@ export interface TodayAppointmentView {
   room: string;
   estheticianId: string;
   esthetician: string;
+  deviceId: string | null;
+  device: string | null;
   status: string;
   statusRaw: string;
   flags: string[];
@@ -54,6 +56,7 @@ export async function getTodayAppointments(locationId: string): Promise<TodayApp
       client: { include: { skinId: true } },
       room: true,
       esthetician: true,
+      device: true,
     },
     orderBy: { startAt: "asc" },
   });
@@ -90,6 +93,8 @@ export async function getTodayAppointments(locationId: string): Promise<TodayApp
       room: a.room.name,
       estheticianId: a.estheticianId,
       esthetician: a.esthetician.name,
+      deviceId: a.deviceId,
+      device: a.device?.name ?? null,
       status: STATUS_LABEL_ES[a.status] ?? a.status,
       statusRaw: a.status,
       flags,

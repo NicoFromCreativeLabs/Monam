@@ -27,6 +27,9 @@ export default async function AdminCalendar() {
       });
       const estheticians = estheticianRows.map((e) => ({ id: e.id, name: e.name }));
 
+      const deviceRows = await prisma.device.findMany({ where: { locationId: location.id }, orderBy: { name: "asc" } });
+      const devices = deviceRows.map((d) => ({ id: d.id, name: d.name }));
+
       const todayAppointments = await getTodayAppointments(location.id);
       const appointments = todayAppointments.map((a) => {
         const [h, m] = a.time.split(":").map(Number);
@@ -41,11 +44,13 @@ export default async function AdminCalendar() {
           client: a.clientName,
           estheticianId: a.estheticianId,
           esthetician: a.esthetician,
+          deviceId: a.deviceId,
+          device: a.device,
           tier: a.tier,
           canReassign: a.statusRaw !== "CANCELLED" && a.statusRaw !== "COMPLETED",
         };
       });
-      return { locationName: location.name, rooms, estheticians, appointments };
+      return { locationName: location.name, rooms, estheticians, devices, appointments };
     }),
   );
 
