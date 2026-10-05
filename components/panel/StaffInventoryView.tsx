@@ -33,7 +33,7 @@ export function StaffInventoryView({
 
   return (
     <>
-      <TopBar title="Inventario" userName={identity.name} userRole={identity.role} />
+      <TopBar title="Inventario" />
       <div className="flex-1 space-y-6 px-8 py-6">
         <InventoryCard
           title={`Piso — ${identity.location}`}

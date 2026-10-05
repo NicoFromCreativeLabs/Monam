@@ -79,7 +79,7 @@ export function StaffTreatmentRecordView({ client }: { client: TreatmentClient |
   if (!client) {
     return (
       <>
-        <TopBar title="Registro de tratamiento" userName={identity.name} userRole={identity.role} />
+        <TopBar title="Registro de tratamiento" />
         <div className="flex-1 px-8 py-6">
           <div className="mx-auto max-w-xl">
             <Card title="Sin cita asignada">
@@ -95,7 +95,7 @@ export function StaffTreatmentRecordView({ client }: { client: TreatmentClient |
 
   return (
     <>
-      <TopBar title="Registro de tratamiento" userName={identity.name} userRole={identity.role} />
+      <TopBar title="Registro de tratamiento" />
       <div className="flex-1 px-8 py-6">
         <div className="mx-auto max-w-xl space-y-4">
           {client.allergies.length > 0 && (

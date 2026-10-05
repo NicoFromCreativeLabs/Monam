@@ -4,7 +4,7 @@ import { useState } from "react";
 import { TopBar } from "@/components/panel/TopBar";
 import { Card } from "@/components/panel/Card";
 import { Badge } from "@/components/panel/Badge";
-import { OWNER, PERMISSIONS_MATRIX } from "@/lib/mock-data";
+import { PERMISSIONS_MATRIX } from "@/lib/mock-data";
 import {
   useLocations,
   type LocationRecord,
@@ -227,7 +227,7 @@ export function AdminSettingsView({
 
   return (
     <>
-      <TopBar title="Configuración" userName={OWNER.name} userRole={OWNER.role} allowBothLocations />
+      <TopBar title="Configuración" allowBothLocations />
       <div className="flex-1 space-y-6 px-8 py-6">
         <Card
           title="Ubicaciones"

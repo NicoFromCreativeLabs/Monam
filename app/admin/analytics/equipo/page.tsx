@@ -8,7 +8,7 @@ import { KpiCard } from "@/components/panel/KpiCard";
 import { useLocations } from "@/components/panel/LocationsContext";
 import { usePeriod } from "@/components/panel/PeriodContext";
 import { useCompare } from "@/components/panel/CompareContext";
-import { OWNER, ANALYTICS_EQUIPO, COMMISSION_ENTRIES } from "@/lib/mock-data";
+import { ANALYTICS_EQUIPO, COMMISSION_ENTRIES } from "@/lib/mock-data";
 import { COMPARE_TO_LABEL } from "@/lib/analytics";
 import { getReportingSnapshotAction } from "@/lib/actions/reporting";
 import { formatRealDelta } from "@/lib/pnl-math";
@@ -44,7 +44,7 @@ export default function AnalyticsEquipo() {
 
   return (
     <>
-      <TopBar title="Análisis · Equipo" userName={OWNER.name} userRole={OWNER.role} allowBothLocations />
+      <TopBar title="Análisis · Equipo" allowBothLocations />
       <GlobalFilterBar />
       <div className="flex-1 space-y-6 px-4 py-6 min-[860px]:px-8">
         <KpiCard

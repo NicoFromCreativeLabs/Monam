@@ -8,7 +8,7 @@ import { KpiCard } from "@/components/panel/KpiCard";
 import { useLocations } from "@/components/panel/LocationsContext";
 import { usePeriod } from "@/components/panel/PeriodContext";
 import { useCompare } from "@/components/panel/CompareContext";
-import { OWNER, ANALYTICS_CLIENTAS, CLIENT_MIX_BY_LOCATION } from "@/lib/mock-data";
+import { ANALYTICS_CLIENTAS, CLIENT_MIX_BY_LOCATION } from "@/lib/mock-data";
 import { getReportingSnapshotAction } from "@/lib/actions/reporting";
 
 // Análisis → Clientas. Nivel 1 + Nivel 2 per spec. "% Skin ID completo" is
@@ -42,7 +42,7 @@ export default function AnalyticsClientas() {
 
   return (
     <>
-      <TopBar title="Análisis · Clientas" userName={OWNER.name} userRole={OWNER.role} allowBothLocations />
+      <TopBar title="Análisis · Clientas" allowBothLocations />
       <GlobalFilterBar />
       <div className="flex-1 space-y-6 px-4 py-6 min-[860px]:px-8">
         <KpiCard

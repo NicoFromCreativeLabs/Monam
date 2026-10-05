@@ -1,7 +1,6 @@
 import { TopBar } from "@/components/panel/TopBar";
 import { AdminClientsTable, type AdminClientRow } from "@/components/panel/AdminClientsTable";
 import { prisma } from "@/lib/prisma";
-import { OWNER } from "@/lib/mock-data";
 
 // Full-text search across the shared client database (spec §6.3).
 // No bulk export control exists for any role but Owner — see Settings/Audit
@@ -28,7 +27,7 @@ export default async function AdminClients() {
 
   return (
     <>
-      <TopBar title="Clientes" userName={OWNER.name} userRole={OWNER.role} allowBothLocations />
+      <TopBar title="Clientes" allowBothLocations />
       <div className="flex-1 px-8 py-6">
         <AdminClientsTable clients={rows} />
       </div>

@@ -8,7 +8,6 @@ import { Card, StatTile } from "@/components/panel/Card";
 import { Badge } from "@/components/panel/Badge";
 import { downloadCsv } from "@/lib/csv";
 import { useLocations } from "@/components/panel/LocationsContext";
-import { OWNER } from "@/lib/mock-data";
 import {
   receiveInventoryAction,
   adjustInventoryAction,
@@ -320,7 +319,7 @@ export function AdminInventoryView({
 
   return (
     <>
-      <TopBar title="Inventario" userName={OWNER.name} userRole={OWNER.role} allowBothLocations />
+      <TopBar title="Inventario" allowBothLocations />
       <div className="flex-1 space-y-6 px-8 py-6">
         <div className="grid grid-cols-2 gap-4 min-[1100px]:grid-cols-5">
           <StatTile label="SKUs — Piso" value={`${retail.length}`} sub={`${retailLow} bajo par`} />

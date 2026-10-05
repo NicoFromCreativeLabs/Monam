@@ -21,14 +21,10 @@ export interface CashSessionInfo {
 }
 
 export function AdminSalesView({
-  ownerName,
-  ownerRole,
   locationName,
   session,
   paymentMethodBreakdown,
 }: {
-  ownerName: string;
-  ownerRole: string;
   locationName: string;
   session: CashSessionInfo | null;
   paymentMethodBreakdown: PaymentMethodRow[];
@@ -60,7 +56,7 @@ export function AdminSalesView({
 
   return (
     <>
-      <TopBar title="Caja y cobros" userName={ownerName} userRole={ownerRole} allowBothLocations />
+      <TopBar title="Caja y cobros" allowBothLocations />
       <div className="flex-1 space-y-6 px-4 py-6 min-[860px]:px-8">
         <Card
           title={`Corte de caja — ${locationName}`}

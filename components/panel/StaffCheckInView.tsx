@@ -4,7 +4,6 @@ import { useState, useTransition } from "react";
 import { TopBar } from "@/components/panel/TopBar";
 import { Card } from "@/components/panel/Card";
 import { Badge } from "@/components/panel/Badge";
-import { staffIdentity, useStaffRole } from "@/components/panel/StaffRoleContext";
 import { NewAppointmentModal, type BookableClient } from "@/components/panel/NewAppointmentModal";
 import { checkInAction } from "@/lib/actions/booking";
 import type { TodayAppointmentView } from "@/lib/appointments";
@@ -26,8 +25,6 @@ export function StaffCheckInView({
   queue: TodayAppointmentView[];
   clients: BookableClient[];
 }) {
-  const { role } = useStaffRole();
-  const identity = staffIdentity(role);
   const [pendingId, setPendingId] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
@@ -41,7 +38,7 @@ export function StaffCheckInView({
 
   return (
     <>
-      <TopBar title="Check-in" userName={identity.name} userRole={identity.role} />
+      <TopBar title="Check-in" />
       <div className="flex-1 px-8 py-6">
         <div className="mb-4 flex justify-end">
           <NewAppointmentModal locationName="Roma Norte" clients={clients} />

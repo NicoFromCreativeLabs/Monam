@@ -2,7 +2,6 @@ import { notFound } from "next/navigation";
 import { TopBar } from "@/components/panel/TopBar";
 import { AdminClientDetailForm, type AdminClientDetailData } from "@/components/panel/AdminClientDetailForm";
 import { prisma } from "@/lib/prisma";
-import { OWNER } from "@/lib/mock-data";
 
 const CONSENT_TYPE_LABEL: Record<string, string> = {
   TREATMENT: "Tratamiento y responsabilidad",
@@ -91,7 +90,7 @@ export default async function AdminClientDetail({
 
   return (
     <>
-      <TopBar title={client.name} userName={OWNER.name} userRole={OWNER.role} allowBothLocations />
+      <TopBar title={client.name} allowBothLocations />
       <AdminClientDetailForm data={data} />
     </>
   );

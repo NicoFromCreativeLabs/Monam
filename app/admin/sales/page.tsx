@@ -1,6 +1,5 @@
 import { prisma } from "@/lib/prisma";
 import { AdminSalesView, type PaymentMethodRow } from "@/components/panel/AdminSalesView";
-import { OWNER } from "@/lib/mock-data";
 
 const PAYMENT_LABEL: Record<string, string> = { CASH: "Efectivo", CARD: "Tarjeta", SPEI: "SPEI" };
 
@@ -51,8 +50,6 @@ export default async function AdminSales() {
 
   return (
     <AdminSalesView
-      ownerName={OWNER.name}
-      ownerRole={OWNER.role}
       locationName="Roma Norte"
       session={
         session

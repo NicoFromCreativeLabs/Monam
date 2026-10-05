@@ -4,7 +4,7 @@ import Link from "next/link";
 import { TopBar } from "@/components/panel/TopBar";
 import { Card } from "@/components/panel/Card";
 import { RoleToggle } from "@/components/panel/RoleToggle";
-import { staffIdentity, useStaffRole } from "@/components/panel/StaffRoleContext";
+import { useStaffRole } from "@/components/panel/StaffRoleContext";
 import { LOW_STOCK_ALERTS } from "@/lib/mock-data";
 import type { TodayAppointmentView, PendingCheckoutView } from "@/lib/appointments";
 
@@ -39,11 +39,10 @@ export function StaffTodayView({
   pendingCheckouts: PendingCheckoutView[];
 }) {
   const { role } = useStaffRole();
-  const identity = staffIdentity(role);
 
   return (
     <>
-      <TopBar title="Hoy" userName={identity.name} userRole={identity.role} extra={<RoleToggle />} />
+      <TopBar title="Hoy" extra={<RoleToggle />} />
       <div className="flex-1 px-8 py-6">
         {role === "Front Desk" ? (
           <FrontDeskToday agenda={agenda} pending={pendingCheckouts} />

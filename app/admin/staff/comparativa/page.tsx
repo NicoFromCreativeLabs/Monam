@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import { TopBar } from "@/components/panel/TopBar";
 import { Card } from "@/components/panel/Card";
-import { OWNER, ESTHETICIAN_OCCUPANCY, COMMISSION_ENTRIES } from "@/lib/mock-data";
+import { ESTHETICIAN_OCCUPANCY, COMMISSION_ENTRIES } from "@/lib/mock-data";
 import { useStaffRoster } from "@/components/panel/StaffRosterContext";
 
 type SortKey = "name" | "occupancyPct" | "service" | "retail" | "total" | "commissionToSalaryPct";
@@ -94,7 +94,7 @@ export default function StaffComparativa() {
 
   return (
     <>
-      <TopBar title="Equipo · Comparativa" userName={OWNER.name} userRole={OWNER.role} allowBothLocations />
+      <TopBar title="Equipo · Comparativa" allowBothLocations />
       <div className="flex-1 space-y-6 px-8 py-6">
         <Card title="Comparar métricas del equipo — mes en curso">
           <div className="overflow-x-auto">

@@ -9,7 +9,7 @@ import { KpiCard } from "@/components/panel/KpiCard";
 import { useLocations } from "@/components/panel/LocationsContext";
 import { usePeriod } from "@/components/panel/PeriodContext";
 import { useCompare } from "@/components/panel/CompareContext";
-import { OWNER, PANEL_KPIS, PANEL_TODAY_VS_LASTWEEK } from "@/lib/mock-data";
+import { PANEL_KPIS, PANEL_TODAY_VS_LASTWEEK } from "@/lib/mock-data";
 import { getReportingSnapshotAction, type ReportingSnapshot } from "@/lib/actions/reporting";
 import { decideApprovalAction } from "@/lib/actions/commerce";
 import { ingresoNetoFromBreakdown, ebitda } from "@/lib/pnl-math";
@@ -204,7 +204,7 @@ export function AdminPanelView({
 
   return (
     <>
-      <TopBar title="Panel" userName={OWNER.name} userRole={OWNER.role} allowBothLocations />
+      <TopBar title="Panel" allowBothLocations />
       <GlobalFilterBar />
       <div className="flex-1 space-y-10 px-4 py-6 min-[860px]:px-8">
         <section>

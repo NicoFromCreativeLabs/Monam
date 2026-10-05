@@ -9,7 +9,6 @@ import { useLocations } from "@/components/panel/LocationsContext";
 import { usePeriod, type Period } from "@/components/panel/PeriodContext";
 import { useCompare } from "@/components/panel/CompareContext";
 import { downloadCsv } from "@/lib/csv";
-import { OWNER } from "@/lib/mock-data";
 import { COMPARE_TO_LABEL } from "@/lib/analytics";
 import { getReportingSnapshotAction, type ReportingSnapshot } from "@/lib/actions/reporting";
 import { ventasBrutas, ingresoNetoFromBreakdown, utilidadBruta, ebitda, type PnlBreakdown } from "@/lib/pnl-math";
@@ -182,7 +181,7 @@ export function AdminPnlView({ initialSnapshot }: { initialSnapshot: ReportingSn
 
   return (
     <>
-      <TopBar title="P&L" userName={OWNER.name} userRole={OWNER.role} allowBothLocations />
+      <TopBar title="P&L" allowBothLocations />
       <GlobalFilterBar />
       <div className="flex-1 space-y-4 px-4 py-6 min-[860px]:px-8">
         <div className="flex flex-wrap items-center justify-between gap-3">

@@ -2,7 +2,6 @@
 
 import { TopBar } from "@/components/panel/TopBar";
 import { Card } from "@/components/panel/Card";
-import { staffIdentity, useStaffRole } from "@/components/panel/StaffRoleContext";
 import { MY_SCHEDULE_WEEK, TODAY_APPOINTMENTS } from "@/lib/mock-data";
 
 const DAY_ABBR_ES = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"];
@@ -36,14 +35,12 @@ function buildCurrentWeek() {
 // Own schedule only — Front Desk sees their location's schedule, Esthetician
 // sees only their own (spec §7.4).
 export default function StaffSchedule() {
-  const { role } = useStaffRole();
-  const identity = staffIdentity(role);
   const scheduleWeek = buildCurrentWeek();
   const max = Math.max(...scheduleWeek.map((d) => d.appointments));
 
   return (
     <>
-      <TopBar title="Mi horario" userName={identity.name} userRole={identity.role} />
+      <TopBar title="Mi horario" />
       <div className="flex-1 space-y-6 px-8 py-6">
         <Card title="Esta semana">
           <div className="flex items-end gap-3">

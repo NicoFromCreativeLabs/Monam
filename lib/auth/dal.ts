@@ -43,6 +43,19 @@ export function homeForRole(role: Role): string {
   return role === "FRONT_DESK" || role === "ESTHETICIAN" ? "/staff" : "/admin";
 }
 
+// The one Spanish label per Role, shared by the navbar identity (TopBar via
+// CurrentAppUserContext) and anywhere else a role needs to read as a title
+// instead of the enum constant.
+const ROLE_LABEL: Record<Role, string> = {
+  OWNER: "Admin",
+  CLINIC_MANAGER: "Gerente de clínica",
+  FRONT_DESK: "Recepción",
+  ESTHETICIAN: "Esteticista",
+};
+export function roleLabel(role: Role): string {
+  return ROLE_LABEL[role];
+}
+
 // Call at the top of a panel layout/page/Server Action. Redirects to
 // /login if there's no session, or to the caller's own correct panel if
 // they're signed in but hold the wrong role — never silently renders

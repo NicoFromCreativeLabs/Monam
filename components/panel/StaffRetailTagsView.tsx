@@ -3,7 +3,6 @@
 import { useState, useTransition } from "react";
 import { TopBar } from "@/components/panel/TopBar";
 import { Card } from "@/components/panel/Card";
-import { staffIdentity, useStaffRole } from "@/components/panel/StaffRoleContext";
 import { saveRetailTagsAction } from "@/lib/actions/treatment";
 
 export interface RetailCatalogItem {
@@ -30,8 +29,6 @@ export function StaffRetailTagsView({
   catalog: RetailCatalogItem[];
   initialSelected: string[];
 }) {
-  const { role } = useStaffRole();
-  const identity = staffIdentity(role);
   const [selected, setSelected] = useState<string[]>(initialSelected);
   const [isPending, startTransition] = useTransition();
   const [saved, setSaved] = useState(false);
@@ -55,7 +52,7 @@ export function StaffRetailTagsView({
 
   return (
     <>
-      <TopBar title="Recomendaciones de compra" userName={identity.name} userRole={identity.role} />
+      <TopBar title="Recomendaciones de compra" />
       <div className="flex-1 px-8 py-6">
         <div className="mx-auto max-w-xl">
           {!client ? (

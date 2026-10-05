@@ -5,23 +5,21 @@ import { LocationSwitcher } from "./LocationSwitcher";
 import { UserMenu } from "./UserMenu";
 import { ViewSwitcher } from "./ViewSwitcher";
 import { usePanelNav } from "./PanelNavContext";
+import { useCurrentAppUser } from "./CurrentAppUserContext";
 
 export function TopBar({
   title,
-  userName,
-  userRole,
   allowBothLocations = false,
   extra,
 }: {
   title: string;
-  userName: string;
-  userRole: string;
   allowBothLocations?: boolean;
   extra?: React.ReactNode;
 }) {
   const { toggle } = usePanelNav();
   const pathname = usePathname();
   const profileHref = `/${pathname.split("/")[1]}/profile`;
+  const currentUser = useCurrentAppUser();
 
   return (
     <header className="flex items-center justify-between gap-3 border-b border-ciruela/10 bg-hueso px-4 py-4 min-[860px]:px-8 min-[860px]:py-5">
@@ -43,7 +41,7 @@ export function TopBar({
         <div className="hidden min-[700px]:block">
           <LocationSwitcher multiple={allowBothLocations} />
         </div>
-        <UserMenu userName={userName} userRole={userRole} profileHref={profileHref} />
+        <UserMenu userName={currentUser.name} userRole={currentUser.roleLabel} profileHref={profileHref} />
       </div>
     </header>
   );

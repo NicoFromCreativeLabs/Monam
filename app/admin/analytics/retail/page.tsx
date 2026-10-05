@@ -8,7 +8,7 @@ import { KpiCard } from "@/components/panel/KpiCard";
 import { useLocations } from "@/components/panel/LocationsContext";
 import { usePeriod } from "@/components/panel/PeriodContext";
 import { useCompare } from "@/components/panel/CompareContext";
-import { OWNER, ANALYTICS_RETAIL, RETAIL_INVENTORY } from "@/lib/mock-data";
+import { ANALYTICS_RETAIL, RETAIL_INVENTORY } from "@/lib/mock-data";
 import { COMPARE_TO_LABEL } from "@/lib/analytics";
 import { getReportingSnapshotAction, type ReportingSnapshot } from "@/lib/actions/reporting";
 import { ingresoNetoFromBreakdown, formatRealDelta } from "@/lib/pnl-math";
@@ -59,7 +59,7 @@ export default function AnalyticsRetail() {
 
   return (
     <>
-      <TopBar title="Análisis · Retail" userName={OWNER.name} userRole={OWNER.role} allowBothLocations />
+      <TopBar title="Análisis · Retail" allowBothLocations />
       <GlobalFilterBar />
       <div className="flex-1 space-y-6 px-4 py-6 min-[860px]:px-8">
         <KpiCard

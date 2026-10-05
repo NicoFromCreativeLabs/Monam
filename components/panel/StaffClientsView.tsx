@@ -5,7 +5,7 @@ import Link from "next/link";
 import { Card } from "@/components/panel/Card";
 import { TopBar } from "@/components/panel/TopBar";
 import { RoleToggle } from "@/components/panel/RoleToggle";
-import { staffIdentity, useStaffRole } from "@/components/panel/StaffRoleContext";
+import { useStaffRole } from "@/components/panel/StaffRoleContext";
 
 export interface StaffClientListing {
   id: string;
@@ -43,7 +43,6 @@ export function StaffClientsView({
   detail: StaffClientDetail | null;
 }) {
   const { role } = useStaffRole();
-  const identity = staffIdentity(role);
   const [query, setQuery] = useState("");
 
   if (!detail) {
@@ -54,8 +53,6 @@ export function StaffClientsView({
       <>
         <TopBar
           title="Perfil del cliente"
-          userName={identity.name}
-          userRole={identity.role}
           extra={<RoleToggle />}
         />
         <div className="flex-1 px-8 py-6">
@@ -100,8 +97,6 @@ export function StaffClientsView({
     <>
       <TopBar
         title="Perfil del cliente"
-        userName={identity.name}
-        userRole={identity.role}
         extra={<RoleToggle />}
       />
       <div className="flex-1 px-8 py-6">

@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import { TopBar } from "@/components/panel/TopBar";
 import { Card } from "@/components/panel/Card";
 import { Badge } from "@/components/panel/Badge";
-import { OWNER } from "@/lib/mock-data";
 import { decideApprovalAction, resolveAnomalyAction } from "@/lib/actions/commerce";
 
 export interface ApprovalRow {
@@ -80,7 +79,7 @@ export function AdminControlView({
 
   return (
     <>
-      <TopBar title="Control" userName={OWNER.name} userRole={OWNER.role} allowBothLocations />
+      <TopBar title="Control" allowBothLocations />
       <div className="flex-1 space-y-6 px-4 py-6 min-[860px]:px-8">
         <div className="flex flex-wrap gap-2 border-b border-ciruela/10 pb-3">
           {TABS.map((t) => (

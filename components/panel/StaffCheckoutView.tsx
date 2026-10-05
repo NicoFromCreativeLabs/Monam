@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { TopBar } from "@/components/panel/TopBar";
 import { Card } from "@/components/panel/Card";
-import { staffIdentity, useStaffRole } from "@/components/panel/StaffRoleContext";
 import { CFDI_ENABLED } from "@/lib/feature-flags";
 import { createSaleAction, flagRetailRemovalAction } from "@/lib/actions/commerce";
 
@@ -52,8 +51,6 @@ export function StaffCheckoutView({
   catalog: CheckoutCatalogItem[];
   locationName: string;
 }) {
-  const { role } = useStaffRole();
-  const identity = staffIdentity(role);
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
 
@@ -187,7 +184,7 @@ export function StaffCheckoutView({
   if (charged && chargedSummary) {
     return (
       <>
-        <TopBar title="Cobro / POS" userName={identity.name} userRole={identity.role} />
+        <TopBar title="Cobro / POS" />
         <div className="flex-1 px-8 py-6">
           <div className="mx-auto max-w-lg">
             <Card title="Cobro completado">
@@ -222,7 +219,7 @@ export function StaffCheckoutView({
 
   return (
     <>
-      <TopBar title="Cobro / POS" userName={identity.name} userRole={identity.role} />
+      <TopBar title="Cobro / POS" />
       <div className="flex-1 px-8 py-6">
         <div className="mx-auto max-w-lg">
           {isRetailOnly && (

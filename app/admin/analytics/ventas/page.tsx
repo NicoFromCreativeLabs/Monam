@@ -9,7 +9,6 @@ import { useLocations } from "@/components/panel/LocationsContext";
 import { usePeriod } from "@/components/panel/PeriodContext";
 import { useCompare } from "@/components/panel/CompareContext";
 import {
-  OWNER,
   ANALYTICS_VENTAS,
   REVENUE_BY_CATEGORY_BY_LOCATION,
   WEEKLY_REVENUE_TREND_BY_LOCATION,
@@ -96,7 +95,7 @@ export default function AnalyticsVentas() {
 
   return (
     <>
-      <TopBar title="Análisis · Ventas" userName={OWNER.name} userRole={OWNER.role} allowBothLocations />
+      <TopBar title="Análisis · Ventas" allowBothLocations />
       <GlobalFilterBar />
       <div className="flex-1 space-y-6 px-4 py-6 min-[860px]:px-8">
         <KpiCard
