@@ -19,6 +19,17 @@ jobs:
 
       - run: npm ci
 
+      # tsc needs two generated-but-gitignored pieces that only the Build
+      # step below would otherwise produce: the Prisma client (lib/generated)
+      # and Next's own route/layout param types (.next/types, e.g.
+      # LayoutProps<"/...">). Without them every file touching either
+      # surfaces as a wall of "implicitly has an 'any' type" errors instead
+      # of the real problem — confirmed by reproducing this exact failure
+      # locally with both deleted. `next typegen` does the latter without
+      # needing a database connection, unlike a full `next build`.
+      - name: Generate Prisma client and Next route types
+        run: npx prisma generate && npx next typegen
+
       - name: Type-check
         run: npx tsc --noEmit
 
