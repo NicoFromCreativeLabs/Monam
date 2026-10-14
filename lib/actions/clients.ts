@@ -2,12 +2,16 @@
 
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
-import { requireClient, requireStaffRole } from "@/lib/auth/dal";
+import { requireClientOrPreview, requireStaffRole } from "@/lib/auth/dal";
 
 // ---------------------------------------------------------------------------
 // Client self-service (/my/skin-id, /my/preferences) — every action derives
-// the target row from requireClient()'s own id, never from a caller-supplied
-// clientId, so a client can only ever read/write their own record.
+// the target row from requireClientOrPreview()'s own id, never from a
+// caller-supplied clientId, so a client can only ever read/write their own
+// record. requireClientOrPreview (not the strict requireClient) so an Owner/
+// Clinic Manager "viendo como" an Admin-side preview can actually submit
+// these forms instead of the page rendering fine and every save redirecting
+// to /login — same precedent the /my/* pages themselves already use.
 // ---------------------------------------------------------------------------
 
 export interface SkinIdInput {
@@ -20,7 +24,7 @@ export interface SkinIdInput {
 }
 
 export async function updateOwnSkinIdAction(data: SkinIdInput) {
-  const client = await requireClient();
+  const { client } = await requireClientOrPreview();
 
   await prisma.clientSkinId.upsert({
     where: { clientId: client.id },
@@ -55,7 +59,7 @@ export interface PreferencesInput {
 }
 
 export async function updateOwnPreferencesAction(data: PreferencesInput) {
-  const client = await requireClient();
+  const { client } = await requireClientOrPreview();
 
   await prisma.clientPreference.upsert({
     where: { clientId: client.id },

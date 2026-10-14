@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
-import { requireClient, requireStaffRole } from "@/lib/auth/dal";
+import { requireClientOrPreview, requireStaffRole } from "@/lib/auth/dal";
 import {
   insertAppointment,
   DEPOSIT_AMOUNT_MXN,
@@ -15,7 +15,7 @@ export type { CreateAppointmentInput, CreateAppointmentResult };
 export async function createAppointmentAction(
   input: CreateAppointmentInput,
 ): Promise<CreateAppointmentResult> {
-  const client = await requireClient();
+  const { client } = await requireClientOrPreview();
 
   let depositId: string | undefined;
   if (input.durationTier === "Signature") {
@@ -52,7 +52,7 @@ export async function createManualAppointmentAction(
 // Client self-service cancel — also used by "Reagendar" (cancel, then the
 // client rebooks from scratch via /my/book, same as before this phase).
 export async function cancelAppointmentAction(appointmentId: string) {
-  const client = await requireClient();
+  const { client } = await requireClientOrPreview();
   const appointment = await prisma.appointment.findUnique({ where: { id: appointmentId } });
   if (!appointment || appointment.clientId !== client.id) {
     throw new Error("No se encontró la cita.");
