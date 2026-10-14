@@ -59,7 +59,7 @@ export interface CreateSaleInput {
   locationName: string;
   retailItems: RetailLineInput[];
   reAddedAfterRemovalSkus: string[]; // re-added after the recommendation was removed — commission goes to whoever closes the sale, not the original tagger
-  paymentMethod: "CASH" | "CARD" | "SPEI";
+  paymentMethod: "CASH" | "CARD" | "ONLINE";
 }
 
 export type CreateSaleResult = { error: string } | { saleId: string; totalMxn: number };
@@ -521,6 +521,73 @@ export async function receiveInventoryAction(input: ReceiveInventoryInput) {
 // a mis-categorized product (spec §5.3: ledgers are never one shared stock
 // line) just flips that field; the same InventoryItem row (qty, par, cost…)
 // carries over untouched, it isn't a transfer between two stock lines.
+export interface ImportInventoryRow {
+  sku: string;
+  product: string;
+  ledger: LedgerName;
+  locationName: string;
+  qty: number;
+  par: number;
+}
+
+// Bulk "actualizar todo el inventario" from the round-trip CSV (same shape
+// as exportTodos in AdminInventoryView): SKU, Producto, Ledger, Ubicacion,
+// Cantidad, Par. Unlike receiveInventoryAction (a restock, which adds to
+// qty), this SETS qty/par to the file's values — a recount overwrites the
+// count, it doesn't add to it. Logs one ADJUSTMENT transaction per row that
+// actually changed qty, so Anomalías/Control still sees real deltas.
+export async function importInventoryCsvAction(rows: ImportInventoryRow[]) {
+  await requireStaffRole(FRONT_DESK_ROLES);
+
+  const results = { updated: 0, created: 0, skipped: 0 };
+
+  for (const row of rows) {
+    if (!row.sku || !row.product || !row.locationName) {
+      results.skipped++;
+      continue;
+    }
+    const location = await prisma.location.findFirst({ where: { name: row.locationName } });
+    if (!location) {
+      results.skipped++;
+      continue;
+    }
+
+    const product = await prisma.product.upsert({
+      where: { sku: row.sku },
+      create: { sku: row.sku, name: row.product, ledger: row.ledger },
+      update: { name: row.product },
+    });
+
+    const existing = await prisma.inventoryItem.findUnique({
+      where: { productId_locationId: { productId: product.id, locationId: location.id } },
+    });
+
+    const item = await prisma.inventoryItem.upsert({
+      where: { productId_locationId: { productId: product.id, locationId: location.id } },
+      create: { productId: product.id, locationId: location.id, qty: row.qty, par: row.par },
+      update: { qty: row.qty, par: row.par },
+    });
+
+    const qtyDelta = row.qty - (existing?.qty ?? 0);
+    if (qtyDelta !== 0) {
+      await prisma.inventoryTransaction.create({
+        data: {
+          inventoryItemId: item.id,
+          type: "ADJUSTMENT",
+          qtyDelta,
+          reason: "Importación CSV — actualización de inventario",
+        },
+      });
+    }
+    existing ? results.updated++ : results.created++;
+  }
+
+  revalidatePath("/admin/inventory");
+  revalidatePath("/staff/inventory");
+  revalidatePath("/staff/checkout");
+  return { ok: true, ...results };
+}
+
 export async function moveInventoryLedgerAction(inventoryItemId: string, toLedger: LedgerName) {
   await requireStaffRole(FRONT_DESK_ROLES);
   const item = await prisma.inventoryItem.findUnique({ where: { id: inventoryItemId } });

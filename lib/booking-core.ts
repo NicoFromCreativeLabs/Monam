@@ -12,6 +12,30 @@ import { prisma } from "@/lib/prisma";
 
 export const DEPOSIT_AMOUNT_MXN = 500;
 
+// Admin-configurable in Settings → Reservas (lib/actions/settings.ts,
+// components/panel/AdminSettingsView.tsx). Both fold into the appointment's
+// own endAt — the EXCLUDE constraints on `appointments` key off that column,
+// so padding it is what actually blocks the next booking from landing
+// during cabin turnover, not a separate "buffer" row anyone could forget to
+// check.
+const DEFAULT_CLEANUP_BUFFER_MIN = 20;
+const DEFAULT_ADDON_SAFETY_BUFFER_MIN = 10;
+
+export async function getBookingBuffers(): Promise<{
+  cleanupBufferMin: number;
+  addonSafetyBufferMin: number;
+}> {
+  const rows = await prisma.setting.findMany({
+    where: { key: { in: ["booking.cleanupBufferMinutes", "booking.addonBufferMinutes"] } },
+  });
+  const cleanup = rows.find((r) => r.key === "booking.cleanupBufferMinutes");
+  const addon = rows.find((r) => r.key === "booking.addonBufferMinutes");
+  return {
+    cleanupBufferMin: typeof cleanup?.value === "number" ? cleanup.value : DEFAULT_CLEANUP_BUFFER_MIN,
+    addonSafetyBufferMin: typeof addon?.value === "number" ? addon.value : DEFAULT_ADDON_SAFETY_BUFFER_MIN,
+  };
+}
+
 // The client never picks a specific esthetician, room, or device (spec:
 // deliberate, so a client can't be steered to one specific esteticista who
 // might leave) — this assigns the first room+esthetician (and, for a
@@ -73,6 +97,7 @@ export interface CreateAppointmentInput {
   time: string; // HH:MM
   durationTier: "Targeted" | "Signature";
   protocolName: string | null; // the chosen Signature facial; null for Targeted (assigned on arrival)
+  addOnIds?: string[]; // add-ons picked during booking — each one's extraMinutes pads the real slot
 }
 
 export type CreateAppointmentResult = { error: string } | { appointmentId: string };
@@ -88,20 +113,32 @@ export async function insertAppointment(params: {
   time: string;
   durationTier: "Targeted" | "Signature";
   protocolName: string | null;
+  addOnIds?: string[];
   depositId?: string;
 }): Promise<CreateAppointmentResult> {
   const location = await prisma.location.findFirst({ where: { name: params.locationName } });
   if (!location) return { error: "Sucursal no encontrada." };
 
-  const [hour, minute] = params.time.split(":").map(Number);
-  const [year, month, day] = params.date.split("-").map(Number);
-  const startAt = new Date(year, month - 1, day, hour, minute);
-  const durationMin = params.durationTier === "Signature" ? 60 : 30;
-  const endAt = new Date(startAt.getTime() + durationMin * 60000);
-
   const protocol = params.protocolName
     ? await prisma.protocol.findUnique({ where: { name: params.protocolName } })
     : null;
+
+  const addOnIds = params.addOnIds ?? [];
+  const addOns = addOnIds.length > 0 ? await prisma.addOn.findMany({ where: { id: { in: addOnIds } } }) : [];
+  const addOnMinutes = addOns.reduce((sum, a) => sum + a.extraMinutes, 0);
+  const { cleanupBufferMin, addonSafetyBufferMin } = await getBookingBuffers();
+
+  const [hour, minute] = params.time.split(":").map(Number);
+  const [year, month, day] = params.date.split("-").map(Number);
+  const startAt = new Date(year, month - 1, day, hour, minute);
+  const baseDurationMin = protocol?.durationMin ?? (params.durationTier === "Signature" ? 60 : 30);
+  // The actual add-ons picked always pad the slot by their real minutes; the
+  // addon safety buffer only applies on top when none were picked yet — it
+  // covers a client who asks for one in person, so the next appointment
+  // can't be booked flush against a slot that might still grow.
+  const blockedDurationMin =
+    baseDurationMin + addOnMinutes + cleanupBufferMin + (addOnMinutes === 0 ? addonSafetyBufferMin : 0);
+  const endAt = new Date(startAt.getTime() + blockedDurationMin * 60000);
 
   const assignment = await findAvailableAssignment(location.id, startAt, endAt, params.durationTier);
   if (!assignment) {
@@ -182,6 +219,7 @@ export async function createPendingDepositCheckout(
         time: draft.time,
         durationTier: draft.durationTier,
         protocolName: draft.protocolName ?? "",
+        addOnIds: (draft.addOnIds ?? []).join(","),
         clientId: draft.clientId,
       },
     });

@@ -64,7 +64,7 @@ export function StaffCheckoutView({
   const [search, setSearch] = useState("");
   const [pendingRemove, setPendingRemove] = useState<CheckoutRetailItem | null>(null);
   const [charged, setCharged] = useState(false);
-  const [paymentMethod, setPaymentMethod] = useState<"CASH" | "CARD" | "SPEI">("CASH");
+  const [paymentMethod, setPaymentMethod] = useState<"CASH" | "CARD" | "ONLINE">("CASH");
   const [checkoutError, setCheckoutError] = useState<string | null>(null);
   // Products whose recommendation tag was removed this session — re-adding
   // one of these needs the same warning removal got, closing the two-step
@@ -326,8 +326,8 @@ export function StaffCheckoutView({
             <div className="mt-6 grid grid-cols-3 gap-2">
               {([
                 ["CASH", "Efectivo"],
-                ["CARD", "Tarjeta"],
-                ["SPEI", "SPEI"],
+                ["CARD", "Tarjeta (terminal BBVA)"],
+                ["ONLINE", "En línea (Stripe)"],
               ] as const).map(([value, label]) => (
                 <button
                   key={value}

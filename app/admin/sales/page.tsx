@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { AdminSalesView, type PaymentMethodRow } from "@/components/panel/AdminSalesView";
 
-const PAYMENT_LABEL: Record<string, string> = { CASH: "Efectivo", CARD: "Tarjeta", SPEI: "SPEI" };
+const PAYMENT_LABEL: Record<string, string> = { CASH: "Efectivo", CARD: "Tarjeta", ONLINE: "En línea" };
 
 function todayRange() {
   const now = new Date();
@@ -42,7 +42,7 @@ export default async function AdminSales() {
     entry.amount += s.totalMxn;
     breakdown.set(s.paymentMethod, entry);
   }
-  const paymentMethodBreakdown: PaymentMethodRow[] = (["CASH", "CARD", "SPEI"] as const).map((m) => ({
+  const paymentMethodBreakdown: PaymentMethodRow[] = (["CASH", "CARD", "ONLINE"] as const).map((m) => ({
     method: PAYMENT_LABEL[m],
     count: breakdown.get(m)?.count ?? 0,
     amount: breakdown.get(m)?.amount ?? 0,

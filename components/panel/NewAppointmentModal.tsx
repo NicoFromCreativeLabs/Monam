@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useProtocols } from "@/components/panel/ProtocolsContext";
+import { useAddOns } from "@/components/panel/AddOnsContext";
 import { createManualAppointmentAction } from "@/lib/actions/booking";
 
 export interface BookableClient {
@@ -26,6 +27,7 @@ export function NewAppointmentModal({
   triggerClassName?: string;
 }) {
   const { protocols } = useProtocols();
+  const addOns = useAddOns();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [clientId, setClientId] = useState<string | null>(null);
@@ -33,11 +35,20 @@ export function NewAppointmentModal({
   const [time, setTime] = useState("10:00");
   const [duration, setDuration] = useState<"Targeted" | "Signature">("Targeted");
   const [protocolName, setProtocolName] = useState<string | null>(null);
+  const [selectedAddOns, setSelectedAddOns] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
   const signatureProtocols = protocols.filter((p) => p.tier === "Signature");
   const selectedClient = clients.find((c) => c.id === clientId) ?? null;
+  const protocolForAddOns = duration === "Targeted" ? "Targeted" : protocolName;
+  const availableAddOns = protocolForAddOns
+    ? addOns.filter((a) => a.availableOn.includes(protocolForAddOns))
+    : [];
+
+  function toggleAddOn(id: string) {
+    setSelectedAddOns((prev) => (prev.includes(id) ? prev.filter((a) => a !== id) : [...prev, id]));
+  }
   const filtered = query.trim()
     ? clients.filter(
         (c) => c.name.toLowerCase().includes(query.toLowerCase()) || c.phone.includes(query),
@@ -51,6 +62,7 @@ export function NewAppointmentModal({
     setTime("10:00");
     setDuration("Targeted");
     setProtocolName(null);
+    setSelectedAddOns([]);
     setError(null);
   }
 
@@ -77,6 +89,7 @@ export function NewAppointmentModal({
         time,
         durationTier: duration,
         protocolName: duration === "Signature" ? protocolName : null,
+        addOnIds: selectedAddOns,
       });
       if ("error" in result) {
         setError(result.error);
@@ -103,7 +116,7 @@ export function NewAppointmentModal({
         >
           <div
             onClick={(e) => e.stopPropagation()}
-            className="w-full max-w-sm rounded-2xl bg-hueso p-5 shadow-xl"
+            className="max-h-[90vh] w-full max-w-sm overflow-y-auto rounded-2xl bg-hueso p-5 shadow-xl"
           >
             <div className="mb-4 flex items-center justify-between">
               <p className="font-display text-sm text-ciruela">Nueva cita — {locationName}</p>
@@ -215,6 +228,33 @@ export function NewAppointmentModal({
                     </option>
                   ))}
                 </select>
+              </div>
+            )}
+
+            {availableAddOns.length > 0 && (
+              <div className="mb-3">
+                <label className="mb-1 block font-body text-xs uppercase tracking-[0.14em] text-ciruela/50">
+                  Add-ons
+                </label>
+                <div className="space-y-1.5">
+                  {availableAddOns.map((a) => (
+                    <label
+                      key={a.id}
+                      className="flex items-center justify-between rounded-lg border border-ciruela/20 px-3 py-1.5 font-body text-xs text-ciruela"
+                    >
+                      <span className="flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          checked={selectedAddOns.includes(a.id)}
+                          onChange={() => toggleAddOn(a.id)}
+                          className="h-3.5 w-3.5 accent-ciruela"
+                        />
+                        {a.name}
+                      </span>
+                      <span className="text-ciruela/40">+{a.extraMinutes} min</span>
+                    </label>
+                  ))}
+                </div>
               </div>
             )}
 

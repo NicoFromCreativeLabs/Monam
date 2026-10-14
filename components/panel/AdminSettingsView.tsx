@@ -24,6 +24,8 @@ export interface OperationalSettings {
   depositRequiredSignature: boolean;
   cancellationWindowHours: number;
   discountApprovalThresholdPct: number;
+  cleanupBufferMinutes: number;
+  addonBufferMinutes: number;
 }
 
 export interface KpiTargetRow {
@@ -707,6 +709,47 @@ export function AdminSettingsView({
             </label>
           </Card>
         </div>
+
+        <Card title="Tiempos de reserva">
+          <label className="flex items-center justify-between py-2 font-body text-sm text-ciruela">
+            Limpieza de cabina tras cada cita
+            <span className="flex items-center gap-1 text-ciruela/60">
+              <input
+                type="number"
+                min={0}
+                value={rules.cleanupBufferMinutes}
+                onChange={(e) =>
+                  setRules((r) => ({ ...r, cleanupBufferMinutes: Number(e.target.value) || 0 }))
+                }
+                onBlur={() => persistRules({ cleanupBufferMinutes: rules.cleanupBufferMinutes })}
+                className="w-16 rounded border border-ciruela/25 bg-hueso px-1.5 py-1 text-right font-body text-sm text-ciruela focus:outline-none focus:ring-1 focus:ring-ciruela/40"
+              />
+              min
+            </span>
+          </label>
+          <label className="flex items-center justify-between border-t border-ciruela/8 py-2 font-body text-sm text-ciruela">
+            Margen por posibles add-ons
+            <span className="flex items-center gap-1 text-ciruela/60">
+              <input
+                type="number"
+                min={0}
+                value={rules.addonBufferMinutes}
+                onChange={(e) =>
+                  setRules((r) => ({ ...r, addonBufferMinutes: Number(e.target.value) || 0 }))
+                }
+                onBlur={() => persistRules({ addonBufferMinutes: rules.addonBufferMinutes })}
+                className="w-16 rounded border border-ciruela/25 bg-hueso px-1.5 py-1 text-right font-body text-sm text-ciruela focus:outline-none focus:ring-1 focus:ring-ciruela/40"
+              />
+              min
+            </span>
+          </label>
+          <p className="mt-3 font-body text-xs text-ciruela/40">
+            Cada cita bloquea su horario real más estos minutos, para que nadie más pueda
+            reservar mientras se limpia la cabina. El margen por add-ons solo se suma cuando la
+            cita no lleva add-ons elegidos de antemano — si ya se eligieron, se bloquean sus
+            minutos reales en su lugar.
+          </p>
+        </Card>
 
         <Card title="Add-ons">
           <div className="overflow-x-auto">

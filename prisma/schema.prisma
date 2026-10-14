@@ -631,8 +631,8 @@ model Deposit {
 
 enum PaymentMethod {
   CASH
-  CARD
-  SPEI
+  CARD // BBVA Mexico card terminal
+  ONLINE // Stripe
 }
 
 model Sale {

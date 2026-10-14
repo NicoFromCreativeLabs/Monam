@@ -148,6 +148,7 @@ export default function ClientBook() {
       time: chosenSlot,
       durationTier: duration!,
       protocolName: duration === "Signature" ? protocol : null,
+      addOnIds: selectedAddOns,
     });
     setConfirming(false);
     if ("error" in result) {

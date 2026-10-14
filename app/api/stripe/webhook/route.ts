@@ -40,7 +40,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ received: true });
   }
 
-  const { locationName, date, time, durationTier, protocolName, clientId } = metadata;
+  const { locationName, date, time, durationTier, protocolName, addOnIds, clientId } = metadata;
   if (!locationName || !date || !time || !durationTier || !clientId) {
     return NextResponse.json({ received: true });
   }
@@ -53,6 +53,7 @@ export async function POST(request: Request) {
       time,
       durationTier: durationTier === "Signature" ? "Signature" : "Targeted",
       protocolName: protocolName || null,
+      addOnIds: addOnIds ? addOnIds.split(",").filter(Boolean) : [],
     },
     clientId,
   );

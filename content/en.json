@@ -11,7 +11,7 @@
   },
   "hero": {
     "subtitle": "Skin Studio",
-    "eyebrow": "Just a skin studio",
+    "eyebrow": "skin studio",
     "headline": "Your skin, well understood.",
     "script": "Solid science and elevated sensoriality for skin, hair, and body.",
     "body": "We believe in care where efficacy, evidence, and judgment coexist with a conscious selection of what we use on our skin and body.",
@@ -20,13 +20,14 @@
   },
   "featured": {
     "eyebrow": "Signature",
-    "heading": "Facials",
-    "description": "Personalized 30- and 60-minute facials, designed around what your skin needs today.",
+    "heading": "Featured Facials",
+    "description": "A selection of our most sought-after and recommended treatments.",
     "items": [
-      { "protocol": "Longevity", "label": "The Longevity Ritual", "icon": "sunburst" },
-      { "protocol": "Lift", "label": "Sculpt & Lift", "icon": "arches" },
-      { "protocol": "Purify", "label": "Deep Purify", "icon": "ring" }
-    ]
+      { "protocol": "Targeted", "label": "Targeted", "icon": "ring" },
+      { "protocol": "Lift", "label": "Lift", "icon": "arches" },
+      { "protocol": "Longevity", "label": "Longevity", "icon": "sunburst" }
+    ],
+    "scrollCta": "View All Facials ↓"
   },
   "philosophy": {
     "eyebrow": "Our Philosophy",
@@ -52,7 +53,7 @@
   "treatments": {
     "eyebrow": "Menú · Faciales",
     "heading": "Facials",
-    "tagline": "Made around you",
+    "tagline": "Personalized 30- and 60-minute treatments, designed around what your skin needs today.",
     "note": "Booked by duration, Targeted or Signature. Your protocol is assigned after an in-person skin assessment and your goals.",
     "items": [
       {
@@ -123,7 +124,7 @@
     "ctaVisit": "Book a Visit"
   },
   "footer": {
-    "script": "Monâm Skin Studio",
+    "script": "Skin Studio",
     "explore": { "heading": "Explore", "links": ["Philosophy", "Treatments", "Visit"] },
     "connect": { "heading": "Connect", "links": ["Instagram", "Website", "Book Now"] },
     "copyright": "© 2026 Monâm Skin Studio."

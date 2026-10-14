@@ -56,6 +56,8 @@ export interface OperationalSettingsInput {
   depositRequiredSignature?: boolean;
   cancellationWindowHours?: number;
   discountApprovalThresholdPct?: number;
+  cleanupBufferMinutes?: number;
+  addonBufferMinutes?: number;
 }
 
 export async function updateOperationalSettingsAction(patch: OperationalSettingsInput) {
@@ -65,6 +67,8 @@ export async function updateOperationalSettingsAction(patch: OperationalSettings
   if (patch.depositRequiredSignature !== undefined) await setSetting("deposit.requiredSignature", patch.depositRequiredSignature);
   if (patch.cancellationWindowHours !== undefined) await setSetting("cancellation.windowHours", patch.cancellationWindowHours);
   if (patch.discountApprovalThresholdPct !== undefined) await setSetting("discount.approvalThresholdPct", patch.discountApprovalThresholdPct);
+  if (patch.cleanupBufferMinutes !== undefined) await setSetting("booking.cleanupBufferMinutes", patch.cleanupBufferMinutes);
+  if (patch.addonBufferMinutes !== undefined) await setSetting("booking.addonBufferMinutes", patch.addonBufferMinutes);
 
   revalidatePath("/admin/settings");
 }

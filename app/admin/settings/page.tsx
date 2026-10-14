@@ -35,6 +35,8 @@ export default async function AdminSettingsPage() {
             "deposit.requiredSignature",
             "cancellation.windowHours",
             "discount.approvalThresholdPct",
+            "booking.cleanupBufferMinutes",
+            "booking.addonBufferMinutes",
           ],
         },
       },
@@ -47,6 +49,8 @@ export default async function AdminSettingsPage() {
     depositRequiredSignature: settingBool(settingRows, "deposit.requiredSignature", true),
     cancellationWindowHours: settingNumber(settingRows, "cancellation.windowHours", 24),
     discountApprovalThresholdPct: settingNumber(settingRows, "discount.approvalThresholdPct", 10),
+    cleanupBufferMinutes: settingNumber(settingRows, "booking.cleanupBufferMinutes", 20),
+    addonBufferMinutes: settingNumber(settingRows, "booking.addonBufferMinutes", 10),
   };
 
   const initialKpiTargets: KpiTargetRow[] = kpiTargets.map((k) => ({

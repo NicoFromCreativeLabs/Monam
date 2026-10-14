@@ -52,6 +52,7 @@ export interface Content {
     heading: string;
     description: string;
     items: FeaturedTreatment[];
+    scrollCta: string;
   };
   philosophy: {
     eyebrow: string;

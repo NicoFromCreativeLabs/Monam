@@ -11,7 +11,7 @@
   },
   "hero": {
     "subtitle": "Skin Studio",
-    "eyebrow": "Es solo skin studio",
+    "eyebrow": "skin studio",
     "headline": "Tu piel, bien entendida.",
     "script": "Ciencia sólida y sensorialidad elevada para piel, cabello y cuerpo.",
     "body": "Creemos en un cuidado donde la eficacia, la evidencia y el criterio conviven con una selección consciente de lo que usamos sobre nuestra piel y cuerpo.",
@@ -20,13 +20,14 @@
   },
   "featured": {
     "eyebrow": "Signature",
-    "heading": "Faciales",
-    "description": "Faciales personalizados de 30 y 60 minutos, diseñados alrededor de lo que tu piel necesita hoy.",
+    "heading": "Featured Facials",
+    "description": "Una selección de nuestros tratamientos más buscados y recomendados.",
     "items": [
-      { "protocol": "Longevity", "label": "El Ritual Longevity", "icon": "sunburst" },
-      { "protocol": "Lift", "label": "Sculpt & Lift", "icon": "arches" },
-      { "protocol": "Purify", "label": "Purify Profundo", "icon": "ring" }
-    ]
+      { "protocol": "Targeted", "label": "Targeted", "icon": "ring" },
+      { "protocol": "Lift", "label": "Lift", "icon": "arches" },
+      { "protocol": "Longevity", "label": "Longevity", "icon": "sunburst" }
+    ],
+    "scrollCta": "Ver todos los faciales ↓"
   },
   "philosophy": {
     "eyebrow": "Nuestra filosofía",
@@ -52,7 +53,7 @@
   "treatments": {
     "eyebrow": "Menú · Faciales",
     "heading": "Faciales",
-    "tagline": "Hecho alrededor de ti",
+    "tagline": "Tratamientos personalizados de 30 y 60 minutos, diseñados alrededor de lo que tu piel necesita hoy.",
     "note": "Reservas por duración, Targeted o Signature. Tu protocolo se asigna tras una valoración de piel en persona y tus objetivos.",
     "items": [
       {
@@ -123,7 +124,7 @@
     "ctaVisit": "Reservar una visita"
   },
   "footer": {
-    "script": "Monâm Skin Studio",
+    "script": "Skin Studio",
     "explore": { "heading": "Explorar", "links": ["Filosofía", "Tratamientos", "Visítanos"] },
     "connect": { "heading": "Conecta", "links": ["Instagram", "Sitio web", "Reservar"] },
     "copyright": "© 2026 Monâm Skin Studio."

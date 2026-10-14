@@ -6,14 +6,16 @@ import { useRouter } from "next/navigation";
 import { TopBar } from "@/components/panel/TopBar";
 import { Card, StatTile } from "@/components/panel/Card";
 import { Badge } from "@/components/panel/Badge";
-import { downloadCsv } from "@/lib/csv";
+import { downloadCsv, parseCsv, CSV_LEDGER } from "@/lib/csv";
 import { useLocations } from "@/components/panel/LocationsContext";
 import {
   receiveInventoryAction,
   adjustInventoryAction,
   updateInventoryItemAction,
   moveInventoryLedgerAction,
+  importInventoryCsvAction,
   type LedgerName as DbLedger,
+  type ImportInventoryRow,
 } from "@/lib/actions/commerce";
 
 export interface RetailInventoryRow {
@@ -148,7 +150,10 @@ export function AdminInventoryView({
   const [tab, setTab] = useState<Tab>("todos");
   const [editModal, setEditModal] = useState<EditDraft | null>(null);
   const [restockOnly, setRestockOnly] = useState(false);
-  const [addProductOpen, setAddProductOpen] = useState(false);
+  const [addMode, setAddMode] = useState<"closed" | "choose" | "manual" | "upload">("closed");
+  const addProductOpen = addMode === "manual";
+  const [csvError, setCsvError] = useState<string | null>(null);
+  const [csvResult, setCsvResult] = useState<{ updated: number; created: number; skipped: number } | null>(null);
   const [newProduct, setNewProduct] = useState({
     ...emptyNewProduct,
     location: locations[0]?.name ?? "",
@@ -281,9 +286,52 @@ export function AdminInventoryView({
         });
       }
       setNewProduct({ ...emptyNewProduct, location: newProduct.location });
-      setAddProductOpen(false);
+      setAddMode("closed");
       router.refresh();
     });
+  }
+
+  function handleCsvFile(file: File) {
+    setCsvError(null);
+    setCsvResult(null);
+    const reader = new FileReader();
+    reader.onload = () => {
+      const text = String(reader.result ?? "");
+      const parsed = parseCsv(text);
+      if (parsed.length === 0) {
+        setCsvError("El archivo está vacío o no se pudo leer.");
+        return;
+      }
+
+      const rows: ImportInventoryRow[] = [];
+      for (const r of parsed) {
+        const ledger = CSV_LEDGER[r.Ledger?.trim() ?? ""];
+        const sku = r.SKU?.trim();
+        const product = r.Producto?.trim();
+        const locationName = r.Ubicacion?.trim();
+        if (!ledger || !sku || !product || !locationName) {
+          setCsvError(
+            `Columnas esperadas: SKU, Producto, Ledger (Piso/Backbar/Warehouse), Ubicacion, Cantidad, Par. Fila inválida: ${JSON.stringify(r)}`,
+          );
+          return;
+        }
+        rows.push({
+          sku,
+          product,
+          ledger,
+          locationName,
+          qty: Number(r.Cantidad) || 0,
+          par: Number(r.Par) || 0,
+        });
+      }
+
+      startTransition(async () => {
+        const result = await importInventoryCsvAction(rows);
+        setCsvResult({ updated: result.updated, created: result.created, skipped: result.skipped });
+        router.refresh();
+      });
+    };
+    reader.readAsText(file);
   }
 
   function exportTodos() {
@@ -363,13 +411,41 @@ export function AdminInventoryView({
             </button>
             <DownloadButton onClick={exportForTab} />
             <button
-              onClick={() => setAddProductOpen((v) => !v)}
+              onClick={() => setAddMode((m) => (m === "closed" ? "choose" : "closed"))}
               className="rounded-full bg-ciruela px-4 py-1.5 font-body text-xs text-hueso"
             >
-              {addProductOpen ? "Cancelar" : "Agregar producto"}
+              {addMode === "closed" ? "Agregar producto" : "Cancelar"}
             </button>
           </div>
         </div>
+
+        {addMode === "upload" && (
+          <Card title="Actualizar inventario — subir Excel/CSV">
+            <p className="mb-3 font-body text-xs text-ciruela/50">
+              Usa el mismo formato que "Descargar Excel": columnas SKU, Producto, Ledger
+              (Piso/Backbar/Warehouse), Ubicacion, Cantidad, Par. La cantidad y el par del
+              archivo reemplazan los valores actuales de cada SKU — es un recuento, no una suma.
+            </p>
+            <input
+              type="file"
+              accept=".csv,text/csv"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) handleCsvFile(file);
+                e.target.value = "";
+              }}
+              className="block font-body text-sm text-ciruela file:mr-3 file:rounded-full file:border-0 file:bg-ciruela file:px-4 file:py-1.5 file:font-body file:text-xs file:text-hueso"
+            />
+            {isPending && <p className="mt-3 font-body text-xs text-ciruela/50">Importando…</p>}
+            {csvError && <p className="mt-3 font-body text-xs text-red-700">{csvError}</p>}
+            {csvResult && (
+              <p className="mt-3 font-body text-xs text-oliva">
+                Listo — {csvResult.updated} actualizados, {csvResult.created} nuevos
+                {csvResult.skipped > 0 ? `, ${csvResult.skipped} omitidos` : ""}.
+              </p>
+            )}
+          </Card>
+        )}
 
         {addProductOpen && (
           <Card title="Nuevo producto">
@@ -707,6 +783,46 @@ export function AdminInventoryView({
           </Card>
         )}
       </div>
+
+      {addMode === "choose" && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-ciruela/40 px-4"
+          onClick={() => setAddMode("closed")}
+        >
+          <div onClick={(e) => e.stopPropagation()} className="w-full max-w-sm rounded-2xl bg-hueso p-5 shadow-xl">
+            <div className="mb-4 flex items-center justify-between">
+              <p className="font-display text-sm text-ciruela">Agregar producto</p>
+              <button onClick={() => setAddMode("closed")} aria-label="Cerrar" className="text-ciruela/50 hover:text-ciruela">
+                ×
+              </button>
+            </div>
+            <div className="space-y-2">
+              <button
+                onClick={() => {
+                  setCsvError(null);
+                  setCsvResult(null);
+                  setAddMode("upload");
+                }}
+                className="w-full rounded-lg border border-ciruela/20 px-4 py-3 text-left font-body text-sm text-ciruela hover:bg-ciruela/5"
+              >
+                <span className="block font-medium">Subir Excel/CSV</span>
+                <span className="block font-body text-xs text-ciruela/50">
+                  Actualiza todo el inventario de una vez desde un archivo.
+                </span>
+              </button>
+              <button
+                onClick={() => setAddMode("manual")}
+                className="w-full rounded-lg border border-ciruela/20 px-4 py-3 text-left font-body text-sm text-ciruela hover:bg-ciruela/5"
+              >
+                <span className="block font-medium">Agregar manualmente</span>
+                <span className="block font-body text-xs text-ciruela/50">
+                  Captura un producto nuevo a mano.
+                </span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {editModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-ciruela/40 px-4" onClick={closeEdit}>

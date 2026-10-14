@@ -65,6 +65,13 @@ export function FeaturedTreatments({ content }: { content: Content }) {
           );
         })}
       </div>
+
+      <a
+        href="#treatments"
+        className="mx-auto mt-8 font-body text-sm text-ciruela/70 underline underline-offset-4 hover:text-ciruela"
+      >
+        {featured.scrollCta}
+      </a>
     </section>
   );
 }

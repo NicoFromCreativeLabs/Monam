@@ -1481,7 +1481,7 @@ export const CASH_CUT_SUMMARY = {
 export const PAYMENT_METHOD_BREAKDOWN = [
   { method: "Tarjeta", amount: 6200, count: 8 },
   { method: "Efectivo", amount: 1800, count: 3 },
-  { method: "Transferencia", amount: 1200, count: 1 },
+  { method: "En línea", amount: 1200, count: 1 },
 ];
 
 export const CFDI_QUEUE = [
