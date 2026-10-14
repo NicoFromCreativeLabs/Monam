@@ -7,7 +7,14 @@ import { NextResponse, type NextRequest } from "next/server";
 // optimistic check the Next.js/Supabase docs both call out as the right
 // scope for Proxy: read the verified session, redirect if there isn't one,
 // never do the real authorization check against Postgres here.
-const PUBLIC_PATHS = ["/", "/login", "/signup", "/forgot-password"];
+const PUBLIC_PATHS = [
+  "/",
+  "/login",
+  "/signup",
+  "/forgot-password",
+  "/api/whatsapp/webhook",
+  "/api/stripe/webhook",
+];
 const PUBLIC_PREFIXES = ["/auth", "/legal"];
 
 function isPublicPath(pathname: string) {
