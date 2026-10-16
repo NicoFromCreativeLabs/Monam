@@ -365,10 +365,6 @@ export default function ClientBook() {
 
       {step === "addons" && (
         <Card title="Agrega un add-on">
-          <p className="mb-4 font-body text-xs text-ciruela/50">
-            Compatibles con {protocolForAddOns} · opcionales, sin costo adicional — solo suman
-            tiempo a tu cita. Máximo {MAX_ADD_ONS}.
-          </p>
           <div className="space-y-2">
             {availableAddOns.map((a) => {
               const checked = selectedAddOns.includes(a.id);
@@ -391,7 +387,9 @@ export default function ClientBook() {
                     <span className="ml-1 text-xs text-ciruela/50">· {a.function}</span>
                   </span>
                 </span>
-                <span className="text-xs text-ciruela/40">+{a.extraMinutes} min</span>
+                <span className="text-xs text-ciruela/40">
+                  {a.priceMxn > 0 ? `+$${a.priceMxn} MXN · ` : ""}+{a.extraMinutes} min
+                </span>
               </label>
               );
             })}

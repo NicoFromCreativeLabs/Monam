@@ -8,7 +8,7 @@ const inputClass =
   "w-full rounded-lg border border-ciruela/20 bg-hueso px-3 py-2 font-body text-sm text-ciruela placeholder:text-ciruela/40 focus:outline-none focus:ring-1 focus:ring-ciruela/40";
 const labelClass = "mb-1 block font-body text-xs uppercase tracking-[0.14em] text-ciruela/50";
 
-export const EMPTY_ADD_ON: AddOnInput = { name: "", function: "", extraMinutes: 10, availableOn: [] };
+export const EMPTY_ADD_ON: AddOnInput = { name: "", function: "", extraMinutes: 10, priceMxn: 0, availableOn: [] };
 
 // Form shared by "Agregar add-on" (inline) and "Editar" (modal) in
 // Configuración → Add-ons. Shows the server's refusal message, if any.
@@ -26,6 +26,7 @@ export function AddOnEditor({
   const { protocols } = useProtocols();
   const [values, setValues] = useState(initial);
   const [minutes, setMinutes] = useState(String(initial.extraMinutes));
+  const [price, setPrice] = useState(String(initial.priceMxn));
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
@@ -41,7 +42,7 @@ export function AddOnEditor({
     setSaving(true);
     setError(null);
     try {
-      const result = await onSubmit({ ...values, extraMinutes: Number(minutes) });
+      const result = await onSubmit({ ...values, extraMinutes: Number(minutes), priceMxn: Number(price) });
       if (result.error) setError(result.error);
     } catch {
       setError("No se pudo guardar. Intenta de nuevo.");
@@ -79,6 +80,18 @@ export function AddOnEditor({
           max={120}
           value={minutes}
           onChange={(e) => setMinutes(e.target.value)}
+          className={inputClass}
+        />
+      </div>
+      <div>
+        <label className={labelClass}>Precio adicional (MXN)</label>
+        <input
+          type="number"
+          min={0}
+          step={1}
+          value={price}
+          onChange={(e) => setPrice(e.target.value)}
+          placeholder="0 = incluido"
           className={inputClass}
         />
       </div>

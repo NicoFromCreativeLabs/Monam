@@ -114,7 +114,9 @@ async function quoteSale(input: Pick<CreateSaleInput, "appointmentId" | "locatio
     const item = itemBySku.get(line.sku);
     return sum + (item?.priceMxn ?? 0) * line.qty;
   }, 0);
-  const subtotal = servicePrice + retailTotal;
+  // Add-ons the client picked when booking, at the price they were shown.
+  const addOnsTotal = (appointment?.addOns ?? []).reduce((sum, a) => sum + a.priceMxn, 0);
+  const subtotal = servicePrice + addOnsTotal + retailTotal;
   const depositCreditMxn =
     appointment?.deposit && appointment.deposit.status === "HELD" ? -appointment.deposit.amountMxn : 0;
   const totalMxn = Math.max(0, subtotal + depositCreditMxn);
@@ -190,6 +192,37 @@ export async function createSaleAction(input: CreateSaleInput): Promise<CreateSa
             commissionMxn,
           },
         });
+      }
+    }
+
+    for (const booked of appointment?.addOns ?? []) {
+      const addOnLine = await tx.saleLineItem.create({
+        data: {
+          saleId: created.id,
+          type: "ADD_ON",
+          addOnId: booked.addOnId,
+          performedByUserId: appointment?.treatmentRecord?.estheticianId,
+          priceMxn: booked.priceMxn,
+        },
+      });
+      if (booked.priceMxn > 0 && appointment?.treatmentRecord) {
+        const addOnEsthetician = await tx.appUser.findUnique({
+          where: { id: appointment.treatmentRecord.estheticianId },
+        });
+        const addOnRule = addOnEsthetician && findRule("ADD_ON", addOnEsthetician.role);
+        if (addOnRule && addOnEsthetician) {
+          await tx.commissionEntry.create({
+            data: {
+              userId: addOnEsthetician.id,
+              saleLineItemId: addOnLine.id,
+              saleId: created.id,
+              basis: "ADD_ON",
+              baseAmountMxn: booked.priceMxn,
+              ratePct: addOnRule.rateOrAmount,
+              commissionMxn: Math.round((booked.priceMxn * addOnRule.rateOrAmount) / 100),
+            },
+          });
+        }
       }
     }
 
@@ -386,6 +419,7 @@ async function loadAppointmentForCheckout(appointmentId: string) {
       protocol: true,
       deposit: true,
       sale: true,
+      addOns: true,
       treatmentRecord: { include: { retailTags: { include: { treatmentRecord: true } } } },
     },
   });

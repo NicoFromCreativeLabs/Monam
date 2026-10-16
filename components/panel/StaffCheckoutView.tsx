@@ -10,7 +10,6 @@ import {
   cancelOnlineChargeAction,
   checkOnlineChargeAction,
   createSaleAction,
-  flagRetailRemovalAction,
   startOnlineChargeAction,
   type CreateSaleInput,
 } from "@/lib/actions/commerce";
@@ -27,6 +26,7 @@ export interface CheckoutSession {
   locationName: string;
   clientName: string;
   service: { name: string; price: number };
+  addOns: { name: string; price: number }[]; // picked when booking, charged with the facial
   retailItems: CheckoutRetailItem[];
   depositCredit: number;
 }
@@ -63,13 +63,14 @@ export function StaffCheckoutView({
 
   const isRetailOnly = !session;
 
-  const [recommendedItems, setRecommendedItems] = useState<CheckoutRetailItem[]>(
-    session?.retailItems ?? [],
-  );
+  // The esthetician's recommendations: shown as suggestions above the ticket
+  // and only counted once Front Desk adds them (they are sold like any other
+  // product; the commission still goes to whoever tagged it, which the server
+  // derives from the tag itself).
+  const suggestions: CheckoutRetailItem[] = session?.retailItems ?? [];
   const [addedItems, setAddedItems] = useState<AddedItem[]>([]);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [search, setSearch] = useState("");
-  const [pendingRemove, setPendingRemove] = useState<CheckoutRetailItem | null>(null);
   const [charged, setCharged] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<"CASH" | "CARD" | "ONLINE">("CASH");
   const [checkoutError, setCheckoutError] = useState<string | null>(null);
@@ -87,44 +88,8 @@ export function StaffCheckoutView({
   const [onlineRecordError, setOnlineRecordError] = useState<string | null>(null);
   const [retryNonce, setRetryNonce] = useState(0);
   const [linkCopied, setLinkCopied] = useState(false);
-  // Products whose recommendation tag was removed this session — re-adding
-  // one of these needs the same warning removal got, closing the two-step
-  // gap a front-desk-persona pentest found: removal was guarded, but
-  // re-adding the identical product afterward silently dropped attribution
-  // with zero confirmation, moving the commission off whoever recommended it.
-  const [removedRecommendations, setRemovedRecommendations] = useState<CheckoutRetailItem[]>([]);
-  const [reAddedSkus, setReAddedSkus] = useState<string[]>([]);
-  const [pendingReAdd, setPendingReAdd] = useState<{ sku: string; product: string; price: number } | null>(
-    null,
-  );
-
   const addToSale = (item: { sku: string; product: string; price: number }) => {
-    setAddedItems((prev) => [...prev, { ...item, qty: 1 }]);
-  };
-  const requestAddToSale = (item: { sku: string; product: string; price: number }) => {
-    const removed = removedRecommendations.find((r) => r.sku === item.sku);
-    if (removed) {
-      setPendingReAdd(item);
-      return;
-    }
-    addToSale(item);
-  };
-  const confirmReAdd = () => {
-    if (!pendingReAdd || !session) return;
-    const removed = removedRecommendations.find((r) => r.sku === pendingReAdd.sku);
-    addToSale(pendingReAdd);
-    if (removed) {
-      setReAddedSkus((prev) => [...prev, pendingReAdd.sku]);
-      // The definitive anomaly record is written server-side by
-      // createSaleAction once the sale actually completes (not here — the
-      // ticket could still be abandoned before charging).
-      startTransition(() => {
-        flagRetailRemovalAction(
-          `"${pendingReAdd.product}" fue re-agregado al ticket de ${session.clientName} después de quitarse la recomendación de ${removed.recommendedBy} — confirmar a quién se atribuye la comisión.`,
-        );
-      });
-    }
-    setPendingReAdd(null);
+    setAddedItems((prev) => (prev.some((a) => a.sku === item.sku) ? prev : [...prev, { ...item, qty: 1 }]));
   };
   const removeAddedItem = (sku: string) => {
     setAddedItems((prev) => prev.filter((a) => a.sku !== sku));
@@ -143,24 +108,11 @@ export function StaffCheckoutView({
     setSearch("");
   };
 
-  const confirmRemoveRecommended = () => {
-    if (!pendingRemove || !session) return;
-    setRecommendedItems((prev) => prev.filter((r) => r.sku !== pendingRemove.sku));
-    setRemovedRecommendations((prev) => [...prev, pendingRemove]);
-    startTransition(() => {
-      flagRetailRemovalAction(
-        `"${pendingRemove.name}" (recomendado por ${pendingRemove.recommendedBy}) fue quitado del ticket de ${session.clientName} — revisar atribución de comisión.`,
-      );
-    });
-    setPendingRemove(null);
-  };
-
   const servicePrice = session?.service.price ?? 0;
+  const addOnsTotal = (session?.addOns ?? []).reduce((sum, a) => sum + a.price, 0);
   const depositCredit = session?.depositCredit ?? 0;
-  const retailTotal =
-    recommendedItems.reduce((sum, i) => sum + i.price, 0) +
-    addedItems.reduce((sum, i) => sum + i.price * i.qty, 0);
-  const subtotal = servicePrice + retailTotal;
+  const retailTotal = addedItems.reduce((sum, i) => sum + i.price * i.qty, 0);
+  const subtotal = servicePrice + addOnsTotal + retailTotal;
   const total = Math.max(0, subtotal + depositCredit);
 
   const [chargedSummary, setChargedSummary] = useState<{
@@ -170,15 +122,12 @@ export function StaffCheckoutView({
 
   function chargeSale() {
     setCheckoutError(null);
-    const retailItems = [
-      ...recommendedItems.map((r) => ({ sku: r.sku, qty: 1 })),
-      ...addedItems.map((a) => ({ sku: a.sku, qty: a.qty })),
-    ];
+    const retailItems = addedItems.map((a) => ({ sku: a.sku, qty: a.qty }));
     const base = {
       appointmentId: session?.appointmentId ?? null,
       locationName: session?.locationName ?? locationName,
       retailItems,
-      reAddedAfterRemovalSkus: reAddedSkus,
+      reAddedAfterRemovalSkus: [],
     };
     startTransition(async () => {
       if (paymentMethod === "ONLINE") {
@@ -335,6 +284,52 @@ export function StaffCheckoutView({
               </p>
             </div>
           )}
+          {session && (
+            <div className="mb-4">
+              <Card title="Recomendaciones de la esteticista">
+                {suggestions.length === 0 ? (
+                  <p className="font-body text-xs text-ciruela/40">
+                    La esteticista no dejó recomendaciones para esta visita.
+                  </p>
+                ) : (
+                  <>
+                    <ul className="divide-y divide-ciruela/8 font-body text-sm text-ciruela">
+                      {suggestions.map((item) => {
+                        const added = addedItems.some((a) => a.sku === item.sku);
+                        const stock = catalog.find((c) => c.sku === item.sku)?.qty ?? 0;
+                        return (
+                          <li key={item.sku} className="flex items-center justify-between gap-3 py-2">
+                            <div>
+                              <p>{item.name}</p>
+                              <p className="text-xs text-ciruela/50">Recomendado por {item.recommendedBy}</p>
+                            </div>
+                            <div className="flex items-center gap-3">
+                              <span>${item.price} MXN</span>
+                              {added ? (
+                                <span className="font-body text-xs text-oliva">Agregado</span>
+                              ) : stock <= 0 ? (
+                                <span className="font-body text-xs text-ciruela/40">Sin existencia</span>
+                              ) : (
+                                <button
+                                  onClick={() => addToSale({ sku: item.sku, product: item.name, price: item.price })}
+                                  className="rounded-full border border-ciruela px-3 py-1.5 font-body text-xs text-ciruela hover:bg-ciruela hover:text-hueso"
+                                >
+                                  Agregar
+                                </button>
+                              )}
+                            </div>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                    <p className="mt-3 font-body text-[11px] text-ciruela/40">
+                      Son sugerencias: no se suman al total hasta que las agregues.
+                    </p>
+                  </>
+                )}
+              </Card>
+            </div>
+          )}
           <Card title={session ? `Ticket — ${session.clientName}` : "Venta de mostrador"}>
             <ul className="divide-y divide-ciruela/8 font-body text-sm text-ciruela">
               {session && (
@@ -343,22 +338,12 @@ export function StaffCheckoutView({
                   <span>${session.service.price} MXN</span>
                 </li>
               )}
-              {recommendedItems.map((item) => (
-                <li key={item.sku} className="flex justify-between py-2">
-                  <div>
-                    <p>{item.name}</p>
-                    <p className="text-xs text-ciruela/50">Recomendado por {item.recommendedBy}</p>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span>${item.price} MXN</span>
-                    <button
-                      onClick={() => setPendingRemove(item)}
-                      aria-label={`Quitar ${item.name}`}
-                      className="text-ciruela/40 hover:text-ciruela"
-                    >
-                      ×
-                    </button>
-                  </div>
+              {session?.addOns.map((a) => (
+                <li key={a.name} className="flex justify-between py-2">
+                  <span>
+                    {a.name} <span className="text-xs text-ciruela/50">· add-on</span>
+                  </span>
+                  <span>{a.price > 0 ? `$${a.price} MXN` : "Incluido"}</span>
                 </li>
               ))}
               {addedItems.map((item) => {
@@ -402,11 +387,14 @@ export function StaffCheckoutView({
               })}
               {session && depositCredit !== 0 && (
                 <li className="flex justify-between py-2 text-oliva">
-                  <span>Crédito de depósito</span>
+                  <span>Depósito pagado (se descuenta)</span>
                   <span>-${Math.abs(depositCredit)} MXN</span>
                 </li>
               )}
-              {!session && recommendedItems.length === 0 && addedItems.length === 0 && (
+              {session && depositCredit === 0 && (
+                <li className="py-2 text-xs text-ciruela/40">Sin depósito previo.</li>
+              )}
+              {!session && addedItems.length === 0 && (
                 <li className="py-4 text-center text-ciruela/40">
                   Agrega productos para iniciar la venta.
                 </li>
@@ -597,7 +585,7 @@ export function StaffCheckoutView({
                     ) : (
                       <button
                         disabled={outOfStock}
-                        onClick={() => requestAddToSale({ sku: item.sku, product: item.product, price: item.price })}
+                        onClick={() => addToSale({ sku: item.sku, product: item.product, price: item.price })}
                         className="rounded-full border border-ciruela px-3 py-1.5 font-body text-xs text-ciruela hover:bg-ciruela hover:text-hueso disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-ciruela"
                       >
                         Agregar
@@ -607,76 +595,6 @@ export function StaffCheckoutView({
                 );
               })}
             </ul>
-          </div>
-        </div>
-      )}
-
-      {pendingRemove && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-ciruela/40 px-4"
-          onClick={() => setPendingRemove(null)}
-        >
-          <div
-            onClick={(e) => e.stopPropagation()}
-            className="w-full max-w-xs rounded-2xl bg-hueso p-5 shadow-xl"
-          >
-            <p className="font-display text-sm text-ciruela">¿Estás seguro que quieres quitarlo?</p>
-            <p className="mt-2 font-body text-sm text-ciruela/70">
-              {pendingRemove.name} · recomendado por {pendingRemove.recommendedBy}
-            </p>
-            <p className="mt-2 font-body text-xs text-ciruela/50">
-              Se notificará en el panel de administración.
-            </p>
-            <div className="mt-5 flex justify-end gap-2">
-              <button
-                onClick={() => setPendingRemove(null)}
-                className="rounded-full border border-ciruela px-4 py-1.5 font-body text-xs text-ciruela hover:bg-ciruela hover:text-hueso"
-              >
-                Cancelar
-              </button>
-              <button
-                onClick={confirmRemoveRecommended}
-                className="rounded-full bg-[#b3392f] px-4 py-1.5 font-body text-xs text-hueso"
-              >
-                Quitar
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {pendingReAdd && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-ciruela/40 px-4"
-          onClick={() => setPendingReAdd(null)}
-        >
-          <div
-            onClick={(e) => e.stopPropagation()}
-            className="w-full max-w-xs rounded-2xl bg-hueso p-5 shadow-xl"
-          >
-            <p className="font-display text-sm text-ciruela">¿Agregar de nuevo?</p>
-            <p className="mt-2 font-body text-sm text-ciruela/70">
-              {pendingReAdd.product} se quitó antes de la recomendación de{" "}
-              {removedRecommendations.find((r) => r.name === pendingReAdd.product)?.recommendedBy}.
-              Si lo agregas ahora, la comisión NO se atribuye automáticamente a esa persona.
-            </p>
-            <p className="mt-2 font-body text-xs text-ciruela/50">
-              Se notificará en el panel de administración.
-            </p>
-            <div className="mt-5 flex justify-end gap-2">
-              <button
-                onClick={() => setPendingReAdd(null)}
-                className="rounded-full border border-ciruela px-4 py-1.5 font-body text-xs text-ciruela hover:bg-ciruela hover:text-hueso"
-              >
-                Cancelar
-              </button>
-              <button
-                onClick={confirmReAdd}
-                className="rounded-full bg-[#b3392f] px-4 py-1.5 font-body text-xs text-hueso"
-              >
-                Agregar de todos modos
-              </button>
-            </div>
           </div>
         </div>
       )}

@@ -807,6 +807,7 @@ export function AdminSettingsView({
                 <th className="pb-2">Add-on</th>
                 <th className="pb-2">Función</th>
                 <th className="pb-2 text-right">Minutos extra</th>
+                <th className="pb-2 text-right">Precio</th>
                 <th className="pb-2 pr-6 text-right">Disponible en</th>
                 <th className="pb-2" />
               </tr>
@@ -817,6 +818,9 @@ export function AdminSettingsView({
                   <td className="py-2.5">{a.name}</td>
                   <td className="py-2.5 text-ciruela/60">{a.function}</td>
                   <td className="py-2.5 text-right text-ciruela/60">+{a.extraMinutes} min</td>
+                  <td className="py-2.5 text-right text-ciruela/60">
+                    {a.priceMxn > 0 ? `$${a.priceMxn} MXN` : "Incluido"}
+                  </td>
                   <td className="py-2.5 pr-6 text-right text-ciruela/50">{a.availableOn.join(", ") || "—"}</td>
                   <td className="py-2.5 text-right">
                     <div className="flex justify-end gap-3">
@@ -841,7 +845,7 @@ export function AdminSettingsView({
               ))}
               {addOns.length === 0 && (
                 <tr className="border-t border-ciruela/8">
-                  <td colSpan={5} className="py-3 text-ciruela/50">
+                  <td colSpan={6} className="py-3 text-ciruela/50">
                     Aún no hay add-ons. Agrega el primero con el botón de arriba.
                   </td>
                 </tr>
@@ -1040,6 +1044,7 @@ export function AdminSettingsView({
                 name: editingAddOn.name,
                 function: editingAddOn.function,
                 extraMinutes: editingAddOn.extraMinutes,
+                priceMxn: editingAddOn.priceMxn,
                 availableOn: editingAddOn.availableOn,
               }}
               submitLabel="Guardar cambios"

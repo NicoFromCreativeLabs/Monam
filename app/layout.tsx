@@ -124,6 +124,7 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
     name: a.name,
     function: a.function,
     extraMinutes: a.extraMinutes,
+    priceMxn: a.priceMxn,
     availableOn: a.protocols.map((link) => link.protocol.name),
   }));
 

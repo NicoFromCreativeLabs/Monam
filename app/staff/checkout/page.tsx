@@ -36,6 +36,7 @@ export default async function StaffCheckout({
         client: true,
         protocol: true,
         deposit: true,
+        addOns: { include: { addOn: true } },
         treatmentRecord: { include: { esthetician: true, retailTags: { include: { product: true } } } },
       },
     });
@@ -50,6 +51,7 @@ export default async function StaffCheckout({
           name: appointment.protocol?.name ?? "Facial",
           price: appointment.protocol?.priceMxn ?? 0,
         },
+        addOns: appointment.addOns.map((a) => ({ name: a.addOn.name, price: a.priceMxn })),
         retailItems: appointment.treatmentRecord.retailTags.map((t) => ({
           sku: t.product.sku,
           name: t.product.name,

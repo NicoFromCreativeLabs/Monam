@@ -181,11 +181,28 @@ model AddOn {
   name         String
   function     String
   extraMinutes Int
+  priceMxn     Int    @default(0) // extra charge on top of the facial; 0 = included
 
-  protocols     AddOnProtocol[]
-  saleLineItems SaleLineItem[]
+  protocols         AddOnProtocol[]
+  saleLineItems     SaleLineItem[]
+  appointmentAddOns AppointmentAddOn[]
 
   @@map("add_ons")
+}
+
+// The add-ons a client picked when booking, with the price at that moment —
+// so the checkout charges what was shown to the client even if the menu price
+// changes later.
+model AppointmentAddOn {
+  appointmentId String
+  addOnId       String
+  priceMxn      Int
+
+  appointment Appointment @relation(fields: [appointmentId], references: [id])
+  addOn       AddOn       @relation(fields: [addOnId], references: [id])
+
+  @@id([appointmentId, addOnId])
+  @@map("appointment_add_ons")
 }
 
 model AddOnProtocol {
@@ -287,6 +304,7 @@ model Appointment {
   treatmentRecord   TreatmentRecord?
   packageRedemption PackageRedemption?
   sale              Sale?
+  addOns            AppointmentAddOn[]
 
   @@index([locationId, startAt])
   @@index([clientId])

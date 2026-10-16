@@ -135,7 +135,14 @@ async function resolveBookingWindow(params: {
     baseDurationMin + addOnMinutes + cleanupBufferMin + (addOnMinutes === 0 ? addonSafetyBufferMin : 0);
 
   const [year, month, day] = params.date.split("-").map(Number);
-  return { locationId: location.id, year, month, day, blockedDurationMin };
+  return {
+    locationId: location.id,
+    year,
+    month,
+    day,
+    blockedDurationMin,
+    addOns: addOns.map((a) => ({ id: a.id, priceMxn: a.priceMxn })),
+  };
 }
 
 function slotWindow(window: { year: number; month: number; day: number; blockedDurationMin: number }, time: string) {
@@ -214,6 +221,9 @@ export async function insertAppointment(params: {
         endAt,
         status: "CONFIRMED",
         depositId: params.depositId,
+        // What the client picked, at the price they were shown — the checkout
+        // charges these.
+        addOns: { create: window.addOns.map((a) => ({ addOnId: a.id, priceMxn: a.priceMxn })) },
       },
     });
     revalidatePath("/my/appointments");

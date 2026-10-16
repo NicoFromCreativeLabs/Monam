@@ -13,6 +13,7 @@ export interface AddOnRecord {
   name: string;
   function: string;
   extraMinutes: number;
+  priceMxn: number;
   availableOn: string[];
 }
 
