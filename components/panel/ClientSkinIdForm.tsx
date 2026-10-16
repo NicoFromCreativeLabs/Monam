@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { Card } from "@/components/panel/Card";
 import { updateOwnSkinIdAction, type SkinIdInput } from "@/lib/actions/clients";
 
@@ -22,8 +23,16 @@ const SUN_EXPOSURE_OPTIONS = ["Leve", "Moderada", "Alta"];
 // Clinical phase): `initial` is the real ClientSkinId row (or blank
 // defaults for a client who hasn't filled one in yet — a genuinely new
 // client should see a blank form, not fake pre-filled content).
-export function ClientSkinIdForm({ initial }: { initial: SkinIdInput }) {
+//
+// onboarding: first-visit mode (see app/my/layout.tsx) — skin type, objective
+// and sun exposure are required, and allergies/medications need an explicit
+// answer (a "Ninguna" checkbox) so an empty box never reads as "skipped".
+export function ClientSkinIdForm({ initial, onboarding = false }: { initial: SkinIdInput; onboarding?: boolean }) {
+  const router = useRouter();
   const [form, setForm] = useState(initial);
+  const [noAllergies, setNoAllergies] = useState(false);
+  const [noMedications, setNoMedications] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
   const [saving, setSaving] = useState(false);
 
@@ -33,17 +42,37 @@ export function ClientSkinIdForm({ initial }: { initial: SkinIdInput }) {
   }
 
   async function save() {
+    if (onboarding) {
+      const missing =
+        !form.skinType ||
+        !form.visitObjective ||
+        !form.sunExposure ||
+        (!noAllergies && !form.allergies.trim()) ||
+        (!noMedications && !form.medications.trim());
+      if (missing) {
+        setError("Responde todas las preguntas para continuar. Si no aplica, marca \"Ninguna\".");
+        return;
+      }
+    }
+    setError(null);
     setSaving(true);
     try {
-      await updateOwnSkinIdAction(form);
+      await updateOwnSkinIdAction({
+        ...form,
+        allergies: noAllergies ? "" : form.allergies,
+        medications: noMedications ? "" : form.medications,
+      });
       setSaved(true);
+      // The /my layout decides between onboarding and the app, so refreshing
+      // is what lets a newly-complete client through.
+      if (onboarding) router.refresh();
     } finally {
       setSaving(false);
     }
   }
 
   return (
-    <Card title="Mi Skin ID">
+    <Card title={onboarding ? "Tu Skin ID" : "Mi Skin ID"}>
       <p className="mb-4 font-body text-xs text-ciruela/50">
         Tu Skin ID nos da una primera idea de tu piel y objetivos — tu cosmetóloga lo revisará
         contigo antes de cada tratamiento
@@ -60,12 +89,14 @@ export function ClientSkinIdForm({ initial }: { initial: SkinIdInput }) {
           value={form.allergies}
           placeholder="Ej. fragancias, frutos secos, algún ingrediente…"
           onChange={(v) => update("allergies", v)}
+          noneOption={onboarding ? { checked: noAllergies, onChange: setNoAllergies } : undefined}
         />
         <Field
           label="Medicamentos"
           value={form.medications}
           placeholder="Incluye medicamentos tópicos y orales relevantes"
           onChange={(v) => update("medications", v)}
+          noneOption={onboarding ? { checked: noMedications, onChange: setNoMedications } : undefined}
         />
         <SelectField
           label="Objetivo"
@@ -103,9 +134,10 @@ export function ClientSkinIdForm({ initial }: { initial: SkinIdInput }) {
           disabled={saving}
           className="rounded-full bg-ciruela px-5 py-2.5 font-body text-sm text-hueso disabled:opacity-50"
         >
-          {saving ? "Guardando…" : "Guardar cambios"}
+          {saving ? "Guardando…" : onboarding ? "Continuar" : "Guardar cambios"}
         </button>
-        {saved && <span className="font-body text-xs text-oliva">Guardado.</span>}
+        {saved && !onboarding && <span className="font-body text-xs text-oliva">Guardado.</span>}
+        {error && <span className="font-body text-xs text-[#b3392f]">{error}</span>}
       </div>
     </Card>
   );
@@ -116,11 +148,13 @@ function Field({
   value,
   onChange,
   placeholder,
+  noneOption,
 }: {
   label: string;
   value: string;
   onChange: (v: string) => void;
   placeholder?: string;
+  noneOption?: { checked: boolean; onChange: (checked: boolean) => void };
 }) {
   return (
     <div>
@@ -128,11 +162,22 @@ function Field({
         {label}
       </label>
       <input
-        value={value}
+        value={noneOption?.checked ? "" : value}
+        disabled={noneOption?.checked}
         placeholder={placeholder}
         onChange={(e) => onChange(e.target.value)}
-        className="w-full rounded-lg border border-ciruela/20 bg-hueso px-3 py-2 font-body text-sm text-ciruela placeholder:text-ciruela/40 focus:outline-none focus:ring-1 focus:ring-ciruela/40"
+        className="w-full rounded-lg border border-ciruela/20 bg-hueso px-3 py-2 font-body text-sm text-ciruela placeholder:text-ciruela/40 focus:outline-none focus:ring-1 focus:ring-ciruela/40 disabled:opacity-50"
       />
+      {noneOption && (
+        <label className="mt-1.5 flex items-center gap-2 font-body text-xs text-ciruela/70">
+          <input
+            type="checkbox"
+            checked={noneOption.checked}
+            onChange={(e) => noneOption.onChange(e.target.checked)}
+          />
+          Ninguna
+        </label>
+      )}
     </div>
   );
 }

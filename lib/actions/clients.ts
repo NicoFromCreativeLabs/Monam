@@ -47,7 +47,7 @@ export async function updateOwnSkinIdAction(data: SkinIdInput) {
     },
   });
 
-  revalidatePath("/my/skin-id");
+  revalidatePath("/my", "layout");
   revalidatePath("/admin/clients");
   revalidatePath("/staff/clients");
 }
