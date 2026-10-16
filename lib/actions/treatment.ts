@@ -20,6 +20,9 @@ export interface CompleteTreatmentInput {
   usedProducts: { sku: string; amountMl: string }[];
   clinicalNotes: string;
   revisitInterval: string; // "2 semanas" | "4 semanas" | "6 semanas"
+  // The add-ons actually performed: the ones booked ahead plus any added in
+  // the cabin. Saved on the appointment so the checkout charges them.
+  addOnIds?: string[];
 }
 
 export type CompleteTreatmentResult = { error: string } | { treatmentRecordId: string };
@@ -40,6 +43,9 @@ export async function completeTreatmentAction(
   const protocol = await prisma.protocol.findUnique({ where: { name: input.protocolName } });
   if (!protocol) return { error: "Protocolo no encontrado." };
 
+  const addOnIds = [...new Set(input.addOnIds ?? [])];
+  if (addOnIds.length > 2) return { error: "Máximo 2 add-ons por cita." };
+
   const record = await prisma.treatmentRecord.create({
     data: {
       appointmentId: appointment.id,
@@ -54,6 +60,26 @@ export async function completeTreatmentAction(
     where: { id: appointment.id },
     data: { status: "COMPLETED", protocolId: protocol.id },
   });
+
+  // Sync the appointment's add-ons with what was really done: drop the ones
+  // not performed, add the new ones at today's price, and keep the price a
+  // booked add-on already had.
+  if (input.addOnIds !== undefined) {
+    const chosen = addOnIds.length ? await prisma.addOn.findMany({ where: { id: { in: addOnIds } } }) : [];
+    const existing = await prisma.appointmentAddOn.findMany({ where: { appointmentId: appointment.id } });
+    await prisma.$transaction([
+      prisma.appointmentAddOn.deleteMany({
+        where: { appointmentId: appointment.id, addOnId: { notIn: chosen.map((a) => a.id) } },
+      }),
+      ...chosen
+        .filter((a) => !existing.some((e) => e.addOnId === a.id))
+        .map((a) =>
+          prisma.appointmentAddOn.create({
+            data: { appointmentId: appointment.id, addOnId: a.id, priceMxn: a.priceMxn },
+          }),
+        ),
+    ]);
+  }
 
   for (const used of input.usedProducts) {
     const amountMl = Number(used.amountMl);

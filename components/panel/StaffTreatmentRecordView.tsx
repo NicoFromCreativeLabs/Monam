@@ -16,6 +16,7 @@ export interface TreatmentClient {
   clientName: string;
   tier: "Targeted" | "Signature";
   allergies: string[];
+  bookedAddOnIds: string[]; // add-ons the client already picked when booking
 }
 
 const REVISIT_OPTIONS = ["2 semanas", "4 semanas", "6 semanas"];
@@ -36,15 +37,23 @@ export function StaffTreatmentRecordView({ client }: { client: TreatmentClient |
   const [protocol, setProtocol] = useState(tierProtocols[0]?.name ?? "");
   const backbarAtLocation = BACKBAR_INVENTORY.filter((b) => b.location === identity.location);
   const [usedProducts, setUsedProducts] = useState<UsedProduct[]>([{ sku: "", amountMl: "" }]);
-  const [selectedAddOns, setSelectedAddOns] = useState<string[]>([]);
+  const [selectedAddOns, setSelectedAddOns] = useState<string[]>(client?.bookedAddOnIds ?? []);
   const [clinicalNotes, setClinicalNotes] = useState("");
   const [revisitInterval, setRevisitInterval] = useState(REVISIT_OPTIONS[0]);
   const [completed, setCompleted] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
-  const availableAddOns = addOns.filter((a) => a.availableOn.includes(protocol));
+  // Add-ons configured for this protocol, plus any the client already booked
+  // (so a booked one never disappears just because the protocol changed).
+  const availableAddOns = addOns.filter(
+    (a) => a.availableOn.includes(protocol) || client?.bookedAddOnIds.includes(a.id),
+  );
+  const MAX_ADD_ONS = 2;
 
   function toggleAddOn(id: string) {
-    setSelectedAddOns((prev) => (prev.includes(id) ? prev.filter((a) => a !== id) : [...prev, id]));
+    setSelectedAddOns((prev) => {
+      if (prev.includes(id)) return prev.filter((a) => a !== id);
+      return prev.length >= MAX_ADD_ONS ? prev : [...prev, id];
+    });
   }
 
   function updateUsedProduct(index: number, patch: Partial<UsedProduct>) {
@@ -67,6 +76,7 @@ export function StaffTreatmentRecordView({ client }: { client: TreatmentClient |
         usedProducts,
         clinicalNotes,
         revisitInterval,
+        addOnIds: selectedAddOns,
       });
       if ("error" in result) {
         setSubmitError(result.error);
@@ -117,7 +127,7 @@ export function StaffTreatmentRecordView({ client }: { client: TreatmentClient |
                     key={p.id}
                     onClick={() => {
                       setProtocol(p.name);
-                      setSelectedAddOns([]);
+                      setSelectedAddOns(client.bookedAddOnIds);
                     }}
                     className={`rounded-lg border px-3 py-2 text-left font-body text-sm ${
                       protocol === p.name
@@ -154,11 +164,22 @@ export function StaffTreatmentRecordView({ client }: { client: TreatmentClient |
                           <span className="ml-1 text-xs text-ciruela/50">· {a.function}</span>
                         </span>
                       </span>
-                      <span className="text-xs text-ciruela/40">+{a.extraMinutes} min</span>
+                      <span className="text-xs text-ciruela/40">
+                        {a.priceMxn > 0 ? `+$${a.priceMxn} MXN · ` : ""}+{a.extraMinutes} min
+                      </span>
                     </label>
                   ))}
                 </div>
+                <p className="mt-2 font-body text-[11px] text-ciruela/40">
+                  Máximo {MAX_ADD_ONS}. Lo que marques se cobra con el facial.
+                </p>
               </div>
+            )}
+            {availableAddOns.length === 0 && (
+              <p className="mt-5 font-body text-xs text-ciruela/40">
+                No hay add-ons configurados para {protocol}. El Admin puede ligarlos en Configuración →
+                Add-ons → Editar → &ldquo;Disponible en&rdquo;.
+              </p>
             )}
 
             <div className="mt-5">

@@ -29,6 +29,9 @@ export default async function StaffTreatmentRecord() {
       clientName: next.clientName,
       tier: next.tier,
       allergies: record?.skinId?.allergies ?? [],
+      bookedAddOnIds: (
+        await prisma.appointmentAddOn.findMany({ where: { appointmentId: next.id }, select: { addOnId: true } })
+      ).map((a) => a.addOnId),
     };
   }
 
