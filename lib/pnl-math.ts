@@ -25,10 +25,15 @@ export interface PnlBreakdown {
   comisionTerminal: number;
   operacionLocal: number;
   marketingLocal: number;
+  // Deposits collected in the period minus those applied to charges (net, so a
+  // deposit later credited to a service is not counted twice).
+  depositosReservaciones: number;
+  // Stripe's fee on online sales and deposits.
+  comisionStripe: number;
 }
 
 export function ventasBrutas(b: PnlBreakdown) {
-  return b.serviciosTargeted + b.serviciosSignature + b.addOns + b.retail + b.paquetesVencidos;
+  return b.serviciosTargeted + b.serviciosSignature + b.addOns + b.retail + b.paquetesVencidos + b.depositosReservaciones;
 }
 export function ingresoNetoFromBreakdown(b: PnlBreakdown) {
   return ventasBrutas(b) + b.descuentos + b.reembolsos;
@@ -68,6 +73,7 @@ export function ebitda(b: PnlBreakdown) {
     b.renta +
     b.mantenimiento +
     b.comisionTerminal +
+    b.comisionStripe +
     b.operacionLocal +
     b.marketingLocal
   );

@@ -24,6 +24,8 @@ export interface BusinessRulesInput {
   anomalyDiscountThresholdPct?: number;
   anomalyRefundThresholdMXN?: number;
   terminalFeePct?: number;
+  stripeFeePct?: number;
+  stripeFixedFeeMxn?: number;
 }
 
 // Commission rates live on CommissionRule (the real table createSaleAction
@@ -52,6 +54,12 @@ export async function updateBusinessRulesAction(patch: BusinessRulesInput) {
   }
   if (patch.terminalFeePct !== undefined) {
     await setSetting("pnl.terminalFeePct", Math.min(100, Math.max(0, patch.terminalFeePct)));
+  }
+  if (patch.stripeFeePct !== undefined) {
+    await setSetting("pnl.stripeFeePct", Math.min(100, Math.max(0, patch.stripeFeePct)));
+  }
+  if (patch.stripeFixedFeeMxn !== undefined) {
+    await setSetting("pnl.stripeFixedFeeMxn", Math.min(1000, Math.max(0, patch.stripeFixedFeeMxn)));
   }
 
   revalidatePath("/admin/settings");

@@ -898,7 +898,7 @@ export function AdminSettingsView({
               </dd>
             </div>
             <div className="flex items-center justify-between border-b border-ciruela/8 pb-2 font-body text-sm text-ciruela">
-              <dt>Comisión de terminal (cobros con tarjeta y en línea)</dt>
+              <dt>Comisión de terminal (cobros con tarjeta)</dt>
               <dd>
                 <span className="flex items-center gap-1 text-ciruela/60">
                   <input
@@ -911,6 +911,41 @@ export function AdminSettingsView({
                     className="w-16 rounded border border-ciruela/25 bg-hueso px-1.5 py-1 text-right font-body text-sm text-ciruela focus:outline-none focus:ring-1 focus:ring-ciruela/40"
                   />
                   %
+                </span>
+              </dd>
+            </div>
+            <div className="flex items-center justify-between border-b border-ciruela/8 pb-2 font-body text-sm text-ciruela">
+              <dt>Comisión de Stripe (cobros en línea y depósitos)</dt>
+              <dd>
+                <span className="flex items-center gap-1 text-ciruela/60">
+                  <input
+                    type="number"
+                    min={0}
+                    max={100}
+                    step={0.1}
+                    value={commissionRules.stripeFeePct}
+                    onChange={(e) => setCommissionRules({ stripeFeePct: Number(e.target.value) || 0 })}
+                    className="w-16 rounded border border-ciruela/25 bg-hueso px-1.5 py-1 text-right font-body text-sm text-ciruela focus:outline-none focus:ring-1 focus:ring-ciruela/40"
+                  />
+                  %
+                </span>
+              </dd>
+            </div>
+            <div className="flex items-center justify-between border-b border-ciruela/8 pb-2 font-body text-sm text-ciruela">
+              <dt>Cargo fijo de Stripe por cobro</dt>
+              <dd>
+                <span className="flex items-center gap-1 text-ciruela/60">
+                  $
+                  <input
+                    type="number"
+                    min={0}
+                    max={1000}
+                    step={0.5}
+                    value={commissionRules.stripeFixedFeeMxn}
+                    onChange={(e) => setCommissionRules({ stripeFixedFeeMxn: Number(e.target.value) || 0 })}
+                    className="w-16 rounded border border-ciruela/25 bg-hueso px-1.5 py-1 text-right font-body text-sm text-ciruela focus:outline-none focus:ring-1 focus:ring-ciruela/40"
+                  />
+                  MXN
                 </span>
               </dd>
             </div>

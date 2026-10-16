@@ -8,7 +8,9 @@ export interface BusinessRules {
   commissionRetailPct: number;
   anomalyDiscountThresholdPct: number;
   anomalyRefundThresholdMXN: number;
-  terminalFeePct: number; // card/online processing fee, % of those payments (P&L "Comisión de terminal")
+  terminalFeePct: number; // card-terminal fee, % of card payments (P&L "Comisión de terminal")
+  stripeFeePct: number; // Stripe fee, % of online payments and deposits (P&L "Comisión de Stripe")
+  stripeFixedFeeMxn: number; // Stripe's fixed fee per payment
   // Depósitos by appointment type (see lib/deposit-rules.ts) — read by /my/book.
   depositRequiredSignature: boolean;
   depositRequiredTargeted: boolean;

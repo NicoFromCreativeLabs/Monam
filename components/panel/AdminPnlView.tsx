@@ -54,6 +54,7 @@ const ROWS: Row[] = [
   { type: "line", label: "Servicios Signature", field: "serviciosSignature" },
   { type: "line", label: "Add-ons", field: "addOns" },
   { type: "line", label: "Retail", field: "retail", favorite: true },
+  { type: "line", label: "Depósitos de reservaciones (neto)", field: "depositosReservaciones" },
   { type: "line", label: "Paquetes vencidos no usados", field: "paquetesVencidos" },
   { type: "subtotal", label: "Ventas brutas", compute: ventasBrutas },
   { type: "line", label: "− Descuentos", field: "descuentos" },
@@ -80,6 +81,7 @@ const ROWS: Row[] = [
 
   { type: "section", label: "GASTOS DE OPERACIÓN" },
   { type: "line", label: "Comisión de terminal", field: "comisionTerminal" },
+  { type: "line", label: "Comisión de Stripe", field: "comisionStripe" },
   { type: "line", label: "Operación del local", field: "operacionLocal" },
   { type: "line", label: "Marketing local", field: "marketingLocal" },
   { type: "subtotal", label: "EBITDA del local", compute: ebitda, favorite: true, objetivoKey: "ebitda" },

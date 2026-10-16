@@ -23,6 +23,7 @@ export async function getPnlBreakdown(locationIds: string[], range: DateRange): 
       backbarTeorico: 0, costoRetailVendido: 0, cortesias: 0, merma: 0, nominaBase: 0, cargasSociales: 0,
       comisionesServicio: 0, comisionesRetail: 0, renta: 0, mantenimiento: 0,
       paquetesVencidos: 0, insumosAddOns: 0, comisionTerminal: 0, operacionLocal: 0, marketingLocal: 0,
+      depositosReservaciones: 0, comisionStripe: 0,
     };
   }
 
@@ -82,14 +83,43 @@ export async function getPnlBreakdown(locationIds: string[], range: DateRange): 
     .filter((l) => l.type === "ADD_ON")
     .reduce((s, l) => s + (l.addOn?.costMxn ?? 0), 0);
 
-  // Comisión de terminal: the configured % of what was paid by card or online.
-  // Stays 0 until the percentage is set in Configuración.
-  const feeRow = await prisma.setting.findUnique({ where: { key: "pnl.terminalFeePct" } });
-  const terminalFeePct = typeof feeRow?.value === "number" ? feeRow.value : 0;
-  const cardPaid = sales
-    .filter((sale) => sale.paymentMethod === "CARD" || sale.paymentMethod === "ONLINE")
-    .reduce((s, sale) => s + sale.totalMxn, 0);
-  const comisionTerminal = -Math.round((cardPaid * terminalFeePct) / 100);
+  // Deposits for reservations: collected in the period (and attached to an
+  // appointment at one of these locations) minus those applied to charges in
+  // the period. Net on purpose — a deposit that is later credited to a service
+  // is already inside that service's price, so adding it in full would count
+  // the money twice.
+  const deposits = await prisma.deposit.findMany({
+    where: {
+      collectedAt: { gte: range.start, lt: range.end },
+      status: { in: ["HELD", "CREDITED", "FORFEITED"] },
+      appointment: { is: { locationId: { in: locationIds } } },
+    },
+    select: { amountMxn: true, provider: true },
+  });
+  const depositsCollected = deposits.reduce((s, d) => s + d.amountMxn, 0);
+  const depositsApplied = -sales.reduce((s, sale) => s + sale.depositCreditMxn, 0);
+  const depositosReservaciones = depositsCollected - depositsApplied;
+
+  // Payment fees, with the rates set in Configuración (0 until set):
+  //  - Comisión de terminal: % of what was paid on the card terminal.
+  //  - Comisión de Stripe: % plus a fixed amount per payment, on online sales
+  //    and on deposits paid through Stripe.
+  const feeRows = await prisma.setting.findMany({
+    where: { key: { in: ["pnl.terminalFeePct", "pnl.stripeFeePct", "pnl.stripeFixedFeeMxn"] } },
+  });
+  const feeNumber = (key: string) => {
+    const v = feeRows.find((r) => r.key === key)?.value;
+    return typeof v === "number" ? v : 0;
+  };
+  const cardPaid = sales.filter((sale) => sale.paymentMethod === "CARD").reduce((s, sale) => s + sale.totalMxn, 0);
+  const comisionTerminal = -Math.round((cardPaid * feeNumber("pnl.terminalFeePct")) / 100);
+  const onlineSales = sales.filter((sale) => sale.paymentMethod === "ONLINE");
+  const stripeDeposits = deposits.filter((d) => d.provider === "STRIPE");
+  const stripeBase = onlineSales.reduce((s, sale) => s + sale.totalMxn, 0) + stripeDeposits.reduce((s, d) => s + d.amountMxn, 0);
+  const stripeCount = onlineSales.length + stripeDeposits.length;
+  const comisionStripe = -Math.round(
+    (stripeBase * feeNumber("pnl.stripeFeePct")) / 100 + stripeCount * feeNumber("pnl.stripeFixedFeeMxn"),
+  );
 
   const merma = inventoryTxns.reduce((s, t) => s + Math.abs(t.qtyDelta) * (t.inventoryItem.costMxn ?? 0), 0) * -1;
 
@@ -108,6 +138,7 @@ export async function getPnlBreakdown(locationIds: string[], range: DateRange): 
     backbarTeorico, costoRetailVendido, cortesias, merma, nominaBase, cargasSociales,
     comisionesServicio, comisionesRetail, renta, mantenimiento,
     paquetesVencidos: 0, insumosAddOns, comisionTerminal, operacionLocal: 0, marketingLocal: 0,
+    depositosReservaciones, comisionStripe,
   };
 }
 

@@ -93,7 +93,7 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
     prisma.setting.findMany({
       where: {
         key: {
-          in: ["anomaly.discountThresholdPct", "anomaly.refundThresholdMxn", "pnl.terminalFeePct", ...TIER_DEPOSIT_SETTING_KEYS],
+          in: ["anomaly.discountThresholdPct", "anomaly.refundThresholdMxn", "pnl.terminalFeePct", "pnl.stripeFeePct", "pnl.stripeFixedFeeMxn", ...TIER_DEPOSIT_SETTING_KEYS],
         },
       },
     }),
@@ -140,6 +140,8 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
     anomalyDiscountThresholdPct: settingNumber("anomaly.discountThresholdPct", 15),
     anomalyRefundThresholdMXN: settingNumber("anomaly.refundThresholdMxn", 1500),
     terminalFeePct: settingNumber("pnl.terminalFeePct", 0),
+    stripeFeePct: settingNumber("pnl.stripeFeePct", 0),
+    stripeFixedFeeMxn: settingNumber("pnl.stripeFixedFeeMxn", 0),
     depositRequiredSignature: tierDepositRules.signature,
     depositRequiredTargeted: tierDepositRules.targeted,
   };

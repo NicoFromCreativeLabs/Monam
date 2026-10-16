@@ -24,6 +24,8 @@ function breakdown(overrides: Partial<PnlBreakdown> = {}): PnlBreakdown {
     comisionTerminal: 0,
     operacionLocal: 0,
     marketingLocal: 0,
+    depositosReservaciones: 0,
+    comisionStripe: 0,
     ...overrides,
   };
 }
@@ -81,11 +83,13 @@ describe("ebitda", () => {
       comisionTerminal: -1500,
       operacionLocal: -4000,
       marketingLocal: -2500,
+      depositosReservaciones: 500,
+      comisionStripe: -300,
     };
-    const expectedIngresoNeto = 100000 + 200000 + 20000 + 150000 + 1000 - 10000 - 2000;
+    const expectedIngresoNeto = 100000 + 200000 + 20000 + 150000 + 1000 + 500 - 10000 - 2000;
     const expectedUtilidadBruta = expectedIngresoNeto - 90000 - 800 - 67000 - 500 - 3000;
     const expectedEbitda =
-      expectedUtilidadBruta - 68000 - 20400 - 42000 - 12000 - 70000 - 11200 - 1500 - 4000 - 2500;
+      expectedUtilidadBruta - 68000 - 20400 - 42000 - 12000 - 70000 - 11200 - 1500 - 300 - 4000 - 2500;
     expect(ingresoNetoFromBreakdown(b)).toBe(expectedIngresoNeto);
     expect(utilidadBruta(b)).toBe(expectedUtilidadBruta);
     expect(ebitda(b)).toBe(expectedEbitda);

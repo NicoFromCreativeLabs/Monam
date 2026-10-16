@@ -7,12 +7,12 @@ import type { PnlBreakdown } from "@/lib/pnl-math";
 export type PnlField = keyof PnlBreakdown;
 
 export const PNL_FIELDS: PnlField[] = [
-  "serviciosTargeted", "serviciosSignature", "addOns", "retail", "paquetesVencidos",
+  "serviciosTargeted", "serviciosSignature", "addOns", "retail", "paquetesVencidos", "depositosReservaciones",
   "descuentos", "reembolsos",
   "backbarTeorico", "insumosAddOns", "costoRetailVendido", "cortesias", "merma",
   "nominaBase", "cargasSociales", "comisionesServicio", "comisionesRetail",
   "renta", "mantenimiento",
-  "comisionTerminal", "operacionLocal", "marketingLocal",
+  "comisionTerminal", "comisionStripe", "operacionLocal", "marketingLocal",
 ];
 
 // Lines the P&L stores as negative numbers (costs, discounts, refunds). The
@@ -20,7 +20,7 @@ export const PNL_FIELDS: PnlField[] = [
 export const PNL_COST_FIELDS = new Set<PnlField>([
   "descuentos", "reembolsos", "backbarTeorico", "insumosAddOns", "costoRetailVendido", "cortesias", "merma",
   "nominaBase", "cargasSociales", "comisionesServicio", "comisionesRetail", "renta", "mantenimiento",
-  "comisionTerminal", "operacionLocal", "marketingLocal",
+  "comisionTerminal", "comisionStripe", "operacionLocal", "marketingLocal",
 ]);
 
 export function emptyBreakdown(): PnlBreakdown {
