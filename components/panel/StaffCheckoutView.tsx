@@ -12,7 +12,9 @@ import {
   createSaleAction,
   startOnlineChargeAction,
   type CreateSaleInput,
+  type DiscountInput,
 } from "@/lib/actions/commerce";
+import { CheckoutDiscount } from "@/components/panel/CheckoutDiscount";
 
 export interface CheckoutRetailItem {
   sku: string;
@@ -23,6 +25,7 @@ export interface CheckoutRetailItem {
 
 export interface CheckoutSession {
   appointmentId: string;
+  clientId: string;
   locationName: string;
   clientName: string;
   service: { name: string; price: number };
@@ -53,10 +56,14 @@ export function StaffCheckoutView({
   session,
   catalog,
   locationName,
+  discountThresholdPct,
+  canApproveDiscounts,
 }: {
   session: CheckoutSession | null;
   catalog: CheckoutCatalogItem[];
   locationName: string;
+  discountThresholdPct: number; // Front Desk can discount up to this % without approval
+  canApproveDiscounts: boolean; // Owner / Clinic Manager: any discount, directly
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -69,6 +76,7 @@ export function StaffCheckoutView({
   // derives from the tag itself).
   const suggestions: CheckoutRetailItem[] = session?.retailItems ?? [];
   const [addedItems, setAddedItems] = useState<AddedItem[]>([]);
+  const [discount, setDiscount] = useState<DiscountInput | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [search, setSearch] = useState("");
   const [charged, setCharged] = useState(false);
@@ -113,7 +121,13 @@ export function StaffCheckoutView({
   const depositCredit = session?.depositCredit ?? 0;
   const retailTotal = addedItems.reduce((sum, i) => sum + i.price * i.qty, 0);
   const subtotal = servicePrice + addOnsTotal + retailTotal;
-  const total = Math.max(0, subtotal + depositCredit);
+  const discountMxn = discount
+    ? Math.min(
+        subtotal,
+        discount.kind === "PERCENT" ? Math.round((subtotal * discount.value) / 100) : Math.round(discount.value),
+      )
+    : 0;
+  const total = Math.max(0, subtotal - discountMxn + depositCredit);
 
   const [chargedSummary, setChargedSummary] = useState<{
     clientName: string | null;
@@ -127,6 +141,7 @@ export function StaffCheckoutView({
       appointmentId: session?.appointmentId ?? null,
       locationName: session?.locationName ?? locationName,
       retailItems,
+      discount,
       reAddedAfterRemovalSkus: [],
     };
     startTransition(async () => {
@@ -407,6 +422,23 @@ export function StaffCheckoutView({
             >
               + Agregar producto
             </button>
+
+            {subtotal > 0 && (
+              <CheckoutDiscount
+                subtotal={subtotal}
+                thresholdPct={discountThresholdPct}
+                canApprove={canApproveDiscounts}
+                clientId={session?.clientId ?? null}
+                value={discount}
+                onChange={setDiscount}
+              />
+            )}
+            {discountMxn > 0 && (
+              <div className="mt-3 flex justify-between font-body text-sm text-oliva">
+                <span>Descuento</span>
+                <span>-${discountMxn} MXN</span>
+              </div>
+            )}
 
             <div className="mt-3 flex justify-between border-t border-ciruela/15 pt-3 font-body text-base font-medium text-ciruela">
               <span>Total</span>

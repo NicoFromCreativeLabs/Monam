@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { getCurrentAppUser } from "@/lib/auth/dal";
 import {
   StaffCheckoutView,
   type CheckoutCatalogItem,
@@ -45,6 +46,7 @@ export default async function StaffCheckout({
       const priceBySku = new Map(catalog.map((c) => [c.sku, c.price]));
       session = {
         appointmentId: appointment.id,
+        clientId: appointment.clientId,
         locationName: "Roma Norte",
         clientName: appointment.client.name,
         service: {
@@ -63,5 +65,20 @@ export default async function StaffCheckout({
     }
   }
 
-  return <StaffCheckoutView session={session} catalog={catalog} locationName="Roma Norte" />;
+  const [currentUser, thresholdRow] = await Promise.all([
+    getCurrentAppUser(),
+    prisma.setting.findUnique({ where: { key: "discount.approvalThresholdPct" } }),
+  ]);
+  const discountThresholdPct = typeof thresholdRow?.value === "number" ? thresholdRow.value : 10;
+  const canApproveDiscounts = currentUser?.role === "OWNER" || currentUser?.role === "CLINIC_MANAGER";
+
+  return (
+    <StaffCheckoutView
+      session={session}
+      catalog={catalog}
+      locationName="Roma Norte"
+      discountThresholdPct={discountThresholdPct}
+      canApproveDiscounts={canApproveDiscounts}
+    />
+  );
 }

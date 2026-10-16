@@ -6,7 +6,12 @@ import { requireStaffRole } from "@/lib/auth/dal";
 import { headers } from "next/headers";
 import QRCode from "qrcode";
 import { STRIPE_ENABLED } from "@/lib/feature-flags";
-import { cancelPaymentIntent, createCounterPaymentIntent, getPaymentStatus } from "@/lib/payments/stripe";
+import {
+  cancelPaymentIntent,
+  createCounterPaymentIntent,
+  getPaymentStatus,
+  refundPayment,
+} from "@/lib/payments/stripe";
 import type { Role } from "@/lib/generated/prisma/client";
 
 const FRONT_DESK_ROLES: Role[] = ["FRONT_DESK", "OWNER", "CLINIC_MANAGER"];
@@ -58,8 +63,20 @@ export interface RetailLineInput {
   qty: number;
 }
 
+// A discount on the whole ticket (before the deposit credit). Front Desk can
+// apply one up to the approval threshold set in Configuración; above it a
+// manager has to approve it first (approvalRequestId), and Owner / Clinic
+// Manager can apply any discount directly. Always needs a reason.
+export interface DiscountInput {
+  kind: "PERCENT" | "AMOUNT";
+  value: number; // % when PERCENT, pesos when AMOUNT
+  reason: string;
+  approvalRequestId?: string;
+}
+
 export interface CreateSaleInput {
   appointmentId?: string | null;
+  discount?: DiscountInput | null;
   locationName: string;
   retailItems: RetailLineInput[];
   reAddedAfterRemovalSkus: string[]; // re-added after the recommendation was removed — commission goes to whoever closes the sale, not the original tagger
@@ -80,7 +97,9 @@ function quoteError(error: string): { error: string } {
   return { error };
 }
 
-async function quoteSale(input: Pick<CreateSaleInput, "appointmentId" | "locationName" | "retailItems">) {
+async function quoteSale(
+  input: Pick<CreateSaleInput, "appointmentId" | "locationName" | "retailItems" | "discount">,
+) {
   const location = await prisma.location.findFirst({ where: { name: input.locationName } });
   if (!location) return quoteError("Sucursal no encontrada.");
 
@@ -119,9 +138,47 @@ async function quoteSale(input: Pick<CreateSaleInput, "appointmentId" | "locatio
   const subtotal = servicePrice + addOnsTotal + retailTotal;
   const depositCreditMxn =
     appointment?.deposit && appointment.deposit.status === "HELD" ? -appointment.deposit.amountMxn : 0;
-  const totalMxn = Math.max(0, subtotal + depositCreditMxn);
 
-  return { location, appointment, itemBySku, servicePrice, subtotal, depositCreditMxn, totalMxn } as const;
+  let discountMxn = 0;
+  if (input.discount) {
+    const d = input.discount;
+    if (!Number.isFinite(d.value) || d.value <= 0) return quoteError("El descuento debe ser mayor a 0.");
+    if (d.reason.trim().length < 3) return quoteError("Escribe el motivo del descuento.");
+    if (d.kind === "PERCENT" && d.value > 100) return quoteError("El descuento no puede pasar de 100%.");
+    discountMxn = d.kind === "PERCENT" ? Math.round((subtotal * d.value) / 100) : Math.round(d.value);
+    if (discountMxn > subtotal) return quoteError("El descuento no puede ser mayor al total.");
+  }
+  const discountPct = subtotal > 0 ? (discountMxn / subtotal) * 100 : 0;
+  const totalMxn = Math.max(0, subtotal - discountMxn + depositCreditMxn);
+
+  return {
+    location, appointment, itemBySku, servicePrice, subtotal, depositCreditMxn, totalMxn, discountMxn, discountPct,
+  } as const;
+}
+
+// Who may apply this discount. Owner / Clinic Manager: any. Front Desk: up to
+// the approval threshold, or any amount with a manager's approval of exactly
+// this request (approved, not yet used on another sale).
+async function authorizeDiscount(
+  staff: { id: string; role: Role },
+  discount: DiscountInput,
+  discountPct: number,
+): Promise<{ ok: true } | { error: string }> {
+  if (MANAGER_ROLES.includes(staff.role)) return { ok: true };
+  const threshold = await getSettingNumber("discount.approvalThresholdPct", 10);
+  if (discountPct <= threshold) return { ok: true };
+  if (!discount.approvalRequestId) {
+    return { error: `Un descuento de más de ${threshold}% requiere la aprobación de un gerente.` };
+  }
+  const approval = await prisma.approvalRequest.findUnique({ where: { id: discount.approvalRequestId } });
+  const valid =
+    approval &&
+    approval.type === "DISCOUNT" &&
+    approval.status === "APPROVED" &&
+    !approval.saleId &&
+    approval.requestedByUserId === staff.id &&
+    (approval.amountMxn ?? 0) + 0.5 >= discountPct;
+  return valid ? { ok: true } : { error: "La aprobación del descuento no es válida o ya se usó." };
 }
 
 // Same price/attribution derivation as always — see quoteSale. For ONLINE
@@ -132,7 +189,13 @@ export async function createSaleAction(input: CreateSaleInput): Promise<CreateSa
 
   const quote = await quoteSale(input);
   if ("error" in quote) return quote;
-  const { location, appointment, itemBySku, servicePrice, subtotal, depositCreditMxn, totalMxn } = quote;
+  const { location, appointment, itemBySku, servicePrice, subtotal, depositCreditMxn, totalMxn, discountMxn, discountPct } =
+    quote;
+
+  if (input.discount) {
+    const auth = await authorizeDiscount(staff, input.discount, discountPct);
+    if ("error" in auth) return auth;
+  }
 
   if (input.paymentMethod === "ONLINE") {
     const verified = await verifyOnlinePayment(input.stripePaymentId, totalMxn);
@@ -159,6 +222,7 @@ export async function createSaleAction(input: CreateSaleInput): Promise<CreateSa
         ...(appointment?.clientId ? { client: { connect: { id: appointment.clientId } } } : {}),
         ...(appointment?.id ? { appointment: { connect: { id: appointment.id } } } : {}),
         subtotalMxn: subtotal,
+        discountMxn,
         depositCreditMxn,
         totalMxn,
         paymentMethod: input.paymentMethod,
@@ -302,6 +366,32 @@ export async function createSaleAction(input: CreateSaleInput): Promise<CreateSa
       await tx.sale.update({ where: { id: created.id }, data: { cashRegisterSessionId: openSession.id } });
     }
 
+    // Keep the paper trail for the discount: a manager-approved request is
+    // tied to this sale; a direct one (within the threshold, or by a manager)
+    // is recorded as an approved request of its own.
+    if (discountMxn > 0 && input.discount) {
+      if (input.discount.approvalRequestId) {
+        await tx.approvalRequest.update({
+          where: { id: input.discount.approvalRequestId },
+          data: { saleId: created.id },
+        });
+      } else {
+        await tx.approvalRequest.create({
+          data: {
+            type: "DISCOUNT",
+            requestedByUserId: staff.id,
+            approvedByUserId: staff.id,
+            status: "APPROVED",
+            decidedAt: new Date(),
+            saleId: created.id,
+            clientId: appointment?.clientId ?? null,
+            amountMxn: Math.ceil(discountPct),
+            reason: input.discount.reason.trim(),
+          },
+        });
+      }
+    }
+
     // Marks the Stripe payment as spent — verifyOnlinePayment refuses a
     // payment that already closed a sale, so it can't be reused.
     if (input.paymentMethod === "ONLINE" && input.stripePaymentId) {
@@ -320,6 +410,17 @@ export async function createSaleAction(input: CreateSaleInput): Promise<CreateSa
 
     return created;
   });
+
+  if (discountMxn > 0 && input.discount && !input.discount.approvalRequestId) {
+    const anomalyPct = await getSettingNumber("anomaly.discountThresholdPct", 15);
+    if (discountPct > anomalyPct) {
+      await createAnomalyFlag(
+        "Descuento inusual",
+        `${Math.round(discountPct)}% aplicado en la venta ${sale.id} por ${staff.name} (umbral: ${anomalyPct}%)`,
+        sale.id,
+      );
+    }
+  }
 
   if (input.reAddedAfterRemovalSkus.length > 0) {
     await createAnomalyFlag(
@@ -364,9 +465,9 @@ export type StartOnlineChargeResult =
 // iOS/Android app or a Stripe card reader — it can't run in a web app.) The
 // Sale is recorded afterwards by createSaleAction once the payment is verified.
 export async function startOnlineChargeAction(
-  input: Pick<CreateSaleInput, "appointmentId" | "locationName" | "retailItems">,
+  input: Pick<CreateSaleInput, "appointmentId" | "locationName" | "retailItems" | "discount">,
 ): Promise<StartOnlineChargeResult> {
-  await requireStaffRole(FRONT_DESK_ROLES);
+  const staff = await requireStaffRole(FRONT_DESK_ROLES);
   if (!STRIPE_ENABLED) return { error: "Stripe no está configurado. Cobra en efectivo o con tarjeta." };
   if (!process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY) {
     return { error: "Falta la llave pública de Stripe (NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY)." };
@@ -375,6 +476,10 @@ export async function startOnlineChargeAction(
   const quote = await quoteSale(input);
   if ("error" in quote) return quote;
   if (quote.totalMxn <= 0) return { error: "No hay nada que cobrar." };
+  if (input.discount) {
+    const auth = await authorizeDiscount(staff, input.discount, quote.discountPct);
+    if ("error" in auth) return auth;
+  }
 
   const origin = (await headers()).get("origin") ?? "";
   try {
@@ -484,8 +589,22 @@ export async function requestApprovalAction(input: RequestApprovalInput) {
   return { requestId: request.id };
 }
 
-export async function decideApprovalAction(id: string, status: "APPROVED" | "REJECTED") {
+export async function decideApprovalAction(
+  id: string,
+  status: "APPROVED" | "REJECTED",
+): Promise<{ ok: true } | { ok: false; error: string }> {
   const manager = await requireStaffRole(MANAGER_ROLES);
+
+  // An approved refund is only approved once the money can really go back: a
+  // failed Stripe refund leaves the request pending.
+  if (status === "APPROVED") {
+    const pending = await prisma.approvalRequest.findUnique({ where: { id } });
+    if (pending?.type === "REFUND" && pending.status === "PENDING") {
+      const done = await executeRefund(pending.saleId, pending.amountMxn ?? 0, id);
+      if ("error" in done) return { ok: false, error: done.error };
+    }
+  }
+
   const request = await prisma.approvalRequest.update({
     where: { id },
     data: { status, approvedByUserId: manager.id, decidedAt: new Date() },
@@ -523,6 +642,124 @@ export async function decideApprovalAction(id: string, status: "APPROVED" | "REJ
 // ---------------------------------------------------------------------------
 // Inventory
 // ---------------------------------------------------------------------------
+
+// Front Desk polls this while a discount waits for a manager's decision.
+export async function getApprovalStatusAction(id: string): Promise<"PENDING" | "APPROVED" | "REJECTED" | null> {
+  await requireStaffRole(FRONT_DESK_ROLES);
+  const request = await prisma.approvalRequest.findUnique({ where: { id }, select: { status: true } });
+  return request?.status ?? null;
+}
+
+// ---------------------------------------------------------------------------
+// Refunds
+// ---------------------------------------------------------------------------
+
+// What can still be refunded on a sale: its total minus refunds already
+// approved (and, when asked, those waiting for approval).
+async function refundableMxn(saleId: string, excludeRequestId?: string, includePending = false) {
+  const sale = await prisma.sale.findUnique({ where: { id: saleId } });
+  if (!sale) return null;
+  const others = await prisma.approvalRequest.findMany({
+    where: {
+      saleId,
+      type: "REFUND",
+      status: includePending ? { in: ["APPROVED", "PENDING"] } : "APPROVED",
+      ...(excludeRequestId ? { id: { not: excludeRequestId } } : {}),
+    },
+    select: { amountMxn: true },
+  });
+  return { sale, remaining: sale.totalMxn - others.reduce((s, r) => s + (r.amountMxn ?? 0), 0) };
+}
+
+// Sends the money back. Online payments are refunded through Stripe; cash and
+// card-terminal payments have to be handed back by the staff, so there is
+// nothing to execute, only to record.
+async function executeRefund(
+  saleId: string | null,
+  amountMxn: number,
+  requestId?: string,
+): Promise<{ ok: true; viaStripe: boolean } | { error: string }> {
+  if (!saleId) return { error: "El reembolso no está ligado a una venta." };
+  const info = await refundableMxn(saleId, requestId);
+  if (!info) return { error: "Venta no encontrada." };
+  if (!Number.isInteger(amountMxn) || amountMxn <= 0) return { error: "El monto debe ser un número entero mayor a 0." };
+  if (amountMxn > info.remaining) {
+    return { error: `Solo se pueden reembolsar $${info.remaining.toLocaleString()} MXN de esta venta.` };
+  }
+
+  if (info.sale.paymentMethod === "ONLINE" && STRIPE_ENABLED) {
+    const payment = await prisma.auditLog.findFirst({
+      where: { action: "STRIPE_COUNTER_SALE", metadata: { path: ["saleId"], equals: saleId } },
+    });
+    if (payment?.entityId) {
+      try {
+        await refundPayment(payment.entityId, amountMxn);
+        return { ok: true, viaStripe: true };
+      } catch {
+        return { error: "Stripe no pudo procesar el reembolso. Revisa el pago en el Dashboard de Stripe." };
+      }
+    }
+  }
+  return { ok: true, viaStripe: false };
+}
+
+export type RefundResult =
+  | { error: string }
+  | { status: "PENDING" }
+  | { status: "REFUNDED"; viaStripe: boolean; amountMxn: number };
+
+// Front Desk asks; a manager approves in Aprobaciones. Owner / Clinic Manager
+// refund directly (and it is recorded like any approved request).
+export async function requestRefundAction(input: {
+  saleId: string;
+  amountMxn: number;
+  reason: string;
+}): Promise<RefundResult> {
+  const staff = await requireStaffRole(FRONT_DESK_ROLES);
+  if (input.reason.trim().length < 3) return { error: "Escribe el motivo del reembolso." };
+  if (!Number.isInteger(input.amountMxn) || input.amountMxn <= 0) {
+    return { error: "El monto debe ser un número entero mayor a 0." };
+  }
+  const info = await refundableMxn(input.saleId, undefined, true);
+  if (!info) return { error: "Venta no encontrada." };
+  if (input.amountMxn > info.remaining) {
+    return { error: `Solo se pueden reembolsar $${Math.max(0, info.remaining).toLocaleString()} MXN de esta venta.` };
+  }
+
+  const base = {
+    type: "REFUND" as const,
+    requestedByUserId: staff.id,
+    saleId: input.saleId,
+    clientId: info.sale.clientId,
+    amountMxn: input.amountMxn,
+    reason: input.reason.trim(),
+  };
+
+  if (!MANAGER_ROLES.includes(staff.role)) {
+    await prisma.approvalRequest.create({ data: base });
+    revalidatePath("/admin/control");
+    revalidatePath("/admin");
+    revalidatePath("/staff/refunds");
+    return { status: "PENDING" };
+  }
+
+  const done = await executeRefund(input.saleId, input.amountMxn);
+  if ("error" in done) return done;
+  await prisma.approvalRequest.create({
+    data: { ...base, approvedByUserId: staff.id, status: "APPROVED", decidedAt: new Date() },
+  });
+  const thresholdMxn = await getSettingNumber("anomaly.refundThresholdMxn", 1500);
+  if (input.amountMxn > thresholdMxn) {
+    await createAnomalyFlag(
+      "Reembolso inusual",
+      `$${input.amountMxn.toLocaleString()} MXN en la venta ${input.saleId} — lo hizo ${staff.name} (umbral: $${thresholdMxn.toLocaleString()} MXN)`,
+      input.saleId,
+    );
+  }
+  revalidateCheckout();
+  revalidatePath("/staff/refunds");
+  return { status: "REFUNDED", viaStripe: done.viaStripe, amountMxn: input.amountMxn };
+}
 
 export type LedgerName = "RETAIL" | "BACKBAR" | "WAREHOUSE";
 

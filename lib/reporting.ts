@@ -36,7 +36,13 @@ export async function getPnlBreakdown(locationIds: string[], range: DateRange): 
     }),
     prisma.sale.findMany({ where: saleWhere }),
     prisma.approvalRequest.findMany({
-      where: { status: "APPROVED", decidedAt: { gte: range.start, lt: range.end }, type: { in: ["REFUND", "COMP"] } },
+      where: {
+        status: "APPROVED",
+        decidedAt: { gte: range.start, lt: range.end },
+        type: { in: ["REFUND", "COMP"] },
+        // Tied to a sale: that sale's location. Not tied to one: counted everywhere, as before.
+        OR: [{ sale: { is: { locationId: { in: locationIds } } } }, { saleId: null }],
+      },
     }),
     prisma.commissionEntry.findMany({
       where: { createdAt: { gte: range.start, lt: range.end }, saleLineItem: { sale: saleWhere } },

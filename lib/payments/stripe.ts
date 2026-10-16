@@ -197,3 +197,11 @@ export async function cancelPaymentIntent(paymentId: string): Promise<void> {
   const stripe = getClient();
   await stripe.paymentIntents.cancel(paymentId);
 }
+
+// Refunds part or all of a payment made through a PaymentIntent (the counter
+// "En línea" charges). Amounts are pesos; Stripe wants centavos.
+export async function refundPayment(paymentId: string, amountMxn: number): Promise<{ refundId: string }> {
+  const stripe = getClient();
+  const refund = await stripe.refunds.create({ payment_intent: paymentId, amount: Math.round(amountMxn * 100) });
+  return { refundId: refund.id };
+}
