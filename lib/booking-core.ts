@@ -1,6 +1,7 @@
 import "server-only";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
+import { isSlotInPast } from "@/lib/booking-time";
 
 // The actual booking engine, factored out of lib/actions/booking.ts so it
 // has exactly one implementation reachable from every entry point — the
@@ -172,6 +173,7 @@ export async function getAvailableSlots(params: {
 
   const entries = await Promise.all(
     params.times.map(async (time) => {
+      if (isSlotInPast(params.date, time)) return [time, false] as const;
       const { startAt, endAt } = slotWindow(window, time);
       const assignment = await findAvailableAssignment(window.locationId, startAt, endAt, params.durationTier);
       return [time, assignment !== null] as const;
@@ -193,7 +195,14 @@ export async function insertAppointment(params: {
   protocolName: string | null;
   addOnIds?: string[];
   depositId?: string;
+  // Only for entries that legitimately book a time that has already started:
+  // Front Desk registering a walk-in, or the webhook finishing a booking whose
+  // deposit was already paid. Everything a client or the bot books is checked.
+  allowPast?: boolean;
 }): Promise<CreateAppointmentResult> {
+  if (!params.allowPast && isSlotInPast(params.date, params.time)) {
+    return { error: "Ese horario ya pasó — elige otro." };
+  }
   const window = await resolveBookingWindow(params);
   if (!window) return { error: "Sucursal no encontrada." };
   const { startAt, endAt } = slotWindow(window, params.time);
@@ -257,6 +266,8 @@ export async function createPendingDepositCheckout(
   if (!STRIPE_ENABLED) return { error: "Stripe no está configurado todavía." };
   const { createDepositCheckout } = await import("@/lib/payments/stripe");
 
+  if (isSlotInPast(draft.date, draft.time)) return { error: "Ese horario ya pasó — elige otro." };
+
   const client = await prisma.client.findUnique({ where: { id: draft.clientId } });
   if (!client) return { error: "Clienta no encontrada." };
 
@@ -312,7 +323,7 @@ export async function confirmDepositAndBook(
     return { error: "Depósito no encontrado o ya procesado." };
   }
   await prisma.deposit.update({ where: { id: depositId }, data: { status: "HELD" } });
-  return insertAppointment({ ...draft, clientId, depositId });
+  return insertAppointment({ ...draft, clientId, depositId, allowPast: true });
 }
 
 // WhatsApp's Cloud API sends `from` as digits only, no "+" and no spaces

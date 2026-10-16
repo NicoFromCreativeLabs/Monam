@@ -85,7 +85,8 @@ export async function createManualAppointmentAction(
   const client = await prisma.client.findUnique({ where: { id: input.clientId } });
   if (!client || client.anonymizedAt) return { error: "Clienta no encontrada." };
 
-  return insertAppointment(input);
+  // Front Desk may register a walk-in or a booking for a time that has started.
+  return insertAppointment({ ...input, allowPast: true });
 }
 
 // Client self-service cancel — also used by "Reagendar" (cancel, then the
