@@ -2,43 +2,67 @@
 
 import { useState } from "react";
 import { Card } from "./Card";
+import {
+  updateOwnPasswordAction,
+  updateOwnProfileAction,
+  type ProfileKind,
+} from "@/lib/actions/profile";
+
+type Message = { ok: boolean; text: string } | null;
 
 // Shared "Editar perfil" form for all three panels — reached from UserMenu.
-// Fields are controlled + Guardar actually does something (brief inline
-// confirmation) — found completely dead (no onClick anywhere, uncontrolled
-// inputs) during the persona QA pass: typing here and clicking "Guardar
-// cambios" silently did nothing. Still doesn't persist past a refresh (no
-// per-user profile store exists yet), but at least responds instead of
-// being a no-op button.
+// Saves to the signed-in person's real record (lib/actions/profile.ts).
+// `phone` is only passed for clients: staff accounts have no phone on file,
+// so the field is hidden for them instead of pretending to save it. Email is
+// the login, so it's shown read-only.
 export function ProfileForm({
+  kind,
   name,
   email,
   phone,
   role,
   location,
 }: {
+  kind: ProfileKind;
   name: string;
   email: string;
-  phone: string;
+  phone?: string;
   role: string;
   location?: string;
 }) {
-  const [fields, setFields] = useState({ name, email, phone });
-  const [savedInfo, setSavedInfo] = useState(false);
+  const [fields, setFields] = useState({ name, phone: phone ?? "" });
+  const [infoMessage, setInfoMessage] = useState<Message>(null);
+  const [savingInfo, setSavingInfo] = useState(false);
   const [password, setPassword] = useState({ next: "", confirm: "" });
-  const [passwordMessage, setPasswordMessage] = useState<string | null>(null);
+  const [passwordMessage, setPasswordMessage] = useState<Message>(null);
+  const [savingPassword, setSavingPassword] = useState(false);
 
-  function saveInfo() {
-    setSavedInfo(true);
+  async function saveInfo() {
+    setSavingInfo(true);
+    try {
+      const result = await updateOwnProfileAction(kind, {
+        name: fields.name,
+        phone: phone === undefined ? undefined : fields.phone,
+      });
+      setInfoMessage(result.error ? { ok: false, text: result.error } : { ok: true, text: "Guardado." });
+    } finally {
+      setSavingInfo(false);
+    }
   }
 
-  function updatePassword() {
-    if (!password.next || password.next !== password.confirm) {
-      setPasswordMessage("Las contraseñas no coinciden.");
-      return;
+  async function updatePassword() {
+    setSavingPassword(true);
+    try {
+      const result = await updateOwnPasswordAction(password.next, password.confirm);
+      if (result.error) {
+        setPasswordMessage({ ok: false, text: result.error });
+      } else {
+        setPasswordMessage({ ok: true, text: "Contraseña actualizada." });
+        setPassword({ next: "", confirm: "" });
+      }
+    } finally {
+      setSavingPassword(false);
     }
-    setPasswordMessage("Contraseña actualizada.");
-    setPassword({ next: "", confirm: "" });
   }
 
   return (
@@ -50,37 +74,36 @@ export function ProfileForm({
             value={fields.name}
             onChange={(v) => {
               setFields((f) => ({ ...f, name: v }));
-              setSavedInfo(false);
+              setInfoMessage(null);
             }}
           />
-          <Field
-            label="Email"
-            type="email"
-            value={fields.email}
-            onChange={(v) => {
-              setFields((f) => ({ ...f, email: v }));
-              setSavedInfo(false);
-            }}
-          />
-          <Field
-            label="Teléfono"
-            value={fields.phone}
-            onChange={(v) => {
-              setFields((f) => ({ ...f, phone: v }));
-              setSavedInfo(false);
-            }}
-          />
+          <ReadOnlyField label="Email" value={email} />
+          {phone !== undefined && (
+            <Field
+              label="Teléfono (WhatsApp)"
+              value={fields.phone}
+              onChange={(v) => {
+                setFields((f) => ({ ...f, phone: v }));
+                setInfoMessage(null);
+              }}
+            />
+          )}
           <ReadOnlyField label="Rol" value={role} />
           {location && <ReadOnlyField label="Ubicación asignada" value={location} />}
         </div>
         <div className="mt-6 flex items-center gap-3">
           <button
             onClick={saveInfo}
-            className="rounded-full bg-ciruela px-5 py-2.5 font-body text-sm text-hueso"
+            disabled={savingInfo}
+            className="rounded-full bg-ciruela px-5 py-2.5 font-body text-sm text-hueso disabled:opacity-50"
           >
-            Guardar cambios
+            {savingInfo ? "Guardando…" : "Guardar cambios"}
           </button>
-          {savedInfo && <span className="font-body text-xs text-oliva">Guardado.</span>}
+          {infoMessage && (
+            <span className={`font-body text-xs ${infoMessage.ok ? "text-oliva" : "text-[#b3392f]"}`}>
+              {infoMessage.text}
+            </span>
+          )}
         </div>
       </Card>
 
@@ -110,15 +133,14 @@ export function ProfileForm({
         <div className="mt-6 flex items-center gap-3">
           <button
             onClick={updatePassword}
-            className="rounded-full border border-ciruela px-5 py-2.5 font-body text-sm text-ciruela"
+            disabled={savingPassword}
+            className="rounded-full border border-ciruela px-5 py-2.5 font-body text-sm text-ciruela disabled:opacity-50"
           >
-            Actualizar contraseña
+            {savingPassword ? "Actualizando…" : "Actualizar contraseña"}
           </button>
           {passwordMessage && (
-            <span
-              className={`font-body text-xs ${passwordMessage.startsWith("Contraseña") ? "text-oliva" : "text-crepe"}`}
-            >
-              {passwordMessage}
+            <span className={`font-body text-xs ${passwordMessage.ok ? "text-oliva" : "text-[#b3392f]"}`}>
+              {passwordMessage.text}
             </span>
           )}
         </div>
