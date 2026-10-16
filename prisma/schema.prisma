@@ -53,8 +53,44 @@ model Location {
   inventoryItems   InventoryItem[]
   sales            Sale[]
   cashSessions     CashRegisterSession[]
+  pnlOverrides     PnlOverride[]
+  pnlMonthCloses   PnlMonthClose[]
 
   @@map("locations")
+}
+
+// P&L: a line's "Real" value typed in by hand for one location and month,
+// replacing what the sales data computes. Only exists while the month is open.
+model PnlOverride {
+  id              String   @id @default(uuid())
+  locationId      String
+  month           String // "2026-10"
+  field           String // a PnlBreakdown key, e.g. "retail"
+  valueMxn        Int // signed like the P&L: costs are negative
+  updatedByUserId String?
+  updatedAt       DateTime @updatedAt
+
+  location Location @relation(fields: [locationId], references: [id])
+
+  @@unique([locationId, month, field])
+  @@map("pnl_overrides")
+}
+
+// P&L: a closed month. The snapshot is the final breakdown at the moment it
+// was closed; from then on reports read it instead of recomputing, and the
+// month can no longer be edited.
+model PnlMonthClose {
+  id             String   @id @default(uuid())
+  locationId     String
+  month          String // "2026-10"
+  closedAt       DateTime @default(now())
+  closedByUserId String?
+  snapshot       Json
+
+  location Location @relation(fields: [locationId], references: [id])
+
+  @@unique([locationId, month])
+  @@map("pnl_month_closes")
 }
 
 // id == Supabase auth.users.id — never a separate PK (spec §2/§10: one

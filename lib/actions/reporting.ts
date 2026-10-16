@@ -4,7 +4,6 @@ import { prisma } from "@/lib/prisma";
 import {
   periodRange,
   compareRange,
-  getPnlBreakdown,
   getOccupancyPct,
   getAttachRetailPct,
   getIngresoHoraEsteticista,
@@ -14,6 +13,7 @@ import {
   type CompareTo,
 } from "@/lib/reporting";
 import type { PnlBreakdown } from "@/lib/pnl-math";
+import { getAdjustedPnl, type PnlAdjustState } from "@/lib/pnl-adjustments";
 
 export interface ReportingRates {
   ocupacion: number | null;
@@ -25,6 +25,7 @@ export interface ReportingRates {
 
 export interface ReportingSnapshot {
   pnl: PnlBreakdown;
+  pnlState: PnlAdjustState; // whether the P&L month is editable / closed
   pnlBaseline: PnlBreakdown | null;
   pnlMesAnterior: PnlBreakdown;
   rates: ReportingRates;
@@ -58,8 +59,8 @@ export async function getReportingSnapshotAction(
   const locationIds = locations.map((l) => l.id);
 
   const range = periodRange(period);
-  const [pnl, rates, kpiTargetRows] = await Promise.all([
-    getPnlBreakdown(locationIds, range),
+  const [{ pnl, state: pnlState }, rates, kpiTargetRows] = await Promise.all([
+    getAdjustedPnl(locationIds, range),
     computeRates(locationIds, range),
     prisma.kpiTarget.findMany(),
   ]);
@@ -69,7 +70,7 @@ export async function getReportingSnapshotAction(
   if (compareTo !== "Objetivo") {
     const baselineRange = compareRange(compareTo, period);
     [pnlBaseline, ratesBaseline] = await Promise.all([
-      getPnlBreakdown(locationIds, baselineRange),
+      getAdjustedPnl(locationIds, baselineRange).then((r) => r.pnl),
       computeRates(locationIds, baselineRange),
     ]);
   }
@@ -80,10 +81,10 @@ export async function getReportingSnapshotAction(
   const pnlMesAnterior =
     compareTo === "Mes anterior" && pnlBaseline
       ? pnlBaseline
-      : await getPnlBreakdown(locationIds, compareRange("Mes anterior", period));
+      : (await getAdjustedPnl(locationIds, compareRange("Mes anterior", period))).pnl;
 
   const kpiTargets: Record<string, { value: number; unit: string }> = {};
   for (const k of kpiTargetRows) kpiTargets[k.kpi] = { value: k.targetValue, unit: k.targetUnit };
 
-  return { pnl, pnlBaseline, pnlMesAnterior, rates, ratesBaseline, kpiTargets };
+  return { pnl, pnlState, pnlBaseline, pnlMesAnterior, rates, ratesBaseline, kpiTargets };
 }

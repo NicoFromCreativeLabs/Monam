@@ -19,16 +19,24 @@ export interface PnlBreakdown {
   comisionesRetail: number;
   renta: number;
   mantenimiento: number;
+  // Lines with no data source in the system: always typed in by hand (0 until then).
+  paquetesVencidos: number;
+  insumosAddOns: number;
+  comisionTerminal: number;
+  operacionLocal: number;
+  marketingLocal: number;
 }
 
 export function ventasBrutas(b: PnlBreakdown) {
-  return b.serviciosTargeted + b.serviciosSignature + b.addOns + b.retail;
+  return b.serviciosTargeted + b.serviciosSignature + b.addOns + b.retail + b.paquetesVencidos;
 }
 export function ingresoNetoFromBreakdown(b: PnlBreakdown) {
   return ventasBrutas(b) + b.descuentos + b.reembolsos;
 }
 export function utilidadBruta(b: PnlBreakdown) {
-  return ingresoNetoFromBreakdown(b) + b.backbarTeorico + b.costoRetailVendido + b.cortesias + b.merma;
+  return (
+    ingresoNetoFromBreakdown(b) + b.backbarTeorico + b.insumosAddOns + b.costoRetailVendido + b.cortesias + b.merma
+  );
 }
 // Shared by every Análisis nivel1 KPI that reads the real reporting
 // snapshot — diff display with a graceful "no real baseline yet" state,
@@ -58,6 +66,9 @@ export function ebitda(b: PnlBreakdown) {
     b.comisionesServicio +
     b.comisionesRetail +
     b.renta +
-    b.mantenimiento
+    b.mantenimiento +
+    b.comisionTerminal +
+    b.operacionLocal +
+    b.marketingLocal
   );
 }

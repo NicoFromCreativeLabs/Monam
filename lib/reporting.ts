@@ -22,6 +22,7 @@ export async function getPnlBreakdown(locationIds: string[], range: DateRange): 
       serviciosTargeted: 0, serviciosSignature: 0, addOns: 0, retail: 0, descuentos: 0, reembolsos: 0,
       backbarTeorico: 0, costoRetailVendido: 0, cortesias: 0, merma: 0, nominaBase: 0, cargasSociales: 0,
       comisionesServicio: 0, comisionesRetail: 0, renta: 0, mantenimiento: 0,
+      paquetesVencidos: 0, insumosAddOns: 0, comisionTerminal: 0, operacionLocal: 0, marketingLocal: 0,
     };
   }
 
@@ -92,6 +93,7 @@ export async function getPnlBreakdown(locationIds: string[], range: DateRange): 
     serviciosTargeted, serviciosSignature, addOns, retail, descuentos, reembolsos,
     backbarTeorico, costoRetailVendido, cortesias, merma, nominaBase, cargasSociales,
     comisionesServicio, comisionesRetail, renta, mantenimiento,
+    paquetesVencidos: 0, insumosAddOns: 0, comisionTerminal: 0, operacionLocal: 0, marketingLocal: 0,
   };
 }
 
