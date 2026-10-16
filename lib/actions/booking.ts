@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { headers } from "next/headers";
 import { prisma } from "@/lib/prisma";
 import { requireClientOrPreview, requireStaffRole } from "@/lib/auth/dal";
+import { isDepositRequired } from "@/lib/deposit-settings";
 import {
   insertAppointment,
   createPendingDepositCheckout,
@@ -27,16 +28,17 @@ export async function getAvailableSlotsAction(input: {
   return getAvailableSlots(input);
 }
 
-// Targeted never requires a deposit, so it still books straight through.
-// Signature used to also land here and just write a HELD deposit row with
-// no real charge behind it (a placeholder from before Stripe was wired up
-// — see schema.prisma's PaymentProvider.MANUAL comment). Now that Stripe is
-// configured, Signature goes through createClientDepositCheckoutAction
-// instead — this action no longer creates a deposit for it.
+// Books straight through only for appointment types that don't need a
+// deposit (Configuración → Depósitos). A type that does need one goes through
+// createClientDepositCheckoutAction instead, so this refuses it here too —
+// otherwise calling the action directly would skip the deposit.
 export async function createAppointmentAction(
   input: CreateAppointmentInput,
 ): Promise<CreateAppointmentResult> {
   const { client } = await requireClientOrPreview();
+  if (await isDepositRequired(input.durationTier)) {
+    return { error: "Este tipo de cita requiere depósito. Reserva de nuevo y paga el depósito para confirmarla." };
+  }
   return insertAppointment({ ...input, clientId: client.id });
 }
 

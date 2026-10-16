@@ -8,6 +8,9 @@ export interface BusinessRules {
   commissionRetailPct: number;
   anomalyDiscountThresholdPct: number;
   anomalyRefundThresholdMXN: number;
+  // Depósitos by appointment type (see lib/deposit-rules.ts) — read by /my/book.
+  depositRequiredSignature: boolean;
+  depositRequiredTargeted: boolean;
 }
 
 const BusinessRulesContext = createContext<{

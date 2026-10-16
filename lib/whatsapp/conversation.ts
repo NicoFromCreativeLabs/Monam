@@ -9,6 +9,7 @@ import {
   DEPOSIT_AMOUNT_MXN,
 } from "@/lib/booking-core";
 import { STRIPE_ENABLED } from "@/lib/feature-flags";
+import { isDepositRequired } from "@/lib/deposit-settings";
 
 // The WhatsApp booking bot (spec §11.1 "highest priority" integration,
 // §8.2's booking engine reused via lib/booking-core.ts). A short, numbered-
@@ -288,11 +289,13 @@ async function finalizeBooking(
     protocolName: draft.protocolName ?? null,
   };
 
-  // Signature requires a deposit — if Stripe is wired up, collect it for
-  // real before the slot is reserved; otherwise fall back to today's
-  // manual behavior (a HELD deposit with no real charge yet, same as every
-  // other booking entry point until a processor is configured).
-  if (draft.durationTier === "Signature" && STRIPE_ENABLED) {
+  // If this appointment type requires a deposit (Configuración → Depósitos)
+  // and Stripe is wired up, collect it for real before the slot is reserved;
+  // otherwise fall back to today's manual behavior (a HELD deposit with no
+  // real charge yet, same as every other booking entry point until a
+  // processor is configured).
+  const depositRequired = await isDepositRequired(draft.durationTier);
+  if (depositRequired && STRIPE_ENABLED) {
     const origin = process.env.NEXT_PUBLIC_SITE_URL ?? "https://monamskinstudio.com";
     const checkout = await createPendingDepositCheckout(
       { ...bookingInput, clientId: client.id },
@@ -305,7 +308,7 @@ async function finalizeBooking(
   }
 
   let depositId: string | undefined;
-  if (draft.durationTier === "Signature") {
+  if (depositRequired) {
     const deposit = await prisma.deposit.create({
       data: { clientId: client.id, amountMxn: DEPOSIT_AMOUNT_MXN, status: "HELD" },
     });

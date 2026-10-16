@@ -5,6 +5,8 @@ import { Card } from "@/components/panel/Card";
 import { useLocations } from "@/components/panel/LocationsContext";
 import { useProtocols } from "@/components/panel/ProtocolsContext";
 import { useAddOns } from "@/components/panel/AddOnsContext";
+import { useBusinessRules } from "@/components/panel/BusinessRulesContext";
+import { depositRequiredForTier } from "@/lib/deposit-rules";
 import { useScrollEdgeFade } from "@/components/panel/useScrollEdgeFade";
 import {
   createAppointmentAction,
@@ -92,7 +94,13 @@ export default function ClientBook() {
   const { ref: dayScrollRef, showLeft: showDayLeft, showRight: showDayRight } =
     useScrollEdgeFade<HTMLDivElement>();
 
-  const requiresDeposit = duration === "Signature";
+  const { rules } = useBusinessRules();
+  const requiresDeposit = duration
+    ? depositRequiredForTier(duration, {
+        signature: rules.depositRequiredSignature,
+        targeted: rules.depositRequiredTargeted,
+      })
+    : false;
 
   // For Targeted, the ampoule is assigned in-cabin (no named protocol), so
   // add-ons are matched against "Targeted"; for Signature, against the

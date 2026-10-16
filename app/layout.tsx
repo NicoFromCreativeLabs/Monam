@@ -10,6 +10,7 @@ import { StaffRosterProvider } from "@/components/panel/StaffRosterContext";
 import type { StaffMember } from "@/lib/mock-data";
 import { BusinessRulesProvider, type BusinessRules } from "@/components/panel/BusinessRulesContext";
 import { LoadingCurtain } from "@/components/LoadingCurtain";
+import { TIER_DEPOSIT_SETTING_KEYS, parseTierDepositRules } from "@/lib/deposit-rules";
 import "./globals.css";
 
 const fraunces = Fraunces({
@@ -89,7 +90,13 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
     prisma.protocol.findMany({ where: { isActive: true }, include: { addOns: { include: { addOn: true } } } }),
     prisma.addOn.findMany({ include: { protocols: { include: { protocol: true } } } }),
     prisma.commissionRule.findMany({ where: { calcType: "PERCENTAGE", role: null } }),
-    prisma.setting.findMany({ where: { key: { in: ["anomaly.discountThresholdPct", "anomaly.refundThresholdMxn"] } } }),
+    prisma.setting.findMany({
+      where: {
+        key: {
+          in: ["anomaly.discountThresholdPct", "anomaly.refundThresholdMxn", ...TIER_DEPOSIT_SETTING_KEYS],
+        },
+      },
+    }),
     prisma.appUser.findMany({ include: { locationAssignments: { include: { location: true } } }, orderBy: { name: "asc" } }),
   ]);
 
@@ -124,11 +131,14 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
     const row = anomalySettings.find((s) => s.key === key);
     return typeof row?.value === "number" ? row.value : fallback;
   };
+  const tierDepositRules = parseTierDepositRules(anomalySettings);
   const initialBusinessRules: BusinessRules = {
     commissionServicePct: commissionRules.find((r) => r.basis === "SERVICE")?.rateOrAmount ?? 0,
     commissionRetailPct: commissionRules.find((r) => r.basis === "RETAIL")?.rateOrAmount ?? 0,
     anomalyDiscountThresholdPct: settingNumber("anomaly.discountThresholdPct", 15),
     anomalyRefundThresholdMXN: settingNumber("anomaly.refundThresholdMxn", 1500),
+    depositRequiredSignature: tierDepositRules.signature,
+    depositRequiredTargeted: tierDepositRules.targeted,
   };
 
   const initialRoster: StaffMember[] = staff.map((s) => {

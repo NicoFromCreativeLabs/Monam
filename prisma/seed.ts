@@ -242,6 +242,7 @@ async function main() {
   const settingsEntries: [string, unknown][] = [
     ["deposit.requiredFirstTime", SETTINGS.depositRequiredFirstTime],
     ["deposit.requiredSignature", SETTINGS.depositRequiredSignature],
+    ["deposit.requiredTargeted", SETTINGS.depositRequiredTargeted],
     ["cancellation.windowHours", SETTINGS.cancellationWindowHours],
     ["discount.approvalThresholdPct", SETTINGS.discountApprovalThresholdPct],
     ["anomaly.discountThresholdPct", BUSINESS_RULES_EXTRA.anomalyDiscountThresholdPct],
