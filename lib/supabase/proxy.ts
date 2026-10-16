@@ -15,7 +15,9 @@ const PUBLIC_PATHS = [
   "/api/whatsapp/webhook",
   "/api/stripe/webhook",
 ];
-const PUBLIC_PREFIXES = ["/auth", "/legal", "/pagar"];
+// /.well-known holds the Apple Pay domain-verification file (Stripe, "Payment
+// method domains"); Apple fetches it with no session.
+const PUBLIC_PREFIXES = ["/auth", "/legal", "/pagar", "/.well-known"];
 
 function isPublicPath(pathname: string) {
   return PUBLIC_PATHS.includes(pathname) || PUBLIC_PREFIXES.some((p) => pathname.startsWith(p));
