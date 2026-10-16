@@ -31,10 +31,12 @@ export interface EstheticianNextClient {
 export function StaffTodayView({
   agenda,
   nextClient,
+  completed,
   pendingCheckouts,
 }: {
   agenda: TodayAppointmentView[];
   nextClient: EstheticianNextClient;
+  completed: TodayAppointmentView[];
   pendingCheckouts: PendingCheckoutView[];
 }) {
   const { role } = useStaffRole();
@@ -46,7 +48,7 @@ export function StaffTodayView({
         {role === "Front Desk" ? (
           <FrontDeskToday agenda={agenda} pending={pendingCheckouts} />
         ) : (
-          <EstheticianToday nextClient={nextClient} />
+          <EstheticianToday nextClient={nextClient} completed={completed} />
         )}
       </div>
     </>
@@ -158,17 +160,26 @@ function FrontDeskToday({
   );
 }
 
-function EstheticianToday({ nextClient }: { nextClient: EstheticianNextClient }) {
+function EstheticianToday({
+  nextClient,
+  completed,
+}: {
+  nextClient: EstheticianNextClient;
+  completed: TodayAppointmentView[];
+}) {
   const { appointment: next } = nextClient;
 
   if (!next) {
     return (
-      <div className="mx-auto max-w-xl">
+      <div className="mx-auto max-w-xl space-y-4">
         <Card title="Siguiente cliente">
           <p className="py-4 text-center font-body text-sm text-ciruela/50">
-            Sin citas asignadas para hoy.
+            {completed.length > 0
+              ? "No quedan más clientes por atender hoy."
+              : "Sin citas asignadas para hoy."}
           </p>
         </Card>
+        <CompletedToday completed={completed} />
       </div>
     );
   }
@@ -223,6 +234,36 @@ function EstheticianToday({ nextClient }: { nextClient: EstheticianNextClient })
           </Link>
         </div>
       </Card>
+      <CompletedToday completed={completed} />
     </div>
+  );
+}
+
+// Clients whose treatment is already recorded today, so they stop showing up
+// as "Siguiente cliente". "Por cobrar" until Front Desk closes the sale.
+function CompletedToday({ completed }: { completed: TodayAppointmentView[] }) {
+  if (completed.length === 0) return null;
+  return (
+    <Card title={`Completados (${completed.length})`}>
+      <ul className="divide-y divide-ciruela/8">
+        {completed.map((apt) => (
+          <li key={apt.id} className="flex items-center justify-between py-3">
+            <div className="flex items-center gap-4">
+              <span className="w-14 font-body text-sm text-ciruela/60">{apt.time}</span>
+              <p className="font-body text-sm text-ciruela">
+                {apt.clientName} <span className="text-ciruela/50">· {apt.tier}</span>
+              </p>
+            </div>
+            <span
+              className={`rounded-full px-3 py-1 font-body text-xs ${
+                apt.checkedOut ? "bg-oliva/15 text-oliva" : "bg-ciruela/8 text-ciruela/70"
+              }`}
+            >
+              {apt.checkedOut ? "Cobrado" : "Por cobrar"}
+            </span>
+          </li>
+        ))}
+      </ul>
+    </Card>
   );
 }

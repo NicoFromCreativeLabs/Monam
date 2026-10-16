@@ -14,9 +14,18 @@ export default async function StaffToday() {
   // falls back to the location's earliest undone appointment so the
   // role-toggle preview (any staff account can preview the Esthetician view
   // without re-authenticating) still shows something representative.
-  const undone = agenda.filter((a) => a.statusRaw !== "COMPLETED");
+  // "Done" = the treatment is recorded. Recording one marks the appointment
+  // COMPLETED, but an appointment that has a treatment record counts as done
+  // either way, so a finished client never stays as "next".
+  const isDone = (a: (typeof agenda)[number]) => a.statusRaw === "COMPLETED" || a.treatmentFinished;
+  const undone = agenda.filter((a) => !isDone(a));
   const ownAppointments = currentUser ? undone.filter((a) => a.estheticianId === currentUser.id) : [];
   const next = ownAppointments[0] ?? undone[0] ?? null;
+
+  // The esthetician's own finished clients (everyone's, in the preview).
+  const doneToday = agenda.filter(isDone);
+  const ownDone = currentUser ? doneToday.filter((a) => a.estheticianId === currentUser.id) : [];
+  const completed = ownDone.length > 0 ? ownDone : doneToday;
 
   let nextClient: EstheticianNextClient = {
     listingId: null,
@@ -54,5 +63,12 @@ export default async function StaffToday() {
     };
   }
 
-  return <StaffTodayView agenda={agenda} nextClient={nextClient} pendingCheckouts={pendingCheckouts} />;
+  return (
+    <StaffTodayView
+      agenda={agenda}
+      nextClient={nextClient}
+      completed={completed}
+      pendingCheckouts={pendingCheckouts}
+    />
+  );
 }
