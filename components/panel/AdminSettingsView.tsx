@@ -808,6 +808,7 @@ export function AdminSettingsView({
                 <th className="pb-2">Función</th>
                 <th className="pb-2 text-right">Minutos extra</th>
                 <th className="pb-2 text-right">Precio</th>
+                <th className="pb-2 text-right">Costo</th>
                 <th className="pb-2 pr-6 text-right">Disponible en</th>
                 <th className="pb-2" />
               </tr>
@@ -820,6 +821,9 @@ export function AdminSettingsView({
                   <td className="py-2.5 text-right text-ciruela/60">+{a.extraMinutes} min</td>
                   <td className="py-2.5 text-right text-ciruela/60">
                     {a.priceMxn > 0 ? `$${a.priceMxn} MXN` : "Incluido"}
+                  </td>
+                  <td className="py-2.5 text-right text-ciruela/60">
+                    {a.costMxn > 0 ? `$${a.costMxn} MXN` : "—"}
                   </td>
                   <td className="py-2.5 pr-6 text-right text-ciruela/50">{a.availableOn.join(", ") || "—"}</td>
                   <td className="py-2.5 text-right">
@@ -845,7 +849,7 @@ export function AdminSettingsView({
               ))}
               {addOns.length === 0 && (
                 <tr className="border-t border-ciruela/8">
-                  <td colSpan={6} className="py-3 text-ciruela/50">
+                  <td colSpan={7} className="py-3 text-ciruela/50">
                     Aún no hay add-ons. Agrega el primero con el botón de arriba.
                   </td>
                 </tr>
@@ -887,6 +891,23 @@ export function AdminSettingsView({
                     onChange={(e) =>
                       setCommissionRules({ commissionRetailPct: Number(e.target.value) || 0 })
                     }
+                    className="w-16 rounded border border-ciruela/25 bg-hueso px-1.5 py-1 text-right font-body text-sm text-ciruela focus:outline-none focus:ring-1 focus:ring-ciruela/40"
+                  />
+                  %
+                </span>
+              </dd>
+            </div>
+            <div className="flex items-center justify-between border-b border-ciruela/8 pb-2 font-body text-sm text-ciruela">
+              <dt>Comisión de terminal (cobros con tarjeta y en línea)</dt>
+              <dd>
+                <span className="flex items-center gap-1 text-ciruela/60">
+                  <input
+                    type="number"
+                    min={0}
+                    max={100}
+                    step={0.1}
+                    value={commissionRules.terminalFeePct}
+                    onChange={(e) => setCommissionRules({ terminalFeePct: Number(e.target.value) || 0 })}
                     className="w-16 rounded border border-ciruela/25 bg-hueso px-1.5 py-1 text-right font-body text-sm text-ciruela focus:outline-none focus:ring-1 focus:ring-ciruela/40"
                   />
                   %
@@ -1045,6 +1066,7 @@ export function AdminSettingsView({
                 function: editingAddOn.function,
                 extraMinutes: editingAddOn.extraMinutes,
                 priceMxn: editingAddOn.priceMxn,
+                costMxn: editingAddOn.costMxn,
                 availableOn: editingAddOn.availableOn,
               }}
               submitLabel="Guardar cambios"

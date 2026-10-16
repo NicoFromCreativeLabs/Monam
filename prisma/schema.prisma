@@ -218,6 +218,7 @@ model AddOn {
   function     String
   extraMinutes Int
   priceMxn     Int    @default(0) // extra charge on top of the facial; 0 = included
+  costMxn      Int    @default(0) // product cost each time it is used; feeds P&L "Insumos de add-ons"
 
   protocols         AddOnProtocol[]
   saleLineItems     SaleLineItem[]

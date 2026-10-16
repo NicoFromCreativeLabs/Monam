@@ -13,6 +13,7 @@ export interface AddOnInput {
   function: string;
   extraMinutes: number;
   priceMxn: number; // extra charge on top of the facial; 0 = included
+  costMxn: number; // product cost each time it is used (feeds the P&L)
   availableOn: string[];
 }
 
@@ -25,6 +26,9 @@ function validate(input: AddOnInput): string | null {
   }
   if (!Number.isInteger(input.priceMxn) || input.priceMxn < 0 || input.priceMxn > 100000) {
     return "El precio debe ser un número entero de pesos (0 si va incluido).";
+  }
+  if (!Number.isInteger(input.costMxn) || input.costMxn < 0 || input.costMxn > 100000) {
+    return "El costo debe ser un número entero de pesos (0 si no aplica).";
   }
   return null;
 }
@@ -53,6 +57,7 @@ export async function addAddOnAction(input: AddOnInput): Promise<AddOnResult> {
       function: input.function.trim(),
       extraMinutes: input.extraMinutes,
       priceMxn: input.priceMxn,
+      costMxn: input.costMxn,
       protocols: { create: ids.map((protocolId) => ({ protocolId })) },
     },
   });
@@ -74,6 +79,7 @@ export async function updateAddOnAction(id: string, input: AddOnInput): Promise<
         function: input.function.trim(),
         extraMinutes: input.extraMinutes,
         priceMxn: input.priceMxn,
+        costMxn: input.costMxn,
       },
     }),
     prisma.addOnProtocol.deleteMany({ where: { addOnId: id } }),

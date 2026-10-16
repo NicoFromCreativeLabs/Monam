@@ -31,7 +31,7 @@ export async function getPnlBreakdown(locationIds: string[], range: DateRange): 
   const [lineItems, sales, approvals, commissions, inventoryTxns, locations, activeStaff] = await Promise.all([
     prisma.saleLineItem.findMany({
       where: { sale: saleWhere },
-      include: { protocol: true },
+      include: { protocol: true, addOn: true },
     }),
     prisma.sale.findMany({ where: saleWhere }),
     prisma.approvalRequest.findMany({
@@ -77,6 +77,20 @@ export async function getPnlBreakdown(locationIds: string[], range: DateRange): 
     .filter((l) => l.type === "RETAIL" && l.productId)
     .reduce((s, l) => s + (costByProductId.get(l.productId!) ?? 0), 0);
 
+  // Insumos de add-ons: the product cost of every add-on sold in the period.
+  const insumosAddOns = -lineItems
+    .filter((l) => l.type === "ADD_ON")
+    .reduce((s, l) => s + (l.addOn?.costMxn ?? 0), 0);
+
+  // Comisión de terminal: the configured % of what was paid by card or online.
+  // Stays 0 until the percentage is set in Configuración.
+  const feeRow = await prisma.setting.findUnique({ where: { key: "pnl.terminalFeePct" } });
+  const terminalFeePct = typeof feeRow?.value === "number" ? feeRow.value : 0;
+  const cardPaid = sales
+    .filter((sale) => sale.paymentMethod === "CARD" || sale.paymentMethod === "ONLINE")
+    .reduce((s, sale) => s + sale.totalMxn, 0);
+  const comisionTerminal = -Math.round((cardPaid * terminalFeePct) / 100);
+
   const merma = inventoryTxns.reduce((s, t) => s + Math.abs(t.qtyDelta) * (t.inventoryItem.costMxn ?? 0), 0) * -1;
 
   const nominaBase = -activeStaff.reduce((s, u) => s + (u.salaryMxn ?? 0), 0);
@@ -93,7 +107,7 @@ export async function getPnlBreakdown(locationIds: string[], range: DateRange): 
     serviciosTargeted, serviciosSignature, addOns, retail, descuentos, reembolsos,
     backbarTeorico, costoRetailVendido, cortesias, merma, nominaBase, cargasSociales,
     comisionesServicio, comisionesRetail, renta, mantenimiento,
-    paquetesVencidos: 0, insumosAddOns: 0, comisionTerminal: 0, operacionLocal: 0, marketingLocal: 0,
+    paquetesVencidos: 0, insumosAddOns, comisionTerminal, operacionLocal: 0, marketingLocal: 0,
   };
 }
 

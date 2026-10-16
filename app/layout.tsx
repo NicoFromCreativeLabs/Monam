@@ -93,7 +93,7 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
     prisma.setting.findMany({
       where: {
         key: {
-          in: ["anomaly.discountThresholdPct", "anomaly.refundThresholdMxn", ...TIER_DEPOSIT_SETTING_KEYS],
+          in: ["anomaly.discountThresholdPct", "anomaly.refundThresholdMxn", "pnl.terminalFeePct", ...TIER_DEPOSIT_SETTING_KEYS],
         },
       },
     }),
@@ -125,6 +125,7 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
     function: a.function,
     extraMinutes: a.extraMinutes,
     priceMxn: a.priceMxn,
+    costMxn: a.costMxn,
     availableOn: a.protocols.map((link) => link.protocol.name),
   }));
 
@@ -138,6 +139,7 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
     commissionRetailPct: commissionRules.find((r) => r.basis === "RETAIL")?.rateOrAmount ?? 0,
     anomalyDiscountThresholdPct: settingNumber("anomaly.discountThresholdPct", 15),
     anomalyRefundThresholdMXN: settingNumber("anomaly.refundThresholdMxn", 1500),
+    terminalFeePct: settingNumber("pnl.terminalFeePct", 0),
     depositRequiredSignature: tierDepositRules.signature,
     depositRequiredTargeted: tierDepositRules.targeted,
   };

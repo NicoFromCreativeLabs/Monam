@@ -8,6 +8,7 @@ export interface BusinessRules {
   commissionRetailPct: number;
   anomalyDiscountThresholdPct: number;
   anomalyRefundThresholdMXN: number;
+  terminalFeePct: number; // card/online processing fee, % of those payments (P&L "Comisión de terminal")
   // Depósitos by appointment type (see lib/deposit-rules.ts) — read by /my/book.
   depositRequiredSignature: boolean;
   depositRequiredTargeted: boolean;
