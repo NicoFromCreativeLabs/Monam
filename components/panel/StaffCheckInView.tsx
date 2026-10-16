@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import Link from "next/link";
 import { TopBar } from "@/components/panel/TopBar";
 import { Card } from "@/components/panel/Card";
 import { Badge } from "@/components/panel/Badge";
@@ -14,6 +15,10 @@ const STATUS_TONE: Record<string, "positive" | "info" | "warning" | "neutral"> =
   Retrasado: "warning",
   Confirmado: "neutral",
 };
+
+// Statuses where the client has not been checked in yet — only these get
+// "Registrar llegada" (not Registrado / En progreso / Completado).
+const CHECK_IN_STATUSES = ["CONFIRMED", "WAITING", "LATE"];
 
 // Greet by name; confirm Skin ID/consents complete before proceeding to
 // treatment (spec §7.3) — cannot proceed with an incomplete record. Real
@@ -67,15 +72,31 @@ export function StaffCheckInView({
                     </p>
                   </div>
                   <div className="flex items-center gap-3">
-                    <Badge tone={STATUS_TONE[apt.status] ?? "neutral"}>{apt.status}</Badge>
-                    {apt.status !== "Registrado" && (
-                      <button
-                        onClick={() => checkIn(apt.id)}
-                        disabled={isPending && pendingId === apt.id}
-                        className="rounded-full bg-ciruela px-3 py-1.5 font-body text-xs text-hueso disabled:opacity-50"
-                      >
-                        {isPending && pendingId === apt.id ? "Registrando…" : "Registrar llegada"}
-                      </button>
+                    {apt.checkedOut ? (
+                      <Badge tone="positive">Cobrado</Badge>
+                    ) : apt.treatmentFinished ? (
+                      <>
+                        <Badge tone="info">Tratamiento finalizado</Badge>
+                        <Link
+                          href={`/staff/checkout?session=${apt.id}`}
+                          className="rounded-full bg-ciruela px-3 py-1.5 font-body text-xs text-hueso"
+                        >
+                          Ir a cobro
+                        </Link>
+                      </>
+                    ) : (
+                      <>
+                        <Badge tone={STATUS_TONE[apt.status] ?? "neutral"}>{apt.status}</Badge>
+                        {CHECK_IN_STATUSES.includes(apt.statusRaw) && (
+                          <button
+                            onClick={() => checkIn(apt.id)}
+                            disabled={isPending && pendingId === apt.id}
+                            className="rounded-full bg-ciruela px-3 py-1.5 font-body text-xs text-hueso disabled:opacity-50"
+                          >
+                            {isPending && pendingId === apt.id ? "Registrando…" : "Registrar llegada"}
+                          </button>
+                        )}
+                      </>
                     )}
                   </div>
                 </li>

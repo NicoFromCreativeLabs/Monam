@@ -27,6 +27,10 @@ export interface TodayAppointmentView {
   status: string;
   statusRaw: string;
   flags: string[];
+  // The esthetician has recorded the treatment (it is ready to be charged),
+  // and whether a Sale already closed it out.
+  treatmentFinished: boolean;
+  checkedOut: boolean;
 }
 
 function todayRange() {
@@ -57,6 +61,8 @@ export async function getTodayAppointments(locationId: string): Promise<TodayApp
       room: true,
       esthetician: true,
       device: true,
+      treatmentRecord: { select: { id: true } },
+      sale: { select: { id: true } },
     },
     orderBy: { startAt: "asc" },
   });
@@ -98,6 +104,8 @@ export async function getTodayAppointments(locationId: string): Promise<TodayApp
       status: STATUS_LABEL_ES[a.status] ?? a.status,
       statusRaw: a.status,
       flags,
+      treatmentFinished: a.treatmentRecord !== null,
+      checkedOut: a.sale !== null,
     };
   });
 }
