@@ -49,7 +49,24 @@ export default async function StaffTreatmentRecord({
         orderBy: { product: { name: "asc" } },
       })
     : [];
-  const backbarProducts = backbarItems.map((i) => ({ sku: i.product.sku, name: i.product.name }));
+  // How much open product the esthetician can use for this appointment: the
+  // cabina's container for shared products, her own for individual ones.
+  const openContainers = backbarItems.length
+    ? await prisma.openContainer.findMany({
+        where: { inventoryItemId: { in: backbarItems.map((i) => i.id) }, status: "OPEN", expiresOn: { gte: new Date() } },
+      })
+    : [];
+  const backbarProducts = backbarItems.map((i) => ({
+    sku: i.product.sku,
+    name: i.product.name,
+    openMl: openContainers
+      .filter(
+        (c) =>
+          c.inventoryItemId === i.id &&
+          (i.scope === "COMMUNAL" ? c.roomId === next?.roomId : c.ownerUserId === currentUser?.id),
+      )
+      .reduce((sum, c) => sum + c.remainingMl, 0),
+  }));
 
   return <StaffTreatmentRecordView client={client} backbarProducts={backbarProducts} />;
 }

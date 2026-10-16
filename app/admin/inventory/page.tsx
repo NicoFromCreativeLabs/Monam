@@ -11,7 +11,7 @@ function formatDate(d: Date | null) {
 }
 
 function paoLabel(days: number | null) {
-  return days ? `${Math.round(days / 30)} meses` : "—";
+  return days ? `${days} días` : "—";
 }
 
 // Three ledgers, kept logically separate (spec §5.3: "never merge into one
@@ -24,6 +24,14 @@ export default async function AdminInventory() {
   const items = await prisma.inventoryItem.findMany({
     include: { product: true, location: true },
     orderBy: { product: { name: "asc" } },
+  });
+
+  // Open containers per backbar item: how many, and how many ml are left.
+  const openAgg = await prisma.openContainer.groupBy({
+    by: ["inventoryItemId"],
+    where: { status: "OPEN" },
+    _count: true,
+    _sum: { remainingMl: true },
   });
 
   const retail: RetailInventoryRow[] = items
@@ -49,8 +57,14 @@ export default async function AdminInventory() {
       location: i.location.name,
       qty: i.qty,
       par: i.par,
-      opensOn: formatDate(i.openedOn),
       pao: paoLabel(i.paoDays),
+      paoDays: i.paoDays ?? 0,
+      contentMl: i.contentMl ?? 0,
+      scope: i.scope,
+      cost: i.costMxn ?? 0,
+      expiresOn: i.expiresOn ? i.expiresOn.toISOString().slice(0, 10) : "",
+      openCount: openAgg.find((o) => o.inventoryItemId === i.id)?._count ?? 0,
+      openMl: openAgg.find((o) => o.inventoryItemId === i.id)?._sum.remainingMl ?? 0,
     }));
 
   const warehouse: WarehouseInventoryRow[] = items

@@ -815,6 +815,8 @@ export interface UpdateInventoryItemInput {
   expiresOn?: string;
   openedOn?: string;
   paoDays?: number;
+  contentMl?: number; // backbar: ml in one container
+  scope?: "COMMUNAL" | "INDIVIDUAL"; // backbar: one open container per cabina, or per esthetician
   sku?: string; // lives on Product, not InventoryItem — a correction, not a rename-to-merge (spec §5.3 never-merge still applies, so this never changes which ledger row the SKU belongs to)
 }
 
@@ -850,6 +852,8 @@ export async function updateInventoryItemAction(
       expiresOn: input.expiresOn ? new Date(input.expiresOn) : undefined,
       openedOn: input.openedOn ? new Date(input.openedOn) : undefined,
       paoDays: input.paoDays,
+      contentMl: input.contentMl,
+      scope: input.scope,
     },
   });
   revalidatePath("/admin/inventory");
@@ -869,6 +873,8 @@ export interface ReceiveInventoryInput {
   expiresOn?: string;
   openedOn?: string;
   paoDays?: number;
+  contentMl?: number;
+  scope?: "COMMUNAL" | "INDIVIDUAL";
 }
 
 // Creates the Product if it's new (first ledger it's ever been received
@@ -903,6 +909,8 @@ export async function receiveInventoryAction(input: ReceiveInventoryInput) {
       expiresOn: input.expiresOn ? new Date(input.expiresOn) : undefined,
       openedOn: input.openedOn ? new Date(input.openedOn) : undefined,
       paoDays: input.paoDays,
+      contentMl: input.contentMl,
+      scope: input.scope,
     },
     update: {
       par: input.par,
@@ -911,6 +919,8 @@ export async function receiveInventoryAction(input: ReceiveInventoryInput) {
       expiresOn: input.expiresOn ? new Date(input.expiresOn) : undefined,
       openedOn: input.openedOn ? new Date(input.openedOn) : undefined,
       paoDays: input.paoDays,
+      contentMl: input.contentMl,
+      scope: input.scope,
       qty: { increment: input.qty },
     },
   });
@@ -934,6 +944,18 @@ export async function receiveInventoryAction(input: ReceiveInventoryInput) {
 // a mis-categorized product (spec §5.3: ledgers are never one shared stock
 // line) just flips that field; the same InventoryItem row (qty, par, cost…)
 // carries over untouched, it isn't a transfer between two stock lines.
+// Only the optional columns the file actually had, so a plain recount never
+// blanks out values set earlier.
+function importExtras(row: ImportInventoryRow) {
+  return {
+    ...(row.contentMl !== undefined ? { contentMl: row.contentMl } : {}),
+    ...(row.scope !== undefined ? { scope: row.scope } : {}),
+    ...(row.paoDays !== undefined ? { paoDays: row.paoDays } : {}),
+    ...(row.costMxn !== undefined ? { costMxn: row.costMxn } : {}),
+    ...(row.expiresOn ? { expiresOn: new Date(row.expiresOn) } : {}),
+  };
+}
+
 export interface ImportInventoryRow {
   sku: string;
   product: string;
@@ -941,6 +963,12 @@ export interface ImportInventoryRow {
   locationName: string;
   qty: number;
   par: number;
+  // Optional extra columns (backbar): filled in by the person doing the inventory.
+  contentMl?: number;
+  scope?: "COMMUNAL" | "INDIVIDUAL";
+  paoDays?: number;
+  costMxn?: number;
+  expiresOn?: string;
 }
 
 // Bulk "actualizar todo el inventario" from the round-trip CSV (same shape
@@ -977,8 +1005,8 @@ export async function importInventoryCsvAction(rows: ImportInventoryRow[]) {
 
     const item = await prisma.inventoryItem.upsert({
       where: { productId_locationId: { productId: product.id, locationId: location.id } },
-      create: { productId: product.id, locationId: location.id, qty: row.qty, par: row.par },
-      update: { qty: row.qty, par: row.par },
+      create: { productId: product.id, locationId: location.id, qty: row.qty, par: row.par, ...importExtras(row) },
+      update: { qty: row.qty, par: row.par, ...importExtras(row) },
     });
 
     const qtyDelta = row.qty - (existing?.qty ?? 0);

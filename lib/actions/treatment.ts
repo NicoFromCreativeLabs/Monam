@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireStaffRole } from "@/lib/auth/dal";
+import { allocateMl, type Allocation } from "@/lib/containers";
 
 const REVISIT_DAYS: Record<string, number> = {
   "2 semanas": 14,
@@ -46,6 +47,42 @@ export async function completeTreatmentAction(
   const addOnIds = [...new Set(input.addOnIds ?? [])];
   if (addOnIds.length > 2) return { error: "Máximo 2 add-ons por cita." };
 
+  // Backbar: every product used comes out of an OPEN container — the cabina's
+  // for shared products, the esthetician's own for individual ones. Nothing is
+  // saved unless all of it can be covered, so the treatment is blocked until a
+  // container is opened.
+  const wanted = new Map<string, number>(); // sku -> ml
+  for (const used of input.usedProducts) {
+    const ml = Number(used.amountMl);
+    if (!used.sku || !ml) continue;
+    if (!Number.isInteger(ml) || ml <= 0) return { error: "Los ml usados deben ser un número entero." };
+    wanted.set(used.sku, (wanted.get(used.sku) ?? 0) + ml);
+  }
+  const plan: { allocations: Allocation[] }[] = [];
+  for (const [sku, ml] of wanted) {
+    const item = await prisma.inventoryItem.findFirst({
+      where: { locationId: appointment.locationId, product: { sku, ledger: "BACKBAR" } },
+      include: { product: true },
+    });
+    if (!item) return { error: `Producto de backbar no encontrado (${sku}).` };
+    const containers = await prisma.openContainer.findMany({
+      where: {
+        inventoryItemId: item.id,
+        status: "OPEN",
+        ...(item.scope === "COMMUNAL" ? { roomId: appointment.roomId } : { ownerUserId: user.id }),
+      },
+    });
+    const allocations = allocateMl(containers, ml);
+    if (!allocations) {
+      return {
+        error: `No hay un envase abierto de ${item.product.name} con ${ml} ml disponibles ${
+          item.scope === "COMMUNAL" ? "en esta cabina" : "a tu nombre"
+        }. Ábrelo en "Abrir producto" y vuelve a intentar.`,
+      };
+    }
+    plan.push({ allocations });
+  }
+
   const record = await prisma.treatmentRecord.create({
     data: {
       appointmentId: appointment.id,
@@ -81,22 +118,20 @@ export async function completeTreatmentAction(
     ]);
   }
 
-  for (const used of input.usedProducts) {
-    const amountMl = Number(used.amountMl);
-    if (!used.sku || !amountMl) continue;
-    const item = await prisma.inventoryItem.findFirst({
-      where: { locationId: appointment.locationId, product: { sku: used.sku } },
-    });
-    if (!item) continue;
-    await prisma.inventoryTransaction.create({
-      data: {
-        inventoryItemId: item.id,
-        type: "BACKBAR_USAGE",
-        qtyDelta: -amountMl,
-        reason: `Tratamiento ${protocol.name}`,
-      },
-    });
-    await prisma.inventoryItem.update({ where: { id: item.id }, data: { qty: { decrement: amountMl } } });
+  // Take the ml out of the containers and keep who used how much.
+  for (const step of plan) {
+    for (const a of step.allocations) {
+      await prisma.openContainer.update({
+        where: { id: a.containerId },
+        data: {
+          remainingMl: a.remainingAfter,
+          ...(a.remainingAfter === 0 ? { status: "FINISHED" as const, closedAt: new Date() } : {}),
+        },
+      });
+      await prisma.containerUsage.create({
+        data: { containerId: a.containerId, appointmentId: appointment.id, userId: user.id, ml: a.ml },
+      });
+    }
   }
 
   revalidatePath("/staff");

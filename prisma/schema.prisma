@@ -573,13 +573,70 @@ model InventoryItem {
   expiresOn  DateTime? // retail — COFEPRIS-relevant, spec §5.3
   openedOn   DateTime? // backbar
   paoDays    Int? // period-after-opening, in days (mock had free-text "6 meses")
+  // Backbar: how much product one sealed container holds, and whether an open
+  // container is shared per cabina (COMMUNAL) or belongs to one esthetician
+  // (INDIVIDUAL). The ml used in treatments are matched against containers.
+  contentMl Int?
+  scope     ContainerScope @default(COMMUNAL)
 
   product      Product                @relation(fields: [productId], references: [id])
   location     Location               @relation(fields: [locationId], references: [id])
   transactions InventoryTransaction[]
+  containers   OpenContainer[]
 
   @@unique([productId, locationId])
   @@map("inventory_items")
+}
+
+enum ContainerScope {
+  COMMUNAL // one open container per cabina, shared by whoever works there
+  INDIVIDUAL // one open container per esthetician
+}
+
+enum ContainerStatus {
+  OPEN
+  FINISHED // used up (or closed by the esthetician)
+  DISCARDED // thrown away — expired or damaged (waste tracking comes next)
+}
+
+// One physical container that has been opened. Its limit is the earlier of the
+// lot's expiry and the opening date plus the product's period-after-opening.
+model OpenContainer {
+  id              String          @id @default(uuid())
+  inventoryItemId String
+  scope           ContainerScope
+  roomId          String? // COMMUNAL: the cabina it lives in
+  ownerUserId     String? // INDIVIDUAL: the esthetician it belongs to
+  openedByUserId  String
+  openedAt        DateTime        @default(now())
+  contentMl       Int
+  remainingMl     Int
+  expiresOn       DateTime
+  status          ContainerStatus @default(OPEN)
+  closedAt        DateTime?
+
+  inventoryItem InventoryItem   @relation(fields: [inventoryItemId], references: [id])
+  usages        ContainerUsage[]
+
+  @@index([inventoryItemId, status])
+  @@map("open_containers")
+}
+
+// The ml an esthetician took from a container in a treatment — how the ml used
+// per esthetician are tied back to the containers.
+model ContainerUsage {
+  id            String   @id @default(uuid())
+  containerId   String
+  appointmentId String?
+  userId        String
+  ml            Int
+  createdAt     DateTime @default(now())
+
+  container OpenContainer @relation(fields: [containerId], references: [id])
+
+  @@index([containerId])
+  @@index([userId, createdAt])
+  @@map("container_usages")
 }
 
 enum InventoryTxnType {

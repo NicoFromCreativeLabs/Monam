@@ -34,10 +34,16 @@ export interface BackbarInventoryRow {
   sku: string;
   product: string;
   location: string;
-  qty: number;
+  qty: number; // sealed containers in stock
   par: number;
-  opensOn: string;
-  pao: string;
+  pao: string; // display, e.g. "180 días"
+  paoDays: number;
+  contentMl: number;
+  scope: "COMMUNAL" | "INDIVIDUAL";
+  cost: number; // per container
+  expiresOn: string; // lot expiry (YYYY-MM-DD), "" when unknown
+  openCount: number;
+  openMl: number;
 }
 export interface WarehouseInventoryRow {
   id: string;
@@ -104,8 +110,9 @@ interface EditDraft {
   price: string;
   cost: string;
   expiresOn: string;
-  opensOn: string;
-  pao: string;
+  contentMl: string;
+  scope: "COMMUNAL" | "INDIVIDUAL";
+  paoDays: string;
   error?: string;
 }
 
@@ -122,19 +129,16 @@ const emptyNewProduct = {
   backbarSku: "",
   backbarQty: "",
   backbarPar: "",
-  backbarOpens: "",
-  backbarPao: "",
+  backbarContentMl: "",
+  backbarScope: "COMMUNAL" as "COMMUNAL" | "INDIVIDUAL",
+  backbarPaoDays: "",
+  backbarCost: "",
   warehouseSku: "",
   warehouseQty: "",
   warehousePar: "",
   warehouseCost: "",
   warehouseExpires: "",
 };
-
-function paoMesesToDays(text: string): number | undefined {
-  const match = /(\d+)\s*mes/i.exec(text);
-  return match ? Number(match[1]) * 30 : undefined;
-}
 
 type SortDir = "asc" | "desc";
 
@@ -253,10 +257,21 @@ export function AdminInventoryView({
       originalQty: item.qty,
       par: String(item.par),
       price: retailItem ? String(retailItem.price) : "",
-      cost: retailItem ? String(retailItem.cost) : warehouseItem ? String(warehouseItem.cost) : "",
-      expiresOn: retailItem ? retailItem.expiresOn : warehouseItem ? warehouseItem.expiresOn : "",
-      opensOn: backbarItem ? backbarItem.opensOn : "",
-      pao: backbarItem ? backbarItem.pao : "",
+      cost: retailItem
+        ? String(retailItem.cost)
+        : warehouseItem
+          ? String(warehouseItem.cost)
+          : backbarItem
+            ? String(backbarItem.cost)
+            : "",
+      expiresOn: retailItem
+        ? retailItem.expiresOn
+        : warehouseItem
+          ? warehouseItem.expiresOn
+          : (backbarItem?.expiresOn ?? ""),
+      contentMl: backbarItem ? String(backbarItem.contentMl || "") : "",
+      scope: backbarItem ? backbarItem.scope : "COMMUNAL",
+      paoDays: backbarItem ? String(backbarItem.paoDays || "") : "",
     });
   }
 
@@ -266,7 +281,7 @@ export function AdminInventoryView({
 
   function saveEditModal() {
     if (!editModal) return;
-    const { id, ledger, originalLedger, qty, par, price, cost, expiresOn, opensOn, pao, originalQty } = editModal;
+    const { id, ledger, originalLedger, qty, par, price, cost, expiresOn, contentMl, scope, paoDays, originalQty } = editModal;
     const qtyNum = Number(qty) || 0;
     const parNum = Number(par) || 0;
     const qtyDelta = qtyNum - originalQty;
@@ -279,10 +294,11 @@ export function AdminInventoryView({
         inventoryItemId: id,
         par: parNum,
         priceMxn: ledger === "Retail" ? Number(price) || 0 : undefined,
-        costMxn: ledger !== "Backbar" ? Number(cost) || 0 : undefined,
-        expiresOn: ledger !== "Backbar" ? expiresOn || undefined : undefined,
-        openedOn: ledger === "Backbar" ? opensOn || undefined : undefined,
-        paoDays: ledger === "Backbar" ? paoMesesToDays(pao) : undefined,
+        costMxn: Number(cost) || 0,
+        expiresOn: expiresOn || undefined,
+        contentMl: ledger === "Backbar" ? Number(contentMl) || undefined : undefined,
+        scope: ledger === "Backbar" ? scope : undefined,
+        paoDays: ledger === "Backbar" ? Number(paoDays) || undefined : undefined,
         sku: editModal.sku,
       });
       if ("error" in result) {
@@ -336,8 +352,10 @@ export function AdminInventoryView({
           locationName: newProduct.location,
           qty: Number(newProduct.backbarQty) || 0,
           par: Number(newProduct.backbarPar) || 0,
-          openedOn: newProduct.backbarOpens || undefined,
-          paoDays: paoMesesToDays(newProduct.backbarPao),
+          contentMl: Number(newProduct.backbarContentMl) || undefined,
+          scope: newProduct.backbarScope,
+          paoDays: Number(newProduct.backbarPaoDays) || undefined,
+          costMxn: Number(newProduct.backbarCost) || undefined,
         });
       }
       if (newProduct.ledgers.includes("Warehouse")) {
@@ -389,6 +407,11 @@ export function AdminInventoryView({
           locationName,
           qty: Number(r.Cantidad) || 0,
           par: Number(r.Par) || 0,
+          contentMl: r["ML por envase"] ? Number(r["ML por envase"]) || undefined : undefined,
+          scope: /indiv/i.test(r.Alcance ?? "") ? "INDIVIDUAL" : /comun/i.test(r.Alcance ?? "") ? "COMMUNAL" : undefined,
+          paoDays: r["Duracion (dias)"] ? Number(r["Duracion (dias)"]) || undefined : undefined,
+          costMxn: r.Costo ? Number(r.Costo) || undefined : undefined,
+          expiresOn: r.Caducidad?.trim() || undefined,
         });
       }
 
@@ -419,7 +442,7 @@ export function AdminInventoryView({
   function exportBackbar() {
     downloadCsv(
       "inventario-backbar-monam.csv",
-      backbar.map((i) => ({ SKU: i.sku, Producto: i.product, Ubicacion: i.location, Cantidad: i.qty, Par: i.par, Abierto: i.opensOn, PAO: i.pao })),
+      backbar.map((i) => ({ SKU: i.sku, Producto: i.product, Ubicacion: i.location, Cantidad: i.qty, Par: i.par, "ML por envase": i.contentMl, Alcance: i.scope === "COMMUNAL" ? "Comunal" : "Individual", "Duracion (dias)": i.paoDays, Costo: i.cost, Caducidad: i.expiresOn })),
     );
   }
 
@@ -603,7 +626,20 @@ export function AdminInventoryView({
                     <TextInput label="SKU" value={newProduct.backbarSku} onChange={(v) => setNewProduct((f) => ({ ...f, backbarSku: v }))} />
                     <TextInput label="Cantidad" type="number" value={newProduct.backbarQty} onChange={(v) => setNewProduct((f) => ({ ...f, backbarQty: v }))} />
                     <TextInput label="Par" type="number" value={newProduct.backbarPar} onChange={(v) => setNewProduct((f) => ({ ...f, backbarPar: v }))} />
-                    <TextInput label="PAO" value={newProduct.backbarPao} onChange={(v) => setNewProduct((f) => ({ ...f, backbarPao: v }))} placeholder="p. ej. 6 meses" />
+                    <TextInput label="ML por envase" type="number" value={newProduct.backbarContentMl} onChange={(v) => setNewProduct((f) => ({ ...f, backbarContentMl: v }))} />
+                    <TextInput label="Duración abierto (días)" type="number" value={newProduct.backbarPaoDays} onChange={(v) => setNewProduct((f) => ({ ...f, backbarPaoDays: v }))} placeholder="p. ej. 180" />
+                    <TextInput label="Costo por envase (MXN)" type="number" value={newProduct.backbarCost} onChange={(v) => setNewProduct((f) => ({ ...f, backbarCost: v }))} />
+                    <label className="block">
+                      <span className="mb-1 block font-body text-xs uppercase tracking-[0.14em] text-ciruela/50">Alcance</span>
+                      <select
+                        value={newProduct.backbarScope}
+                        onChange={(e) => setNewProduct((f) => ({ ...f, backbarScope: e.target.value as "COMMUNAL" | "INDIVIDUAL" }))}
+                        className="w-full rounded-lg border border-ciruela/20 bg-hueso px-3 py-2 font-body text-sm text-ciruela"
+                      >
+                        <option value="COMMUNAL">Comunal (por cabina)</option>
+                        <option value="INDIVIDUAL">Individual (por esteticista)</option>
+                      </select>
+                    </label>
                   </div>
                 </div>
               )}
@@ -760,8 +796,11 @@ export function AdminInventoryView({
                   <SortTh label="Ubicación" col="location" sortCol={sortCol} sortDir={sortDir} onSort={toggleSort} className="pb-2 pr-6" />
                   <SortTh label="Cant." col="qty" sortCol={sortCol} sortDir={sortDir} onSort={toggleSort} className="pb-2 pr-3 text-right" />
                   <SortTh label="Par" col="par" sortCol={sortCol} sortDir={sortDir} onSort={toggleSort} className="pb-2 pr-6 text-right" />
-                  <SortTh label="Abierto" col="opensOn" sortCol={sortCol} sortDir={sortDir} onSort={toggleSort} className="pb-2 pr-6" />
-                  <SortTh label="PAO" col="pao" sortCol={sortCol} sortDir={sortDir} onSort={toggleSort} className="pb-2" />
+                  <SortTh label="ML/envase" col="contentMl" sortCol={sortCol} sortDir={sortDir} onSort={toggleSort} className="pb-2 pr-4 text-right" />
+                  <SortTh label="Alcance" col="scope" sortCol={sortCol} sortDir={sortDir} onSort={toggleSort} className="pb-2 pr-4" />
+                  <SortTh label="Duración" col="pao" sortCol={sortCol} sortDir={sortDir} onSort={toggleSort} className="pb-2 pr-4" />
+                  <SortTh label="Costo" col="cost" sortCol={sortCol} sortDir={sortDir} onSort={toggleSort} className="pb-2 pr-4 text-right" />
+                  <SortTh label="Abiertos" col="openCount" sortCol={sortCol} sortDir={sortDir} onSort={toggleSort} className="pb-2 pr-4 text-right" />
                   <th className="pb-2" />
                 </tr>
               </thead>
@@ -775,8 +814,13 @@ export function AdminInventoryView({
                       <td className="py-3 pr-6 text-ciruela/60">{item.location}</td>
                       <td className="py-3 pr-3 text-right">{item.qty}</td>
                       <td className="py-3 pr-6 text-right text-ciruela/50">{item.par}</td>
-                      <td className="py-3 pr-6 text-ciruela/50">{item.opensOn}</td>
-                      <td className="py-3 text-ciruela/50">{item.pao}</td>
+                      <td className="py-3 pr-4 text-right text-ciruela/60">{item.contentMl ? `${item.contentMl} ml` : "—"}</td>
+                      <td className="py-3 pr-4 text-ciruela/60">{item.scope === "COMMUNAL" ? "Comunal" : "Individual"}</td>
+                      <td className="py-3 pr-4 text-ciruela/50">{item.pao}</td>
+                      <td className="py-3 pr-4 text-right text-ciruela/60">{item.cost ? `$${item.cost}` : "—"}</td>
+                      <td className="py-3 pr-4 text-right text-ciruela/60">
+                        {item.openCount > 0 ? `${item.openCount} · ${item.openMl} ml` : "—"}
+                      </td>
                       <td className="py-3 text-right">
                         <div className="flex items-center justify-end gap-2">
                           {low && <Badge tone="warning">Bajo par</Badge>}
@@ -955,8 +999,21 @@ export function AdminInventoryView({
               )}
               {editModal.ledger === "Backbar" && (
                 <>
-                  <TextInput label="Abierto" type="date" value={editModal.opensOn} onChange={(v) => setEditModal((m) => (m ? { ...m, opensOn: v } : m))} />
-                  <TextInput label="PAO" value={editModal.pao} placeholder="p. ej. 6 meses" onChange={(v) => setEditModal((m) => (m ? { ...m, pao: v } : m))} />
+                  <TextInput label="ML por envase" type="number" value={editModal.contentMl} onChange={(v) => setEditModal((m) => (m ? { ...m, contentMl: v } : m))} />
+                  <TextInput label="Duración abierto (días)" type="number" value={editModal.paoDays} onChange={(v) => setEditModal((m) => (m ? { ...m, paoDays: v } : m))} />
+                  <TextInput label="Costo por envase (MXN)" type="number" value={editModal.cost} onChange={(v) => setEditModal((m) => (m ? { ...m, cost: v } : m))} />
+                  <TextInput label="Caducidad del lote" type="date" value={editModal.expiresOn} onChange={(v) => setEditModal((m) => (m ? { ...m, expiresOn: v } : m))} />
+                  <label className="block">
+                    <span className="mb-1 block font-body text-xs uppercase tracking-[0.14em] text-ciruela/50">Alcance</span>
+                    <select
+                      value={editModal.scope}
+                      onChange={(e) => setEditModal((m) => (m ? { ...m, scope: e.target.value as "COMMUNAL" | "INDIVIDUAL" } : m))}
+                      className="w-full rounded-lg border border-ciruela/20 bg-hueso px-3 py-2 font-body text-sm text-ciruela"
+                    >
+                      <option value="COMMUNAL">Comunal (por cabina)</option>
+                      <option value="INDIVIDUAL">Individual (por esteticista)</option>
+                    </select>
+                  </label>
                 </>
               )}
               {editModal.ledger === "Warehouse" && (

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import Link from "next/link";
 import { TopBar } from "@/components/panel/TopBar";
 import { Card } from "@/components/panel/Card";
 import { useProtocols } from "@/components/panel/ProtocolsContext";
@@ -30,7 +31,7 @@ export function StaffTreatmentRecordView({
   backbarProducts,
 }: {
   client: TreatmentClient | null;
-  backbarProducts: { sku: string; name: string }[];
+  backbarProducts: { sku: string; name: string; openMl: number }[];
 }) {
   const { protocols } = useProtocols();
   const addOns = useAddOns();
@@ -63,7 +64,13 @@ export function StaffTreatmentRecordView({
 
   const hasLoggedProduct = usedProducts.some((p) => p.sku && Number(p.amountMl) > 0);
   const hasNotes = clinicalNotes.trim().length > 0;
-  const canComplete = hasLoggedProduct && hasNotes;
+  // Each product used must fit in what is open right now.
+  const mlBySku = new Map<string, number>();
+  for (const p of usedProducts) {
+    if (p.sku && Number(p.amountMl) > 0) mlBySku.set(p.sku, (mlBySku.get(p.sku) ?? 0) + Number(p.amountMl));
+  }
+  const overLimit = backbarProducts.find((b) => (mlBySku.get(b.sku) ?? 0) > b.openMl);
+  const canComplete = hasLoggedProduct && hasNotes && !overLimit;
 
   // Finishing a treatment here and charging for it at Cobro/POS are two
   // different people, two different moments — this is the hand-off.
@@ -197,8 +204,8 @@ export function StaffTreatmentRecordView({
                     >
                       <option value="">Selecciona un producto</option>
                       {backbarProducts.map((b) => (
-                        <option key={b.sku} value={b.sku}>
-                          {b.name}
+                        <option key={b.sku} value={b.sku} disabled={b.openMl <= 0}>
+                          {b.name} — {b.openMl > 0 ? `${b.openMl} ml abiertos` : "sin envase abierto"}
                         </option>
                       ))}
                     </select>
@@ -228,7 +235,11 @@ export function StaffTreatmentRecordView({
                 + Agregar producto
               </button>
               <p className="mt-2 font-body text-xs text-ciruela/40">
-                Se descuenta del inventario backbar y alimenta el reporte de consumo y mermas.
+                Se descuenta del envase abierto (el de la cabina o el tuyo). ¿No ves tu producto o ya no alcanza?{" "}
+                <Link href="/staff/open-product" className="underline">
+                  Abre un envase
+                </Link>
+                .
               </p>
             </div>
 

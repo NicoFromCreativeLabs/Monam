@@ -16,7 +16,10 @@ const FRONT_DESK_ITEMS: NavSection[] = [
   },
   {
     heading: "Operación",
-    items: [{ href: "/staff/inventory", label: "Inventario" }],
+    items: [
+      { href: "/staff/inventory", label: "Inventario" },
+      { href: "/staff/open-product", label: "Abrir producto" },
+    ],
   },
   {
     heading: "Mi cuenta",
@@ -36,6 +39,7 @@ const ESTHETICIAN_ITEMS: NavSection[] = [
     items: [
       { href: "/staff/clients", label: "Perfil del cliente" },
       { href: "/staff/treatment-record", label: "Registro de tratamiento" },
+      { href: "/staff/open-product", label: "Abrir producto" },
       { href: "/staff/retail-tags", label: "Recomendaciones de compra" },
     ],
   },
