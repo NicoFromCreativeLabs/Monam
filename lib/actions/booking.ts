@@ -32,12 +32,16 @@ export async function getAvailableSlotsAction(input: {
 // deposit (Configuración → Depósitos). A type that does need one goes through
 // createClientDepositCheckoutAction instead, so this refuses it here too —
 // otherwise calling the action directly would skip the deposit.
-export async function createAppointmentAction(
-  input: CreateAppointmentInput,
-): Promise<CreateAppointmentResult> {
+//
+// `depositRequired` lets the booking page recover on its own: if its copy of
+// the rule was stale, it moves the client on to the deposit step (Stripe)
+// instead of showing a dead-end error.
+export type BookAppointmentResult = CreateAppointmentResult | { error: string; depositRequired: true };
+
+export async function createAppointmentAction(input: CreateAppointmentInput): Promise<BookAppointmentResult> {
   const { client } = await requireClientOrPreview();
   if (await isDepositRequired(input.durationTier)) {
-    return { error: "Este tipo de cita requiere depósito. Reserva de nuevo y paga el depósito para confirmarla." };
+    return { error: "Este tipo de cita requiere depósito.", depositRequired: true };
   }
   return insertAppointment({ ...input, clientId: client.id });
 }

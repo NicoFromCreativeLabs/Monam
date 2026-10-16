@@ -95,8 +95,13 @@ export default function ClientBook() {
     useScrollEdgeFade<HTMLDivElement>();
 
   const { rules } = useBusinessRules();
+  // The server is the authority: if it ever answers "deposit required" for a
+  // tier this page thought was free (rules changed since the page loaded),
+  // that tier is remembered here and the client goes on to the deposit step.
+  const [depositForcedTier, setDepositForcedTier] = useState<string | null>(null);
   const requiresDeposit = duration
-    ? depositRequiredForTier(duration, {
+    ? depositForcedTier === duration ||
+      depositRequiredForTier(duration, {
         signature: rules.depositRequiredSignature,
         targeted: rules.depositRequiredTargeted,
       })
@@ -219,6 +224,12 @@ export default function ClientBook() {
     });
     setConfirming(false);
     if ("error" in result) {
+      if ("depositRequired" in result) {
+        setDepositForcedTier(duration);
+        setSlot(chosenSlot);
+        setStep("deposit");
+        return false;
+      }
       setBookingError(result.error);
       return false;
     }
@@ -480,8 +491,8 @@ export default function ClientBook() {
       {step === "deposit" && (
         <Card title="Depósito requerido">
           <p className="font-body text-sm text-ciruela/70">
-            Las citas Signature requieren un depósito, que se acredita automáticamente en tu
-            cuenta al final del tratamiento.
+            Esta cita requiere un depósito, que se acredita automáticamente en tu cuenta al
+            final del tratamiento.
           </p>
           <div className="mt-4 flex justify-between font-body text-sm text-ciruela">
             <span>Depósito</span>
