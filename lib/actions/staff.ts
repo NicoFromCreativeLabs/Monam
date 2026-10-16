@@ -30,56 +30,91 @@ export interface InviteStaffInput {
   salaryMxn: number;
 }
 
-export type InviteStaffResult = { error: string } | { userId: string };
+export type InviteStaffResult =
+  | { error: string }
+  // existingAccount: the email already had a login (e.g. a client who signed
+  // up), so it was promoted in place — no invite email, status is ACTIVE.
+  | { userId: string; existingAccount: boolean };
+
+// Supabase has no get-user-by-email on the admin API, so page through
+// listUsers. Fine at this studio's scale (hundreds of accounts, not millions).
+async function findAuthUserIdByEmail(
+  admin: ReturnType<typeof createAdminClient>,
+  email: string,
+): Promise<string | null> {
+  const perPage = 200;
+  for (let page = 1; page <= 50; page++) {
+    const { data, error } = await admin.auth.admin.listUsers({ page, perPage });
+    if (error) return null;
+    const match = data.users.find((u) => u.email?.toLowerCase() === email);
+    if (match) return match.id;
+    if (data.users.length < perPage) return null;
+  }
+  return null;
+}
 
 // Real account creation — same two-step pattern as
 // scripts/create-staff-account.ts (the very first Owner account was
 // bootstrapped this way): create the Supabase Auth user, then the AppUser +
 // StaffLocationAssignment rows, then try to send a password-setup email.
-// Individual named logins only, never shared (spec §10) — this is the only
-// way a new staff member gets in.
+// If the email already has a login (someone who signed up as a client), that
+// login is reused instead: they keep their password and just gain the staff
+// role. Individual named logins only, never shared (spec §10).
 export async function inviteStaffAction(input: InviteStaffInput): Promise<InviteStaffResult> {
   await requireStaffRole(["OWNER"]);
 
   const role = ROLE_FROM_LABEL[input.roleLabel];
   if (!role) return { error: "Rol no reconocido." };
 
+  const email = input.email.trim().toLowerCase();
   const admin = createAdminClient();
-  const { data, error } = await admin.auth.admin.createUser({
-    email: input.email,
-    email_confirm: true,
-    user_metadata: { name: input.name },
-  });
-  if (error || !data.user) {
-    return { error: error?.message ?? "No se pudo crear la cuenta." };
+
+  let userId = await findAuthUserIdByEmail(admin, email);
+  const existingAccount = userId !== null;
+
+  if (userId) {
+    const alreadyStaff = await prisma.appUser.findUnique({ where: { id: userId } });
+    if (alreadyStaff) return { error: "Esta persona ya está en el equipo." };
+  } else {
+    const { data, error } = await admin.auth.admin.createUser({
+      email,
+      email_confirm: true,
+      user_metadata: { name: input.name },
+    });
+    if (error || !data.user) {
+      return { error: error?.message ?? "No se pudo crear la cuenta." };
+    }
+    userId = data.user.id;
   }
 
   await prisma.appUser.create({
     data: {
-      id: data.user.id,
+      id: userId,
       name: input.name,
-      email: input.email,
+      email,
       role,
       salaryMxn: input.salaryMxn,
-      status: "INVITED",
+      status: existingAccount ? "ACTIVE" : "INVITED",
     },
   });
 
   const locationIds = await resolveLocationIds(input.locationLabel);
   for (const [i, locationId] of locationIds.entries()) {
     await prisma.staffLocationAssignment.create({
-      data: { userId: data.user.id, locationId, isPrimary: i === 0 },
+      data: { userId, locationId, isPrimary: i === 0 },
     });
   }
 
-  await admin.auth.resetPasswordForEmail(input.email).catch(() => {
-    // Account still exists even if the email send fails (rate limits,
-    // etc.) — same tolerance as the bootstrap script; retry is a resend,
-    // not a blocker.
-  });
+  if (!existingAccount) {
+    await admin.auth.resetPasswordForEmail(email).catch(() => {
+      // Account still exists even if the email send fails (rate limits,
+      // etc.) — same tolerance as the bootstrap script; retry is a resend,
+      // not a blocker.
+    });
+  }
 
   revalidatePath("/admin/staff");
-  return { userId: data.user.id };
+  return { userId, existingAccount };
 }
 
 export interface UpdateStaffInput {
@@ -114,4 +149,38 @@ export async function toggleStaffStatusAction(userId: string) {
   const nextStatus = user.status === "INACTIVE" ? "ACTIVE" : "INACTIVE";
   await prisma.appUser.update({ where: { id: userId }, data: { status: nextStatus } });
   revalidatePath("/admin/staff");
+}
+
+export interface AccountSuggestion {
+  name: string;
+  email: string;
+}
+
+// Autocomplete for the roster's "add person" form: existing client accounts
+// (real logins, not yet on the team) matching what the Owner has typed, so
+// they can be promoted instead of re-invited. Owner-only, capped, and never
+// returns anonymized or already-staff accounts.
+export async function searchAccountsAction(query: string): Promise<AccountSuggestion[]> {
+  await requireStaffRole(["OWNER"]);
+
+  const q = query.trim();
+  if (q.length < 2) return [];
+
+  const staff = await prisma.appUser.findMany({ select: { id: true } });
+  const clients = await prisma.client.findMany({
+    where: {
+      authUserId: { not: null, notIn: staff.map((s) => s.id) },
+      anonymizedAt: null,
+      email: { not: null },
+      OR: [
+        { name: { contains: q, mode: "insensitive" } },
+        { email: { contains: q, mode: "insensitive" } },
+      ],
+    },
+    select: { name: true, email: true },
+    orderBy: { name: "asc" },
+    take: 8,
+  });
+
+  return clients.flatMap((c) => (c.email ? [{ name: c.name, email: c.email }] : []));
 }

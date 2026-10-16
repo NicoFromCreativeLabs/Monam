@@ -4,9 +4,10 @@ import { useState } from "react";
 import { TopBar } from "@/components/panel/TopBar";
 import { Card } from "@/components/panel/Card";
 import { Badge } from "@/components/panel/Badge";
-import { ESTHETICIAN_OCCUPANCY, type StaffMember } from "@/lib/mock-data";
+import type { StaffMember } from "@/lib/mock-data";
 import { useLocations } from "@/components/panel/LocationsContext";
 import { useStaffRoster } from "@/components/panel/StaffRosterContext";
+import { StaffNameSearch } from "@/components/panel/StaffNameSearch";
 
 // All roles the roster can hold — Admin included, so ownership/admin rights
 // can be granted or moved between people from this same screen.
@@ -35,6 +36,7 @@ export default function AdminStaff() {
     location: locations[0].name,
     salary: "",
   });
+  const [pickedExisting, setPickedExisting] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draft, setDraft] = useState<{ role: string; location: string; salary: string }>({
     role: "",
@@ -50,9 +52,10 @@ export default function AdminStaff() {
       email: form.email.trim(),
       role: form.role,
       location: form.location,
-      status: "Invitado",
+      status: pickedExisting ? "Activo" : "Invitado",
       salary: Number(form.salary) || 0,
     });
+    setPickedExisting(false);
     setForm({ name: "", email: "", role: ROLE_OPTIONS[1], location: locations[0].name, salary: "" });
     setFormOpen(false);
   }
@@ -91,11 +94,17 @@ export default function AdminStaff() {
                 <label className="mb-1 block font-body text-xs uppercase tracking-[0.14em] text-ciruela/50">
                   Nombre completo
                 </label>
-                <input
-                  required
+                <StaffNameSearch
                   value={form.name}
-                  onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-                  className="w-full rounded-lg border border-ciruela/20 bg-hueso px-3 py-2 font-body text-sm text-ciruela focus:outline-none focus:ring-1 focus:ring-ciruela/40"
+                  onChange={(name) => {
+                    setPickedExisting(false);
+                    setForm((f) => ({ ...f, name }));
+                  }}
+                  onPick={(account) => {
+                    setPickedExisting(true);
+                    setForm((f) => ({ ...f, name: account.name, email: account.email }));
+                  }}
+                  inputClassName="w-full rounded-lg border border-ciruela/20 bg-hueso px-3 py-2 font-body text-sm text-ciruela placeholder:text-ciruela/40 focus:outline-none focus:ring-1 focus:ring-ciruela/40"
                 />
               </div>
               <div>
@@ -106,7 +115,10 @@ export default function AdminStaff() {
                   required
                   type="email"
                   value={form.email}
-                  onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
+                  onChange={(e) => {
+                    setPickedExisting(false);
+                    setForm((f) => ({ ...f, email: e.target.value }));
+                  }}
                   className="w-full rounded-lg border border-ciruela/20 bg-hueso px-3 py-2 font-body text-sm text-ciruela focus:outline-none focus:ring-1 focus:ring-ciruela/40"
                 />
               </div>
@@ -165,8 +177,13 @@ export default function AdminStaff() {
                   type="submit"
                   className="rounded-full bg-ciruela px-5 py-2.5 font-body text-sm text-hueso"
                 >
-                  Enviar invitación
+                  {pickedExisting ? "Agregar al equipo" : "Enviar invitación"}
                 </button>
+                {pickedExisting && (
+                  <p className="mt-2 font-body text-[11px] text-ciruela/60">
+                    Cuenta existente: conserva su contraseña y no se envía correo.
+                  </p>
+                )}
                 <p className="mt-2 font-body text-[11px] text-ciruela/40">
                   Login individual y con alcance de ubicación — nunca una cuenta compartida
                   (spec §10). El salario alimenta &ldquo;Nómina base&rdquo; en Análisis → P&L.
@@ -291,30 +308,6 @@ export default function AdminStaff() {
             </tbody>
           </table>
           </div>
-        </Card>
-
-        <Card title="Horarios — semana en curso">
-          <ul className="space-y-3">
-            {ESTHETICIAN_OCCUPANCY.map((e) => {
-              const pct = e.hoursBooked / e.hoursAvailable;
-              return (
-                <li key={e.name}>
-                  <div className="mb-1 flex justify-between font-body text-xs text-ciruela">
-                    <span>{e.name}</span>
-                    <span className="text-ciruela/50">
-                      {e.hoursBooked}h agendadas / {e.hoursAvailable}h disponibles
-                    </span>
-                  </div>
-                  <div className="h-2 rounded-full bg-ciruela/8">
-                    <div className="h-2 rounded-full bg-ciruela" style={{ width: `${pct * 100}%` }} />
-                  </div>
-                </li>
-              );
-            })}
-          </ul>
-          <p className="mt-4 font-body text-xs text-ciruela/40">
-            Vista de solo lectura — la edición de turnos individuales es Fase 2.
-          </p>
         </Card>
       </div>
     </>

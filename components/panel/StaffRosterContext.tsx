@@ -42,7 +42,13 @@ export function StaffRosterProvider({
           setRoster((prev) => prev.filter((s) => s.id !== tempId));
           return;
         }
-        setRoster((prev) => prev.map((s) => (s.id === tempId ? { ...s, id: result.userId } : s)));
+        setRoster((prev) =>
+          prev.map((s) =>
+            s.id === tempId
+              ? { ...s, id: result.userId, status: result.existingAccount ? "Activo" : s.status }
+              : s,
+          ),
+        );
       })
       .catch((err) => {
         console.error("Failed to invite staff member:", err);
