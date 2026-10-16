@@ -3,6 +3,7 @@ import { STRIPE_ENABLED } from "@/lib/feature-flags";
 import { constructWebhookEvent } from "@/lib/payments/stripe";
 import { confirmDepositAndBook } from "@/lib/booking-core";
 import { confirmPackagePurchase } from "@/lib/packages-core";
+import { prisma } from "@/lib/prisma";
 
 // Registers at https://<domain>/api/stripe/webhook in the Stripe Dashboard
 // (Developers → Webhooks), subscribed to checkout.session.completed. Stripe
@@ -79,6 +80,18 @@ export async function POST(request: Request) {
     // Payment succeeded but the slot is gone — not a webhook failure, a
     // real booking conflict Front Desk needs to follow up on by hand.
     console.error("Stripe deposit paid but booking failed:", depositId, result.error);
+    // Surface it in the panel's alerts too: the client has paid and has no
+    // appointment, so Front Desk has to book it by hand or refund the deposit.
+    await prisma.alert
+      .create({
+        data: {
+          text: `Depósito pagado sin cita: ${date} ${time} (${durationTier}, ${locationName}). ${result.error} Reserva a mano o reembolsa el depósito.`,
+          severity: "WARNING",
+          sourceType: "DEPOSIT_NO_BOOKING",
+          sourceId: depositId,
+        },
+      })
+      .catch((err) => console.error("Could not create the unbooked-deposit alert:", err));
   }
 
   return NextResponse.json({ received: true });
