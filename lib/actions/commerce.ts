@@ -3,6 +3,10 @@
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireStaffRole } from "@/lib/auth/dal";
+import { headers } from "next/headers";
+import QRCode from "qrcode";
+import { STRIPE_ENABLED } from "@/lib/feature-flags";
+import { cancelPaymentIntent, createCounterPaymentIntent, getPaymentStatus } from "@/lib/payments/stripe";
 import type { Role } from "@/lib/generated/prisma/client";
 
 const FRONT_DESK_ROLES: Role[] = ["FRONT_DESK", "OWNER", "CLINIC_MANAGER"];
@@ -60,26 +64,32 @@ export interface CreateSaleInput {
   retailItems: RetailLineInput[];
   reAddedAfterRemovalSkus: string[]; // re-added after the recommendation was removed — commission goes to whoever closes the sale, not the original tagger
   paymentMethod: "CASH" | "CARD" | "ONLINE";
+  stripePaymentId?: string; // required for ONLINE — the succeeded PaymentIntent from startOnlineChargeAction
 }
 
 export type CreateSaleResult = { error: string } | { saleId: string; totalMxn: number };
 
-// All prices/attribution are re-derived server-side from real rows (the
-// appointment's protocol, the location's InventoryItem.priceMxn, the
-// treatment's RetailRecommendationTag) rather than trusting client-supplied
-// numbers — this handles real money.
-export async function createSaleAction(input: CreateSaleInput): Promise<CreateSaleResult> {
-  const staff = await requireStaffRole(FRONT_DESK_ROLES);
+// Prices are always re-derived server-side from real rows (the appointment's
+// protocol, the location's InventoryItem.priceMxn, the deposit on file) —
+// never from client-supplied numbers. Shared by createSaleAction and
+// startOnlineChargeAction so the amount on a Stripe payment link is exactly
+// what the Sale will record.
+// Explicitly typed (not an inline literal) so callers can narrow the quote
+// with `"error" in quote`.
+function quoteError(error: string): { error: string } {
+  return { error };
+}
 
+async function quoteSale(input: Pick<CreateSaleInput, "appointmentId" | "locationName" | "retailItems">) {
   const location = await prisma.location.findFirst({ where: { name: input.locationName } });
-  if (!location) return { error: "Sucursal no encontrada." };
+  if (!location) return quoteError("Sucursal no encontrada.");
 
   let appointment: Awaited<ReturnType<typeof loadAppointmentForCheckout>> = null;
   if (input.appointmentId) {
     appointment = await loadAppointmentForCheckout(input.appointmentId);
-    if (!appointment) return { error: "Cita no encontrada." };
-    if (appointment.sale) return { error: "Esta cita ya fue cobrada." };
-    if (!appointment.treatmentRecord) return { error: "El tratamiento no se ha completado." };
+    if (!appointment) return quoteError("Cita no encontrada.");
+    if (appointment.sale) return quoteError("Esta cita ya fue cobrada.");
+    if (!appointment.treatmentRecord) return quoteError("El tratamiento no se ha completado.");
   }
 
   const skus = input.retailItems.filter((r) => r.qty > 0).map((r) => r.sku);
@@ -95,13 +105,9 @@ export async function createSaleAction(input: CreateSaleInput): Promise<CreateSa
     if (line.qty <= 0) continue;
     const item = itemBySku.get(line.sku);
     if (!item || item.qty < line.qty) {
-      return { error: `Sin existencia suficiente de ${line.sku}.` };
+      return quoteError(`Sin existencia suficiente de ${line.sku}.`);
     }
   }
-
-  const tagByProductId = new Map(
-    (appointment?.treatmentRecord?.retailTags ?? []).map((t) => [t.productId, t]),
-  );
 
   const servicePrice = appointment?.protocol?.priceMxn ?? 0;
   const retailTotal = input.retailItems.reduce((sum, line) => {
@@ -112,6 +118,28 @@ export async function createSaleAction(input: CreateSaleInput): Promise<CreateSa
   const depositCreditMxn =
     appointment?.deposit && appointment.deposit.status === "HELD" ? -appointment.deposit.amountMxn : 0;
   const totalMxn = Math.max(0, subtotal + depositCreditMxn);
+
+  return { location, appointment, itemBySku, servicePrice, subtotal, depositCreditMxn, totalMxn } as const;
+}
+
+// Same price/attribution derivation as always — see quoteSale. For ONLINE
+// payments the sale is only recorded once the Stripe Checkout session
+// (started by startOnlineChargeAction) is verified paid for exactly this total.
+export async function createSaleAction(input: CreateSaleInput): Promise<CreateSaleResult> {
+  const staff = await requireStaffRole(FRONT_DESK_ROLES);
+
+  const quote = await quoteSale(input);
+  if ("error" in quote) return quote;
+  const { location, appointment, itemBySku, servicePrice, subtotal, depositCreditMxn, totalMxn } = quote;
+
+  if (input.paymentMethod === "ONLINE") {
+    const verified = await verifyOnlinePayment(input.stripePaymentId, totalMxn);
+    if ("error" in verified) return verified;
+  }
+
+  const tagByProductId = new Map(
+    (appointment?.treatmentRecord?.retailTags ?? []).map((t) => [t.productId, t]),
+  );
 
   const commissionRules = await prisma.commissionRule.findMany({ where: { isActive: true } });
   function findRule(basis: "SERVICE" | "ADD_ON" | "RETAIL" | "PACKAGE", role: Role) {
@@ -241,6 +269,22 @@ export async function createSaleAction(input: CreateSaleInput): Promise<CreateSa
       await tx.sale.update({ where: { id: created.id }, data: { cashRegisterSessionId: openSession.id } });
     }
 
+    // Marks the Stripe payment as spent — verifyOnlinePayment refuses a
+    // payment that already closed a sale, so it can't be reused.
+    if (input.paymentMethod === "ONLINE" && input.stripePaymentId) {
+      await tx.auditLog.create({
+        data: {
+          actorUserId: staff.id,
+          actorRole: staff.role,
+          action: "STRIPE_COUNTER_SALE",
+          entityType: "StripePaymentIntent",
+          entityId: input.stripePaymentId,
+          locationId: location.id,
+          metadata: { saleId: created.id, totalMxn },
+        },
+      });
+    }
+
     return created;
   });
 
@@ -254,6 +298,84 @@ export async function createSaleAction(input: CreateSaleInput): Promise<CreateSa
 
   revalidateCheckout();
   return { saleId: sale.id, totalMxn };
+}
+
+async function verifyOnlinePayment(
+  paymentId: string | undefined,
+  totalMxn: number,
+): Promise<{ ok: true } | { error: string }> {
+  if (!STRIPE_ENABLED) return { error: "Stripe no está configurado. Cobra en efectivo o con tarjeta." };
+  if (!paymentId) return { error: "Genera primero el cobro con Stripe." };
+
+  const alreadyUsed = await prisma.auditLog.findFirst({
+    where: { action: "STRIPE_COUNTER_SALE", entityId: paymentId },
+  });
+  if (alreadyUsed) return { error: "Este pago ya se registró en otra venta." };
+
+  const status = await getPaymentStatus(paymentId);
+  if (status.kind !== "counter") return { error: "El pago no corresponde a una venta de mostrador." };
+  if (!status.paid) return { error: "El pago todavía no se ha completado." };
+  if (status.amountMxn !== totalMxn) {
+    return { error: "El monto pagado no coincide con el total de la venta. Revisa en Stripe." };
+  }
+  return { ok: true };
+}
+
+export type StartOnlineChargeResult =
+  | { error: string }
+  | { paymentId: string; payUrl: string; qrDataUrl: string; totalMxn: number };
+
+// "En línea (Stripe)" at the counter: creates a PaymentIntent for exactly the
+// server-derived total and returns a QR to our own branded page (/pagar/<id>),
+// where the client pays on their phone. (Tap to Pay itself needs a native
+// iOS/Android app or a Stripe card reader — it can't run in a web app.) The
+// Sale is recorded afterwards by createSaleAction once the payment is verified.
+export async function startOnlineChargeAction(
+  input: Pick<CreateSaleInput, "appointmentId" | "locationName" | "retailItems">,
+): Promise<StartOnlineChargeResult> {
+  await requireStaffRole(FRONT_DESK_ROLES);
+  if (!STRIPE_ENABLED) return { error: "Stripe no está configurado. Cobra en efectivo o con tarjeta." };
+  if (!process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY) {
+    return { error: "Falta la llave pública de Stripe (NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY)." };
+  }
+
+  const quote = await quoteSale(input);
+  if ("error" in quote) return quote;
+  if (quote.totalMxn <= 0) return { error: "No hay nada que cobrar." };
+
+  const origin = (await headers()).get("origin") ?? "";
+  try {
+    const { paymentId } = await createCounterPaymentIntent({
+      amountMxn: quote.totalMxn,
+      description: `Monâm Skin Studio — ${quote.location.name}`,
+      metadata: { locationName: quote.location.name, appointmentId: input.appointmentId ?? "" },
+    });
+    const payUrl = `${origin}/pagar/${paymentId}`;
+    const qrDataUrl = await QRCode.toDataURL(payUrl, { width: 320, margin: 1 });
+    return { paymentId, payUrl, qrDataUrl, totalMxn: quote.totalMxn };
+  } catch {
+    return { error: "No se pudo generar el cobro. Intenta de nuevo." };
+  }
+}
+
+export async function checkOnlineChargeAction(
+  paymentId: string,
+): Promise<{ paid: boolean; expired: boolean } | { error: string }> {
+  await requireStaffRole(FRONT_DESK_ROLES);
+  if (!STRIPE_ENABLED) return { error: "Stripe no está configurado." };
+  try {
+    const { paid, canceled } = await getPaymentStatus(paymentId);
+    return { paid, expired: canceled };
+  } catch {
+    return { error: "No se pudo consultar el pago." };
+  }
+}
+
+export async function cancelOnlineChargeAction(paymentId: string): Promise<void> {
+  await requireStaffRole(FRONT_DESK_ROLES);
+  if (!STRIPE_ENABLED) return;
+  // An already-paid or already-canceled intent can't be canceled — nothing to do.
+  await cancelPaymentIntent(paymentId).catch(() => {});
 }
 
 async function loadAppointmentForCheckout(appointmentId: string) {

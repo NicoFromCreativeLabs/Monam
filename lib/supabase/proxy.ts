@@ -15,7 +15,7 @@ const PUBLIC_PATHS = [
   "/api/whatsapp/webhook",
   "/api/stripe/webhook",
 ];
-const PUBLIC_PREFIXES = ["/auth", "/legal"];
+const PUBLIC_PREFIXES = ["/auth", "/legal", "/pagar"];
 
 function isPublicPath(pathname: string) {
   return PUBLIC_PATHS.includes(pathname) || PUBLIC_PREFIXES.some((p) => pathname.startsWith(p));

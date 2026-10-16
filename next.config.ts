@@ -19,25 +19,28 @@ const nextConfig: NextConfig = {
   // locked down further — tightening it more needs verifying against every
   // page's actual asset origins first, which is follow-up work, not this fix.
   async headers() {
+    const baseHeaders = [
+      { key: "X-Content-Type-Options", value: "nosniff" },
+      { key: "X-Frame-Options", value: "DENY" },
+      { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+    ];
+    const csp = (stripe: boolean) => ({
+      key: "Content-Security-Policy",
+      value:
+        "default-src 'self'; frame-ancestors 'none'; base-uri 'self'; " +
+        `script-src 'self' 'unsafe-inline' 'unsafe-eval'${stripe ? " https://js.stripe.com" : ""}; ` +
+        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; " +
+        "font-src 'self' https://fonts.gstatic.com; " +
+        `img-src 'self' data: blob:${stripe ? " https://*.stripe.com" : ""}; ` +
+        `connect-src 'self' https://*.supabase.co wss://*.supabase.co${stripe ? " https://api.stripe.com https://m.stripe.network" : ""}` +
+        (stripe ? "; frame-src https://js.stripe.com https://hooks.stripe.com https://m.stripe.network" : ""),
+    });
     return [
-      {
-        source: "/:path*",
-        headers: [
-          { key: "X-Content-Type-Options", value: "nosniff" },
-          { key: "X-Frame-Options", value: "DENY" },
-          { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
-          {
-            key: "Content-Security-Policy",
-            value:
-              "default-src 'self'; frame-ancestors 'none'; base-uri 'self'; " +
-              "script-src 'self' 'unsafe-inline' 'unsafe-eval'; " +
-              "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; " +
-              "font-src 'self' https://fonts.gstatic.com; " +
-              "img-src 'self' data: blob:; " +
-              "connect-src 'self' https://*.supabase.co wss://*.supabase.co",
-          },
-        ],
-      },
+      // The public counter-payment page (/pagar) embeds Stripe's Payment
+      // Element (script + iframes + API calls straight to Stripe). Stripe is
+      // allowed there only — /admin, /staff and /my keep the stricter policy.
+      { source: "/pagar/:path*", headers: [...baseHeaders, csp(true)] },
+      { source: "/((?!pagar).*)", headers: [...baseHeaders, csp(false)] },
     ];
   },
 };

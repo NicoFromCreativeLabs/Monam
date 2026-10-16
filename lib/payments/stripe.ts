@@ -125,3 +125,75 @@ export function constructWebhookEvent(rawBody: string, signature: string): Strip
   }
   return stripe.webhooks.constructEvent(rawBody, signature, webhookSecret);
 }
+
+export interface CounterPaymentInput {
+  amountMxn: number;
+  description: string; // e.g. "Monâm Skin Studio — Roma Norte"
+  metadata: Record<string, string>;
+}
+
+// In-clinic charge: Front Desk shows a QR to our own branded page
+// (/pagar/<id>), where the client pays with Stripe's embedded Payment Element
+// (card / Apple Pay / Google Pay). Card data goes straight from the browser to
+// Stripe — it never touches this server. The Sale row is only written after
+// the PaymentIntent is confirmed succeeded (createSaleAction verifies it).
+// Tagged "kind: counter" so it can't be mistaken for a deposit or package.
+// Which payment methods appear is managed in the Stripe Dashboard.
+export async function createCounterPaymentIntent(input: CounterPaymentInput): Promise<{ paymentId: string }> {
+  const stripe = getClient();
+  const intent = await stripe.paymentIntents.create({
+    amount: Math.round(input.amountMxn * 100),
+    currency: "mxn",
+    description: input.description,
+    metadata: { ...input.metadata, kind: "counter" },
+  });
+  return { paymentId: intent.id };
+}
+
+export interface PaymentStatus {
+  paid: boolean;
+  canceled: boolean;
+  amountMxn: number;
+  kind: string | null;
+}
+
+export async function getPaymentStatus(paymentId: string): Promise<PaymentStatus> {
+  const stripe = getClient();
+  const intent = await stripe.paymentIntents.retrieve(paymentId);
+  return {
+    paid: intent.status === "succeeded",
+    canceled: intent.status === "canceled",
+    // amount_received is what actually settled; amount is what was asked for.
+    amountMxn: (intent.status === "succeeded" ? intent.amount_received : intent.amount) / 100,
+    kind: intent.metadata?.kind ?? null,
+  };
+}
+
+// A counter payment link is for the person standing at the desk. Past this
+// age the /pagar page stops accepting payment, so an abandoned QR can't be
+// paid later with no sale on our side to match it.
+const COUNTER_LINK_LIFETIME_SECONDS = 30 * 60;
+
+export interface PayPageIntent extends PaymentStatus {
+  clientSecret: string | null;
+  linkExpired: boolean;
+}
+
+// Everything the public /pagar page needs, fetched server-side by intent id.
+export async function getPayPageIntent(paymentId: string): Promise<PayPageIntent> {
+  const stripe = getClient();
+  const intent = await stripe.paymentIntents.retrieve(paymentId);
+  return {
+    paid: intent.status === "succeeded",
+    canceled: intent.status === "canceled",
+    amountMxn: intent.amount / 100,
+    kind: intent.metadata?.kind ?? null,
+    clientSecret: intent.client_secret,
+    linkExpired: Math.floor(Date.now() / 1000) - intent.created > COUNTER_LINK_LIFETIME_SECONDS,
+  };
+}
+
+export async function cancelPaymentIntent(paymentId: string): Promise<void> {
+  const stripe = getClient();
+  await stripe.paymentIntents.cancel(paymentId);
+}

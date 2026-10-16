@@ -1,12 +1,19 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { TopBar } from "@/components/panel/TopBar";
 import { Card } from "@/components/panel/Card";
 import { CFDI_ENABLED } from "@/lib/feature-flags";
-import { createSaleAction, flagRetailRemovalAction } from "@/lib/actions/commerce";
+import {
+  cancelOnlineChargeAction,
+  checkOnlineChargeAction,
+  createSaleAction,
+  flagRetailRemovalAction,
+  startOnlineChargeAction,
+  type CreateSaleInput,
+} from "@/lib/actions/commerce";
 
 export interface CheckoutRetailItem {
   sku: string;
@@ -66,6 +73,20 @@ export function StaffCheckoutView({
   const [charged, setCharged] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<"CASH" | "CARD" | "ONLINE">("CASH");
   const [checkoutError, setCheckoutError] = useState<string | null>(null);
+  // "En línea (Stripe)": a Checkout link shown as a QR the client pays from
+  // their own phone. saleInput is a snapshot of the ticket at the moment the
+  // link was created, so the sale recorded after payment matches what was
+  // charged even if the cart is touched in the meantime.
+  const [onlineCharge, setOnlineCharge] = useState<{
+    paymentId: string;
+    payUrl: string;
+    qrDataUrl: string;
+    totalMxn: number;
+    saleInput: CreateSaleInput;
+  } | null>(null);
+  const [onlineRecordError, setOnlineRecordError] = useState<string | null>(null);
+  const [retryNonce, setRetryNonce] = useState(0);
+  const [linkCopied, setLinkCopied] = useState(false);
   // Products whose recommendation tag was removed this session — re-adding
   // one of these needs the same warning removal got, closing the two-step
   // gap a front-desk-persona pentest found: removal was guarded, but
@@ -153,14 +174,27 @@ export function StaffCheckoutView({
       ...recommendedItems.map((r) => ({ sku: r.sku, qty: 1 })),
       ...addedItems.map((a) => ({ sku: a.sku, qty: a.qty })),
     ];
+    const base = {
+      appointmentId: session?.appointmentId ?? null,
+      locationName: session?.locationName ?? locationName,
+      retailItems,
+      reAddedAfterRemovalSkus: reAddedSkus,
+    };
     startTransition(async () => {
-      const result = await createSaleAction({
-        appointmentId: session?.appointmentId ?? null,
-        locationName: session?.locationName ?? locationName,
-        retailItems,
-        reAddedAfterRemovalSkus: reAddedSkus,
-        paymentMethod,
-      });
+      if (paymentMethod === "ONLINE") {
+        const started = await startOnlineChargeAction(base);
+        if ("error" in started) {
+          setCheckoutError(started.error);
+          return;
+        }
+        setOnlineRecordError(null);
+        setOnlineCharge({
+          ...started,
+          saleInput: { ...base, paymentMethod: "ONLINE", stripePaymentId: started.paymentId },
+        });
+        return;
+      }
+      const result = await createSaleAction({ ...base, paymentMethod });
       if ("error" in result) {
         setCheckoutError(result.error);
         return;
@@ -169,6 +203,74 @@ export function StaffCheckoutView({
       setCharged(true);
       router.refresh();
     });
+  }
+
+  // Polls Stripe every 3s while a payment link is open. Once the payment is
+  // paid, the sale is recorded (createSaleAction re-verifies the payment and
+  // amount server-side). If recording fails after the client already paid, the
+  // panel stays up with the Stripe reference so it can be reconciled.
+  const activePaymentId = onlineCharge?.paymentId;
+  useEffect(() => {
+    if (!onlineCharge) return;
+    const { paymentId, saleInput } = onlineCharge;
+    let stopped = false;
+    let busy = false;
+
+    async function tick() {
+      if (stopped || busy) return;
+      busy = true;
+      try {
+        const status = await checkOnlineChargeAction(paymentId);
+        if (stopped || "error" in status) return;
+        if (status.expired) {
+          stopped = true;
+          setOnlineCharge(null);
+          setCheckoutError("El link de pago venció. Genera uno nuevo para cobrar.");
+          return;
+        }
+        if (!status.paid) return;
+        stopped = true;
+        const result = await createSaleAction(saleInput);
+        if ("error" in result) {
+          setOnlineRecordError(result.error);
+          return;
+        }
+        setChargedSummary({ clientName: session?.clientName ?? null, total: result.totalMxn });
+        setOnlineCharge(null);
+        setCharged(true);
+        router.refresh();
+      } finally {
+        busy = false;
+      }
+    }
+
+    tick();
+    const id = setInterval(tick, 3000);
+    return () => {
+      stopped = true;
+      clearInterval(id);
+    };
+    // Keyed on the payment id (and the manual retry) on purpose: the snapshot
+    // inside onlineCharge never changes for a given payment.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activePaymentId, retryNonce]);
+
+  function cancelOnlineCharge() {
+    if (!onlineCharge) return;
+    const { paymentId } = onlineCharge;
+    setOnlineCharge(null);
+    setOnlineRecordError(null);
+    cancelOnlineChargeAction(paymentId);
+  }
+
+  async function copyPaymentLink() {
+    if (!onlineCharge) return;
+    try {
+      await navigator.clipboard.writeText(onlineCharge.payUrl);
+      setLinkCopied(true);
+    } catch {
+      setLinkCopied(false);
+    }
   }
 
   function startNextRetailSale() {
@@ -332,6 +434,7 @@ export function StaffCheckoutView({
                 <button
                   key={value}
                   onClick={() => setPaymentMethod(value)}
+                  disabled={!!onlineCharge}
                   aria-pressed={paymentMethod === value}
                   className={`rounded-full border border-ciruela px-3 py-2 font-body text-xs ${
                     paymentMethod === value ? "bg-ciruela text-hueso" : "text-ciruela hover:bg-ciruela hover:text-hueso"
@@ -354,14 +457,77 @@ export function StaffCheckoutView({
             )}
             <button
               onClick={chargeSale}
-              disabled={total === 0 || isPending}
+              disabled={total === 0 || isPending || !!onlineCharge}
               className="mt-6 w-full rounded-full bg-ciruela px-5 py-3 font-body text-sm text-hueso disabled:cursor-not-allowed disabled:opacity-40"
             >
-              {isPending ? "Cobrando…" : session ? "Cobrar y reagendar" : "Cobrar"}
+              {isPending
+                ? paymentMethod === "ONLINE"
+                  ? "Generando link…"
+                  : "Cobrando…"
+                : paymentMethod === "ONLINE"
+                  ? "Generar cobro con Stripe"
+                  : session
+                    ? "Cobrar y reagendar"
+                    : "Cobrar"}
             </button>
           </Card>
         </div>
       </div>
+
+      {/* Stripe payment: full screen on phones, centered dialog from sm up.
+          No backdrop-dismiss — closing mid-payment goes through "Cancelar cobro". */}
+      {onlineCharge && (
+        <div className="fixed inset-0 z-50 flex items-stretch justify-center bg-hueso sm:items-center sm:bg-ciruela/40 sm:px-4">
+          <div className="flex w-full flex-col items-center justify-center overflow-y-auto bg-hueso px-6 py-8 text-center sm:max-h-[92vh] sm:max-w-md sm:rounded-2xl sm:py-6 sm:shadow-xl">
+            <p className="font-body text-xs uppercase tracking-[0.14em] text-ciruela/50">Cobro con Stripe</p>
+            <p className="mt-2 font-display text-3xl text-ciruela">${onlineCharge.totalMxn} MXN</p>
+            <p className="mt-2 font-body text-sm text-ciruela/70">
+              Pídele a la clienta que escanee el código con su celular y pague con tarjeta, Apple Pay o Google Pay.
+            </p>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={onlineCharge.qrDataUrl}
+              alt="Código QR para pagar con tarjeta, Apple Pay o Google Pay"
+              width={320}
+              height={320}
+              className="mt-5 aspect-square w-full max-w-[300px]"
+            />
+            {onlineRecordError ? (
+              <div className="mt-5 w-full max-w-[300px] rounded-lg bg-[#b3392f]/10 px-3 py-2 text-left font-body text-xs text-[#b3392f]">
+                <p>El pago se recibió, pero la venta no se pudo registrar: {onlineRecordError}</p>
+                <p className="mt-1 break-all">Referencia de Stripe: {onlineCharge.paymentId}</p>
+                <button
+                  onClick={() => {
+                    setOnlineRecordError(null);
+                    setRetryNonce((n) => n + 1);
+                  }}
+                  className="mt-2 rounded-full border border-[#b3392f] px-3 py-1 text-[#b3392f]"
+                >
+                  Reintentar registro
+                </button>
+              </div>
+            ) : (
+              <p className="mt-5 font-body text-sm text-ciruela/60">Esperando el pago…</p>
+            )}
+            <div className="mt-5 flex flex-wrap justify-center gap-2">
+              <button
+                onClick={copyPaymentLink}
+                className="rounded-full border border-ciruela px-4 py-2 font-body text-xs text-ciruela"
+              >
+                {linkCopied ? "Link copiado" : "Copiar link de pago"}
+              </button>
+              {!onlineRecordError && (
+                <button
+                  onClick={cancelOnlineCharge}
+                  className="rounded-full border border-ciruela px-4 py-2 font-body text-xs text-ciruela"
+                >
+                  Cancelar cobro
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {pickerOpen && (
         <div
