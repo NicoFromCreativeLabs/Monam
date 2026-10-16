@@ -774,12 +774,6 @@ export function AdminSettingsView({
               min
             </span>
           </label>
-          <p className="mt-3 font-body text-xs text-ciruela/40">
-            Cada cita bloquea su horario real más estos minutos, para que nadie más pueda
-            reservar mientras se limpia la cabina. El margen por add-ons solo se suma cuando la
-            cita no lleva add-ons elegidos de antemano — si ya se eligieron, se bloquean sus
-            minutos reales en su lugar.
-          </p>
         </Card>
 
         <Card
@@ -932,12 +926,6 @@ export function AdminSettingsView({
               </dd>
             </div>
           </dl>
-          <p className="mt-4 font-body text-xs text-ciruela/40">
-            Todo esto ya es real: los umbrales de anomalía se comparan al aprobar un Descuento o
-            Reembolso en Aprobaciones (generan una anomalía en Control → Anomalías si se exceden),
-            y las tasas de comisión son las que createSaleAction usa para calcular cada comisión
-            en Cobro/POS.
-          </p>
         </Card>
 
         <Card title="Objetivos por KPI">
@@ -977,11 +965,6 @@ export function AdminSettingsView({
             </tbody>
           </table>
           </div>
-          <p className="mt-3 font-body text-xs text-ciruela/40">
-            Se guarda en la tabla real de KpiTarget — Panel y Análisis siguen leyendo cifras de
-            ejemplo por ahora (no hay suficiente historial de ventas real todavía para que esas
-            comparaciones digan algo útil), así que un cambio aquí no se refleja ahí todavía.
-          </p>
         </Card>
 
         <Card title="Permisos por rol">
@@ -1030,10 +1013,6 @@ export function AdminSettingsView({
               {permissionsMessage.text}
             </p>
           )}
-          <p className="mt-3 font-body text-xs text-ciruela/40">
-            Los cambios se guardan, pero por ahora son la matriz de referencia: todavía no limitan
-            lo que cada rol puede hacer en el sistema. La columna Admin no se puede modificar.
-          </p>
         </Card>
       </div>
 
