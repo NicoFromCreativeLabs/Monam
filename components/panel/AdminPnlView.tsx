@@ -13,7 +13,7 @@ import { downloadCsv } from "@/lib/csv";
 import { COMPARE_TO_LABEL } from "@/lib/analytics";
 import { getReportingSnapshotAction, type ReportingSnapshot } from "@/lib/actions/reporting";
 import { ventasBrutas, ingresoNetoFromBreakdown, utilidadBruta, ebitda, type PnlBreakdown } from "@/lib/pnl-math";
-import { clearPnlLineAction, closePnlMonthAction, savePnlLineAction } from "@/lib/actions/pnl";
+import { clearPnlLineAction, closePnlMonthAction, savePnlLinesAction } from "@/lib/actions/pnl";
 import { monthHasEnded, parseMoneyInput, storedFromTyped, typedFromStored, type PnlField } from "@/lib/pnl-periods";
 
 function formatMoney(n: number | null) {
@@ -164,16 +164,20 @@ export function AdminPnlView({ initialSnapshot }: { initialSnapshot: ReportingSn
   const rows = buildRows(snapshot, compareTo);
 
   // Editing the Real column and closing the month: Owner only, one location
-  // at a time, on a single calendar month that is not closed yet. A month
-  // can only be closed once it has ended.
+  // at a time, on a single calendar month that is not closed yet. "Editar"
+  // opens edit mode (Guardar / Cancelar); "Cerrar mes" locks the month.
   const state = snapshot.pnlState;
   const singleLocation = selectedNames.length === 1 ? selectedNames[0] : null;
   const isOwner = currentUser.role === "OWNER";
   const canEdit = isOwner && !!singleLocation && !!state.monthKey && !state.closed;
-  const canClose = canEdit && !!state.monthKey && monthHasEnded(state.monthKey);
+  const monthOver = !!state.monthKey && monthHasEnded(state.monthKey);
+  const [editMode, setEditMode] = useState(false);
+  const [drafts, setDrafts] = useState<Record<string, string>>({});
+  const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [confirmClose, setConfirmClose] = useState(false);
   const [closing, setClosing] = useState(false);
+  const editing = editMode && canEdit;
 
   function reload() {
     startTransition(async () => {
@@ -181,24 +185,34 @@ export function AdminPnlView({ initialSnapshot }: { initialSnapshot: ReportingSn
     });
   }
 
-  async function saveLine(field: PnlField, text: string) {
+  function stopEditing() {
+    setEditMode(false);
+    setDrafts({});
+  }
+
+  async function saveChanges() {
     if (!singleLocation || !state.monthKey) return;
-    const typed = parseMoneyInput(text);
-    if (typed === null) {
-      setMessage("Escribe un monto entero en pesos.");
-      reload();
+    const changes: { field: string; valueMxn: number }[] = [];
+    for (const [field, text] of Object.entries(drafts)) {
+      const typed = parseMoneyInput(text);
+      if (typed === null) {
+        setMessage("Revisa los montos: deben ser números enteros en pesos.");
+        return;
+      }
+      const stored = storedFromTyped(field as PnlField, typed);
+      if (stored !== snapshot.pnl[field as PnlField]) changes.push({ field, valueMxn: stored });
+    }
+    setSaving(true);
+    setMessage(null);
+    const result = changes.length
+      ? await savePnlLinesAction({ locationName: singleLocation, monthKey: state.monthKey, changes })
+      : {};
+    setSaving(false);
+    if ("error" in result && result.error) {
+      setMessage(result.error);
       return;
     }
-    const stored = storedFromTyped(field, typed);
-    if (stored === snapshot.pnl[field]) return;
-    setMessage(null);
-    const result = await savePnlLineAction({
-      locationName: singleLocation,
-      monthKey: state.monthKey,
-      field,
-      valueMxn: stored,
-    });
-    if (result.error) setMessage(result.error);
+    stopEditing();
     reload();
   }
 
@@ -207,37 +221,49 @@ export function AdminPnlView({ initialSnapshot }: { initialSnapshot: ReportingSn
     setMessage(null);
     const result = await clearPnlLineAction({ locationName: singleLocation, monthKey: state.monthKey, field });
     if (result.error) setMessage(result.error);
+    setDrafts((d) => {
+      const { [field]: _removed, ...rest } = d;
+      void _removed;
+      return rest;
+    });
     reload();
   }
 
   async function closeMonth() {
     if (!singleLocation || !state.monthKey) return;
     setClosing(true);
-    const result = await closePnlMonthAction({ locationName: singleLocation, monthKey: state.monthKey });
+    const result = await closePnlMonthAction({
+      locationName: singleLocation,
+      monthKey: state.monthKey,
+      closeEarly: !monthOver,
+    });
     setClosing(false);
     setConfirmClose(false);
     if (result.error) {
       setMessage(result.error);
       return;
     }
+    stopEditing();
     setMessage(`${periodLabel(period)} cerrado.`);
-    // On to the next month: the previous month's close lands you on the
+    // On to the next month: closing the previous month lands you on the
     // current one. (Other periods just refresh.)
     if (period === "Mes anterior") setPeriod("Mes en curso");
     else reload();
   }
 
-  const editHint = !isOwner
+  const hint = !isOwner
     ? "Solo el Admin puede editar el P&L."
     : state.closed
       ? "Mes cerrado: los valores ya no se pueden editar."
       : !state.monthKey
-        ? "Elige Mes en curso o Mes anterior para editar."
+        ? "Elige Mes en curso o Mes anterior para editar o cerrar."
         : !singleLocation
-          ? "Elige una sola sucursal para editar los valores."
-          : canClose
-            ? "Edita la columna Real. Al cerrar el mes, los valores quedan bloqueados."
-            : "Edita la columna Real. Podrás cerrar el mes cuando termine.";
+          ? "Elige una sola sucursal para editar o cerrar el mes."
+          : editing
+            ? "Cambia los valores de la columna Real y pulsa Guardar cambios."
+            : monthOver
+              ? "Usa Editar para ajustar valores y Cerrar mes para bloquearlos."
+              : "Usa Editar para ajustar valores. El mes aún no termina; puedes cerrarlo al terminar.";
 
   function exportForAccountant() {
     downloadCsv(
@@ -269,13 +295,45 @@ export function AdminPnlView({ initialSnapshot }: { initialSnapshot: ReportingSn
           </div>
           <div className="flex items-center gap-3">
             {state.closed ? <Badge tone="positive">Cerrado</Badge> : <Badge tone="warning">Preliminar</Badge>}
-            {canClose && (
-              <button
-                onClick={() => setConfirmClose(true)}
-                className="rounded-full border border-ciruela px-4 py-2 font-body text-xs text-ciruela"
-              >
-                Cerrar mes
-              </button>
+            {isOwner && !state.closed && (
+              editing ? (
+                <>
+                  <button
+                    onClick={saveChanges}
+                    disabled={saving}
+                    className="rounded-full bg-ciruela px-4 py-2 font-body text-xs text-hueso disabled:opacity-50"
+                  >
+                    {saving ? "Guardando…" : "Guardar cambios"}
+                  </button>
+                  <button
+                    onClick={stopEditing}
+                    disabled={saving}
+                    className="rounded-full border border-ciruela px-4 py-2 font-body text-xs text-ciruela"
+                  >
+                    Cancelar
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button
+                    onClick={() => {
+                      setMessage(null);
+                      setEditMode(true);
+                    }}
+                    disabled={!canEdit}
+                    className="rounded-full border border-ciruela px-4 py-2 font-body text-xs text-ciruela disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    Editar
+                  </button>
+                  <button
+                    onClick={() => setConfirmClose(true)}
+                    disabled={!canEdit}
+                    className="rounded-full border border-ciruela px-4 py-2 font-body text-xs text-ciruela disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    Cerrar mes
+                  </button>
+                </>
+              )
             )}
             <button onClick={exportForAccountant} className="rounded-full bg-ciruela px-4 py-2 font-body text-xs text-hueso">
               Exportar para contador
@@ -283,7 +341,7 @@ export function AdminPnlView({ initialSnapshot }: { initialSnapshot: ReportingSn
           </div>
         </div>
 
-        <p className="font-body text-xs text-ciruela/50">{editHint}</p>
+        <p className="font-body text-xs text-ciruela/50">{hint}</p>
         {message && <p className="font-body text-xs text-[#b3392f]">{message}</p>}
 
         <Card>
@@ -315,7 +373,7 @@ export function AdminPnlView({ initialSnapshot }: { initialSnapshot: ReportingSn
                   <tr key={`${row.label}-${i}`} className={isSubtotal ? "border-y border-ciruela/20 bg-ciruela/5 font-medium" : "border-t border-ciruela/8"}>
                     <td className={`py-2 ${isSubtotal ? "" : "pl-3 text-ciruela/80"}`}>{row.label}</td>
                     <td className={`py-2 text-right tabular-nums ${row.real !== null && row.real < 0 ? "text-[#b3392f]" : ""}`}>
-                      {canEdit && row.field ? (
+                      {editing && row.field ? (
                         <div className="flex items-center justify-end gap-1.5">
                           {state.overriddenFields.includes(row.field) && (
                             <button
@@ -328,19 +386,22 @@ export function AdminPnlView({ initialSnapshot }: { initialSnapshot: ReportingSn
                             </button>
                           )}
                           <input
-                            key={`${row.field}-${row.real}`}
-                            defaultValue={typedFromStored(row.field, row.real ?? 0).toLocaleString("es-MX")}
+                            value={drafts[row.field] ?? typedFromStored(row.field, row.real ?? 0).toLocaleString("es-MX")}
+                            onChange={(e) => setDrafts((d) => ({ ...d, [row.field!]: e.target.value }))}
                             inputMode="numeric"
                             aria-label={`Real — ${row.label}`}
-                            onBlur={(e) => saveLine(row.field!, e.target.value)}
-                            onKeyDown={(e) => {
-                              if (e.key === "Enter") e.currentTarget.blur();
-                            }}
                             className="w-28 rounded border border-ciruela/25 bg-hueso px-1.5 py-1 text-right font-body text-sm tabular-nums text-ciruela focus:outline-none focus:ring-1 focus:ring-ciruela/40"
                           />
                         </div>
                       ) : (
-                        formatMoney(row.real)
+                        <>
+                          {row.field && state.overriddenFields.includes(row.field) && (
+                            <span title="Editado a mano" className="mr-1.5 text-crepe">
+                              ●
+                            </span>
+                          )}
+                          {formatMoney(row.real)}
+                        </>
                       )}
                     </td>
                     <td className="py-2 pl-4 text-right text-ciruela/60 tabular-nums">{row.pctLabel ?? "—"}</td>
@@ -356,7 +417,7 @@ export function AdminPnlView({ initialSnapshot }: { initialSnapshot: ReportingSn
             </tbody>
           </table>
         </Card>
-        {canEdit && (
+        {editing && (
           <p className="font-body text-[11px] text-ciruela/40">
             Los costos, descuentos y reembolsos se escriben como monto positivo.
           </p>
@@ -374,6 +435,12 @@ export function AdminPnlView({ initialSnapshot }: { initialSnapshot: ReportingSn
               Los valores de {scopeLabel} quedan bloqueados: ya no se podrán editar, y el mes se
               reportará tal como está ahora aunque cambien las ventas después.
             </p>
+            {!monthOver && (
+              <p className="mt-2 rounded-lg bg-[#b3392f]/10 px-3 py-2 font-body text-xs text-[#b3392f]">
+                El mes aún no termina: si lo cierras ahora, las ventas que se registren después no
+                se reflejarán en este P&amp;L.
+              </p>
+            )}
             <div className="mt-5 flex justify-end gap-2">
               <button
                 onClick={() => setConfirmClose(false)}
@@ -387,7 +454,7 @@ export function AdminPnlView({ initialSnapshot }: { initialSnapshot: ReportingSn
                 disabled={closing}
                 className="rounded-full bg-ciruela px-4 py-1.5 font-body text-xs text-hueso disabled:opacity-50"
               >
-                {closing ? "Cerrando…" : "Cerrar mes"}
+                {closing ? "Cerrando…" : monthOver ? "Cerrar mes" : "Cerrar de todos modos"}
               </button>
             </div>
           </div>

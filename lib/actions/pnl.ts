@@ -33,43 +33,43 @@ async function resolveOpenMonth(locationName: string, monthKey: string) {
   return { location } as const;
 }
 
-export async function savePnlLineAction(input: {
+// Saves everything changed in one "Editar" session at once.
+export async function savePnlLinesAction(input: {
   locationName: string;
   monthKey: string;
-  field: string;
-  valueMxn: number; // signed as the P&L stores it (costs negative)
+  changes: { field: string; valueMxn: number }[]; // signed as the P&L stores it (costs negative)
 }): Promise<Result> {
   const owner = await requireStaffRole(["OWNER"]);
-  if (!(PNL_FIELDS as string[]).includes(input.field)) return { error: "Línea no válida." };
-  if (!Number.isInteger(input.valueMxn) || Math.abs(input.valueMxn) > 100_000_000) {
-    return { error: "Escribe un monto entero en pesos." };
+  if (input.changes.length === 0) return {};
+  for (const c of input.changes) {
+    if (!(PNL_FIELDS as string[]).includes(c.field)) return { error: "Línea no válida." };
+    if (!Number.isInteger(c.valueMxn) || Math.abs(c.valueMxn) > 100_000_000) {
+      return { error: "Escribe montos enteros en pesos." };
+    }
   }
   const resolved = await resolveOpenMonth(input.locationName, input.monthKey);
   if ("error" in resolved) return { error: resolved.error };
+  const locationId = resolved.location.id;
 
-  await prisma.pnlOverride.upsert({
-    where: {
-      locationId_month_field: { locationId: resolved.location.id, month: input.monthKey, field: input.field },
-    },
-    create: {
-      locationId: resolved.location.id,
-      month: input.monthKey,
-      field: input.field,
-      valueMxn: input.valueMxn,
-      updatedByUserId: owner.id,
-    },
-    update: { valueMxn: input.valueMxn, updatedByUserId: owner.id },
-  });
-  await prisma.auditLog.create({
-    data: {
-      actorUserId: owner.id,
-      actorRole: owner.role,
-      action: "PNL_EDIT",
-      entityType: "PnlOverride",
-      locationId: resolved.location.id,
-      metadata: { month: input.monthKey, field: input.field, valueMxn: input.valueMxn },
-    },
-  });
+  await prisma.$transaction([
+    ...input.changes.map((c) =>
+      prisma.pnlOverride.upsert({
+        where: { locationId_month_field: { locationId, month: input.monthKey, field: c.field } },
+        create: { locationId, month: input.monthKey, field: c.field, valueMxn: c.valueMxn, updatedByUserId: owner.id },
+        update: { valueMxn: c.valueMxn, updatedByUserId: owner.id },
+      }),
+    ),
+    prisma.auditLog.create({
+      data: {
+        actorUserId: owner.id,
+        actorRole: owner.role,
+        action: "PNL_EDIT",
+        entityType: "PnlOverride",
+        locationId,
+        metadata: { month: input.monthKey, changes: input.changes },
+      },
+    }),
+  ]);
   revalidatePath("/admin/analytics/pnl");
   return {};
 }
@@ -107,12 +107,13 @@ export async function clearPnlLineAction(input: {
 export async function closePnlMonthAction(input: {
   locationName: string;
   monthKey: string;
+  closeEarly?: boolean; // the Owner confirmed closing a month that has not ended yet
 }): Promise<Result & { nextMonthKey?: string }> {
   const owner = await requireStaffRole(["OWNER"]);
   const resolved = await resolveOpenMonth(input.locationName, input.monthKey);
   if ("error" in resolved) return { error: resolved.error };
-  if (!monthHasEnded(input.monthKey)) {
-    return { error: "El mes se puede cerrar cuando termine." };
+  if (!monthHasEnded(input.monthKey) && !input.closeEarly) {
+    return { error: "El mes aún no termina. Confirma que quieres cerrarlo antes de tiempo." };
   }
 
   const { location } = resolved;
