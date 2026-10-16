@@ -829,16 +829,6 @@ export const CLIENT_APPOINTMENTS_LIST = {
   ],
 };
 
-export const CLIENT_CONSENTS = [
-  { type: "Tratamiento y responsabilidad", version: "v2.1", acceptedAt: "2026-06-02", revocable: false },
-  { type: "Uso de fotografía", version: "v1.0", acceptedAt: "2026-06-02", revocable: true },
-  { type: "Aviso de privacidad", version: "v1.3", acceptedAt: "2026-06-02", revocable: false },
-];
-
-export const CLIENT_PAYMENT_METHODS = [
-  { id: "pm-1", brand: "Visa", last4: "4242", expiresOn: "08/28" },
-];
-
 // ---------------------------------------------------------------------------
 // Admin — Panel (Band 1 · Pulso KPIs) — spec: MONAM admin IA rebuild
 // ---------------------------------------------------------------------------

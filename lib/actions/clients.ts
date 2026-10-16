@@ -212,3 +212,41 @@ export async function anonymizeClientAction(clientId: string) {
   revalidatePath("/admin/clients");
   revalidatePath(`/admin/clients/${clientId}`);
 }
+
+// Consent Center (/my/consent) — only photo-use consent is revocable by the
+// client (spec §5.1); treatment and privacy-notice consents stay while the
+// clinical record is active. Scoped to the caller's own Client row, same as
+// the Skin ID / preferences actions above.
+const REVOCABLE_CONSENT_TYPES = ["PHOTO_USE"] as const;
+
+export async function revokeOwnConsentAction(consentId: string): Promise<{ error?: string }> {
+  const { client } = await requireClientOrPreview();
+
+  const consent = await prisma.consent.findFirst({
+    where: { id: consentId, clientId: client.id },
+    include: { document: true },
+  });
+  if (!consent) return { error: "Consentimiento no encontrado." };
+  if (!(REVOCABLE_CONSENT_TYPES as readonly string[]).includes(consent.document.type)) {
+    return { error: "Este consentimiento no se puede revocar desde aquí." };
+  }
+  if (consent.status === "REVOKED") return {};
+
+  await prisma.$transaction([
+    prisma.consent.update({
+      where: { id: consent.id },
+      data: { status: "REVOKED", revokedAt: new Date() },
+    }),
+    prisma.auditLog.create({
+      data: {
+        action: "REVOKE_CONSENT",
+        entityType: "Consent",
+        entityId: consent.id,
+        metadata: { clientId: client.id, type: consent.document.type, version: consent.document.version },
+      },
+    }),
+  ]);
+
+  revalidatePath("/my/consent");
+  return {};
+}
