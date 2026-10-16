@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { loadStripe } from "@stripe/stripe-js";
 import { Elements, PaymentElement, useElements, useStripe } from "@stripe/react-stripe-js";
 
@@ -57,31 +57,44 @@ function CheckoutForm({ amountMxn }: { amountMxn: number }) {
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [done, setDone] = useState(false);
+  const [ready, setReady] = useState(false);
+  const [loadFailed, setLoadFailed] = useState(false);
+
+  // If Stripe's form never mounts (e.g. a key/mode mismatch or a blocked
+  // request), say so instead of leaving a dead button.
+  useEffect(() => {
+    if (ready) return;
+    const timer = setTimeout(() => setLoadFailed(true), 12000);
+    return () => clearTimeout(timer);
+  }, [ready]);
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!stripe || !elements) return;
+    if (!stripe || !elements || !ready) return;
     setSubmitting(true);
     setError(null);
 
-    const { error: confirmError, paymentIntent } = await stripe.confirmPayment({
-      elements,
-      // Only used when the bank forces a redirect (3-D Secure); the page then
-      // reloads and shows the paid state from the server.
-      confirmParams: { return_url: `${window.location.origin}${window.location.pathname}` },
-      redirect: "if_required",
-    });
+    try {
+      const { error: confirmError, paymentIntent } = await stripe.confirmPayment({
+        elements,
+        // Only used when the bank forces a redirect (3-D Secure); the page then
+        // reloads and shows the paid state from the server.
+        confirmParams: { return_url: `${window.location.origin}${window.location.pathname}` },
+        redirect: "if_required",
+      });
 
-    if (confirmError) {
-      setError(confirmError.message ?? "No se pudo procesar el pago. Intenta de nuevo.");
+      if (confirmError) {
+        setError(confirmError.message ?? "No se pudo procesar el pago. Intenta de nuevo.");
+        return;
+      }
+      if (paymentIntent?.status === "succeeded") {
+        setDone(true);
+      }
+    } catch {
+      setError("No se pudo procesar el pago. Revisa tu conexión e intenta de nuevo.");
+    } finally {
       setSubmitting(false);
-      return;
     }
-    if (paymentIntent?.status === "succeeded") {
-      setDone(true);
-      return;
-    }
-    setSubmitting(false);
   }
 
   if (done) {
@@ -90,11 +103,23 @@ function CheckoutForm({ amountMxn }: { amountMxn: number }) {
 
   return (
     <form onSubmit={onSubmit}>
-      <PaymentElement options={{ defaultValues: { billingDetails: { address: { country: "MX" } } } }} />
+      <PaymentElement
+        options={{ defaultValues: { billingDetails: { address: { country: "MX" } } } }}
+        onReady={() => {
+          setReady(true);
+          setLoadFailed(false);
+        }}
+        onLoadError={() => setLoadFailed(true)}
+      />
+      {loadFailed && !ready && (
+        <p className="mt-3 font-body text-xs text-[#b3392f]">
+          No se pudo cargar el formulario de pago. Recarga la página; si sigue igual, avisa al personal del estudio.
+        </p>
+      )}
       {error && <p className="mt-3 font-body text-xs text-[#b3392f]">{error}</p>}
       <button
         type="submit"
-        disabled={!stripe || !elements || submitting}
+        disabled={!stripe || !elements || !ready || submitting}
         className="mt-6 w-full rounded-full bg-ciruela px-5 py-3 font-body text-sm text-hueso disabled:cursor-not-allowed disabled:opacity-50"
       >
         {submitting ? "Procesando…" : `Pagar $${amountMxn} MXN`}
