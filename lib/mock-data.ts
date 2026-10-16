@@ -783,6 +783,7 @@ export const ANOMALY_FLAGS = [
 export const SETTINGS = {
   depositRequiredFirstTime: true,
   depositRequiredSignature: true,
+  depositRequiredTargeted: false,
   cancellationWindowHours: 24,
   discountApprovalThresholdPct: 10,
 };
@@ -939,8 +940,8 @@ export const PANEL_KPIS: KpiDef[] = [
   },
   {
     id: "attach-retail",
-    label: "Attach retail",
-    info: "Visitas de servicio con al menos una compra retail en los 7 días siguientes ÷ visitas de servicio.",
+    label: "Compra de producto",
+    info: "Porcentaje de visitas de servicio en las que la clienta compra algún producto en los 7 días siguientes.",
     value: "34%",
     deltaLabel: "▲ 4 pts vs. mes anterior",
     deltaTone: "positive",
@@ -1294,8 +1295,8 @@ export const ANALYTICS_RETAIL = {
   nivel2: [
     {
       id: "attach-retail-2",
-      label: "Attach retail (≤ 7 días)",
-      info: "Visitas de servicio con ≥1 compra retail en ≤7 días ÷ visitas de servicio.",
+      label: "Visitas con compra de producto (≤ 7 días)",
+      info: "Porcentaje de visitas de servicio en las que la clienta compra algún producto en los 7 días siguientes.",
       value: "34%",
       deltaLabel: "▲ 4 pts vs. mes anterior",
       deltaTone: "positive" as DeltaTone,
@@ -1367,8 +1368,8 @@ export const ANALYTICS_EQUIPO = {
     },
     {
       id: "attach-equipo",
-      label: "Attach",
-      info: "Attach retail promedio del equipo de esteticistas.",
+      label: "Compra de producto",
+      info: "Porcentaje promedio de visitas con compra de producto, por esteticista.",
       value: "34%",
       deltaLabel: "▲ 4 pts vs. mes anterior",
       deltaTone: "positive" as DeltaTone,
@@ -1465,7 +1466,7 @@ export const COMMISSION_TRANSACTIONS = [
 export const KPI_TARGETS = [
   { kpi: "Ingreso neto (MTD)", target: "$520,000 MXN", vigencia: "2026" },
   { kpi: "Ocupación de cabinas", target: "80%", vigencia: "2026" },
-  { kpi: "Attach retail (≤ 7 días)", target: "40%", vigencia: "2026" },
+  { kpi: "Visitas con compra de producto (≤ 7 días)", target: "40%", vigencia: "2026" },
   { kpi: "Rebooking", target: "65%", vigencia: "2026" },
   { kpi: "EBITDA del local", target: "15%", vigencia: "2026" },
   { kpi: "Retención a 90 días", target: "55%", vigencia: "2026" },

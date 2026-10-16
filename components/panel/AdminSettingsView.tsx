@@ -4,7 +4,12 @@ import { useState } from "react";
 import { TopBar } from "@/components/panel/TopBar";
 import { Card } from "@/components/panel/Card";
 import { Badge } from "@/components/panel/Badge";
-import { PERMISSIONS_MATRIX } from "@/lib/mock-data";
+import {
+  ADMIN_COLUMN,
+  PERMISSION_OPTIONS,
+  PERMISSION_ROLES,
+  type PermissionRow,
+} from "@/lib/permissions-matrix";
 import {
   useLocations,
   type LocationRecord,
@@ -15,13 +20,19 @@ import {
   type ProtocolRecord,
   type ProtocolTier,
 } from "@/components/panel/ProtocolsContext";
-import { useAddOns } from "@/components/panel/AddOnsContext";
+import { useAddOns, useAddOnActions, type AddOnRecord } from "@/components/panel/AddOnsContext";
+import { AddOnEditor, EMPTY_ADD_ON } from "@/components/panel/AddOnEditor";
 import { useBusinessRules } from "@/components/panel/BusinessRulesContext";
-import { updateOperationalSettingsAction, updateKpiTargetAction } from "@/lib/actions/settings";
+import {
+  updateOperationalSettingsAction,
+  updateKpiTargetAction,
+  updatePermissionsMatrixAction,
+} from "@/lib/actions/settings";
 
 export interface OperationalSettings {
   depositRequiredFirstTime: boolean;
   depositRequiredSignature: boolean;
+  depositRequiredTargeted: boolean;
   cancellationWindowHours: number;
   discountApprovalThresholdPct: number;
   cleanupBufferMinutes: number;
@@ -71,11 +82,13 @@ function emptyNewLocation() {
 const emptyNewProtocol = { name: "", tier: "Targeted" as ProtocolTier, duration: 30, price: 850, cost: 200 };
 
 export function AdminSettingsView({
+  initialPermissionRows,
   initialOperationalSettings,
   initialKpiTargets,
 }: {
   initialOperationalSettings: OperationalSettings;
   initialKpiTargets: KpiTargetRow[];
+  initialPermissionRows: PermissionRow[];
 }) {
   const { locations, updateLocation, addLocation } = useLocations();
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -99,6 +112,11 @@ export function AdminSettingsView({
 
   const { protocols, updateProtocol, addProtocol, removeProtocol } = useProtocols();
   const addOns = useAddOns();
+  const { addAddOn, updateAddOn, removeAddOn } = useAddOnActions();
+  const [addOnFormOpen, setAddOnFormOpen] = useState(false);
+  const [editingAddOn, setEditingAddOn] = useState<AddOnRecord | null>(null);
+  const [deletingAddOn, setDeletingAddOn] = useState<AddOnRecord | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   const [protocolEditModal, setProtocolEditModal] = useState<{
     id: string;
     name: string;
@@ -113,10 +131,8 @@ export function AdminSettingsView({
   const [rules, setRules] = useState(initialOperationalSettings);
   const { rules: commissionRules, updateRules: setCommissionRules } = useBusinessRules();
   const [kpiTargets, setKpiTargets] = useState(initialKpiTargets);
-  const [permissions, setPermissions] = useState(() => ({
-    roles: PERMISSIONS_MATRIX.roles,
-    rows: PERMISSIONS_MATRIX.rows.map((row) => ({ ...row, access: [...row.access] })),
-  }));
+  const [permissionRows, setPermissionRows] = useState<PermissionRow[]>(initialPermissionRows);
+  const [permissionsMessage, setPermissionsMessage] = useState<{ ok: boolean; text: string } | null>(null);
 
   // Fire-and-forget persist, same pattern as ProtocolsContext/LocationsContext
   // — local state updates instantly, the write lands in the background.
@@ -144,15 +160,21 @@ export function AdminSettingsView({
     });
   }
 
-  function updatePermissionCell(area: string, roleIndex: number, value: string) {
-    setPermissions((prev) => ({
-      ...prev,
-      rows: prev.rows.map((row) =>
-        row.area === area
-          ? { ...row, access: row.access.map((v, i) => (i === roleIndex ? value : v)) }
-          : row,
-      ),
-    }));
+  async function updatePermissionCell(area: string, roleIndex: number, value: string) {
+    const next = permissionRows.map((row) =>
+      row.area === area ? { ...row, access: row.access.map((v, i) => (i === roleIndex ? value : v)) } : row,
+    );
+    const previous = permissionRows;
+    setPermissionRows(next);
+    setPermissionsMessage(null);
+    try {
+      const result = await updatePermissionsMatrixAction(next);
+      setPermissionsMessage(result.error ? { ok: false, text: result.error } : { ok: true, text: "Guardado." });
+      if (result.error) setPermissionRows(previous);
+    } catch {
+      setPermissionRows(previous);
+      setPermissionsMessage({ ok: false, text: "No se pudo guardar. Solo el Admin puede editar los permisos." });
+    }
   }
 
   function startEdit(l: LocationRecord) {
@@ -671,6 +693,15 @@ export function AdminSettingsView({
                 className="h-4 w-4 accent-ciruela"
               />
             </label>
+            <label className="flex items-center justify-between border-t border-ciruela/8 py-2 font-body text-sm text-ciruela">
+              Requerido para Targeted (30 min)
+              <input
+                type="checkbox"
+                checked={rules.depositRequiredTargeted}
+                onChange={(e) => persistRules({ depositRequiredTargeted: e.target.checked })}
+                className="h-4 w-4 accent-ciruela"
+              />
+            </label>
           </Card>
 
           <Card title="Cancelación y aprobaciones">
@@ -751,15 +782,39 @@ export function AdminSettingsView({
           </p>
         </Card>
 
-        <Card title="Add-ons">
+        <Card
+          title="Add-ons"
+          action={
+            <button
+              onClick={() => setAddOnFormOpen((v) => !v)}
+              className="rounded-full bg-ciruela px-4 py-1.5 font-body text-xs text-hueso"
+            >
+              {addOnFormOpen ? "Cancelar" : "Agregar add-on"}
+            </button>
+          }
+        >
+          {addOnFormOpen && (
+            <div className="mb-5 rounded-lg border border-ciruela/15 p-4">
+              <AddOnEditor
+                initial={EMPTY_ADD_ON}
+                submitLabel="Agregar add-on"
+                onSubmit={async (values) => {
+                  const result = await addAddOn(values);
+                  if (!result.error) setAddOnFormOpen(false);
+                  return result;
+                }}
+              />
+            </div>
+          )}
           <div className="overflow-x-auto">
-          <table className="w-full min-w-[520px] whitespace-nowrap font-body text-sm text-ciruela">
+          <table className="w-full min-w-[620px] whitespace-nowrap font-body text-sm text-ciruela">
             <thead>
               <tr className="text-left text-xs uppercase tracking-wide text-ciruela/40">
                 <th className="pb-2">Add-on</th>
                 <th className="pb-2">Función</th>
                 <th className="pb-2 text-right">Minutos extra</th>
-                <th className="pb-2 text-right">Disponible en</th>
+                <th className="pb-2 pr-6 text-right">Disponible en</th>
+                <th className="pb-2" />
               </tr>
             </thead>
             <tbody>
@@ -768,9 +823,35 @@ export function AdminSettingsView({
                   <td className="py-2.5">{a.name}</td>
                   <td className="py-2.5 text-ciruela/60">{a.function}</td>
                   <td className="py-2.5 text-right text-ciruela/60">+{a.extraMinutes} min</td>
-                  <td className="py-2.5 text-right text-ciruela/50">{a.availableOn.join(", ")}</td>
+                  <td className="py-2.5 pr-6 text-right text-ciruela/50">{a.availableOn.join(", ") || "—"}</td>
+                  <td className="py-2.5 text-right">
+                    <div className="flex justify-end gap-3">
+                      <button
+                        onClick={() => setEditingAddOn(a)}
+                        className="font-body text-[11px] text-ciruela underline"
+                      >
+                        Editar
+                      </button>
+                      <button
+                        onClick={() => {
+                          setDeleteError(null);
+                          setDeletingAddOn(a);
+                        }}
+                        className="font-body text-[11px] text-crepe underline"
+                      >
+                        Borrar
+                      </button>
+                    </div>
+                  </td>
                 </tr>
               ))}
+              {addOns.length === 0 && (
+                <tr className="border-t border-ciruela/8">
+                  <td colSpan={5} className="py-3 text-ciruela/50">
+                    Aún no hay add-ons. Agrega el primero con el botón de arriba.
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
           </div>
@@ -909,7 +990,7 @@ export function AdminSettingsView({
               <thead>
                 <tr className="text-left text-xs uppercase tracking-wide text-ciruela/40">
                   <th className="pb-2 pr-4">Área</th>
-                  {permissions.roles.map((r) => (
+                  {PERMISSION_ROLES.map((r) => (
                     <th key={r} className="pb-2 pr-4 text-left">
                       {r}
                     </th>
@@ -917,17 +998,26 @@ export function AdminSettingsView({
                 </tr>
               </thead>
               <tbody>
-                {permissions.rows.map((row) => (
+                {permissionRows.map((row) => (
                   <tr key={row.area} className="border-t border-ciruela/8">
                     <td className="py-2.5 pr-4">{row.area}</td>
                     {row.access.map((val, i) => (
                       <td key={i} className="py-2.5 pr-4">
-                        <input
-                          type="text"
-                          value={val}
-                          onChange={(e) => updatePermissionCell(row.area, i, e.target.value)}
-                          className="w-24 rounded border border-ciruela/25 bg-hueso px-1.5 py-1 font-body text-sm text-ciruela/60 focus:outline-none focus:ring-1 focus:ring-ciruela/40"
-                        />
+                        {i === ADMIN_COLUMN ? (
+                          <span className="inline-block w-28 px-1.5 py-1 font-body text-sm text-ciruela/60">{val}</span>
+                        ) : (
+                          <select
+                            value={val}
+                            onChange={(e) => updatePermissionCell(row.area, i, e.target.value)}
+                            className="w-28 rounded border border-ciruela/25 bg-hueso px-1.5 py-1 font-body text-sm text-ciruela focus:outline-none focus:ring-1 focus:ring-ciruela/40"
+                          >
+                            {PERMISSION_OPTIONS.map((opt) => (
+                              <option key={opt} value={opt}>
+                                {opt}
+                              </option>
+                            ))}
+                          </select>
+                        )}
                       </td>
                     ))}
                   </tr>
@@ -935,13 +1025,95 @@ export function AdminSettingsView({
               </tbody>
             </table>
           </div>
+          {permissionsMessage && (
+            <p className={`mt-3 font-body text-xs ${permissionsMessage.ok ? "text-oliva" : "text-[#b3392f]"}`}>
+              {permissionsMessage.text}
+            </p>
+          )}
           <p className="mt-3 font-body text-xs text-ciruela/40">
-            Matriz de referencia editable — la aplicación real de permisos granulares por rol en
-            el código sigue pendiente del backend (Fase 2); los valores aquí no cambian lo que
-            cada rol puede hacer todavía.
+            Los cambios se guardan, pero por ahora son la matriz de referencia: todavía no limitan
+            lo que cada rol puede hacer en el sistema. La columna Admin no se puede modificar.
           </p>
         </Card>
       </div>
+
+      {editingAddOn && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-ciruela/40 px-4"
+          onClick={() => setEditingAddOn(null)}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl bg-hueso p-5 shadow-xl"
+          >
+            <div className="mb-4 flex items-center justify-between">
+              <p className="font-display text-sm text-ciruela">Editar add-on</p>
+              <button
+                onClick={() => setEditingAddOn(null)}
+                aria-label="Cerrar"
+                className="text-ciruela/50 hover:text-ciruela"
+              >
+                ×
+              </button>
+            </div>
+            <AddOnEditor
+              initial={{
+                name: editingAddOn.name,
+                function: editingAddOn.function,
+                extraMinutes: editingAddOn.extraMinutes,
+                availableOn: editingAddOn.availableOn,
+              }}
+              submitLabel="Guardar cambios"
+              onSubmit={async (values) => {
+                const result = await updateAddOn(editingAddOn.id, values);
+                if (!result.error) setEditingAddOn(null);
+                return result;
+              }}
+              onCancel={() => setEditingAddOn(null)}
+            />
+          </div>
+        </div>
+      )}
+
+      {deletingAddOn && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-ciruela/40 px-4"
+          onClick={() => setDeletingAddOn(null)}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-xs rounded-2xl bg-hueso p-5 shadow-xl"
+          >
+            <p className="font-display text-sm text-ciruela">¿Borrar add-on?</p>
+            <p className="mt-2 font-body text-sm text-ciruela/70">
+              Vas a borrar &ldquo;{deletingAddOn.name}&rdquo;. Dejará de ofrecerse al reservar.
+            </p>
+            {deleteError && (
+              <p className="mt-3 rounded-lg bg-[#b3392f]/10 px-3 py-2 font-body text-xs text-[#b3392f]">
+                {deleteError}
+              </p>
+            )}
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                onClick={() => setDeletingAddOn(null)}
+                className="rounded-full border border-ciruela px-4 py-1.5 font-body text-xs text-ciruela hover:bg-ciruela hover:text-hueso"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={async () => {
+                  const result = await removeAddOn(deletingAddOn.id);
+                  if (result.error) setDeleteError(result.error);
+                  else setDeletingAddOn(null);
+                }}
+                className="rounded-full bg-[#b3392f] px-4 py-1.5 font-body text-xs text-hueso"
+              >
+                Borrar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {protocolEditModal && (
         <div

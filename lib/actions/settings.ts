@@ -8,6 +8,8 @@ async function requireSettingsEditor() {
   return requireStaffRole(["OWNER", "CLINIC_MANAGER"]);
 }
 
+import { normalizePermissionRows, type PermissionRow } from "@/lib/permissions-matrix";
+
 async function setSetting(key: string, value: unknown) {
   await prisma.setting.upsert({
     where: { key },
@@ -49,11 +51,15 @@ export async function updateBusinessRulesAction(patch: BusinessRulesInput) {
   }
 
   revalidatePath("/admin/settings");
+  // The deposit rules by appointment type are also seeded from the root
+  // layout (used by /my/book), so refresh that too.
+  revalidatePath("/", "layout");
 }
 
 export interface OperationalSettingsInput {
   depositRequiredFirstTime?: boolean;
   depositRequiredSignature?: boolean;
+  depositRequiredTargeted?: boolean;
   cancellationWindowHours?: number;
   discountApprovalThresholdPct?: number;
   cleanupBufferMinutes?: number;
@@ -65,6 +71,7 @@ export async function updateOperationalSettingsAction(patch: OperationalSettings
 
   if (patch.depositRequiredFirstTime !== undefined) await setSetting("deposit.requiredFirstTime", patch.depositRequiredFirstTime);
   if (patch.depositRequiredSignature !== undefined) await setSetting("deposit.requiredSignature", patch.depositRequiredSignature);
+  if (patch.depositRequiredTargeted !== undefined) await setSetting("deposit.requiredTargeted", patch.depositRequiredTargeted);
   if (patch.cancellationWindowHours !== undefined) await setSetting("cancellation.windowHours", patch.cancellationWindowHours);
   if (patch.discountApprovalThresholdPct !== undefined) await setSetting("discount.approvalThresholdPct", patch.discountApprovalThresholdPct);
   if (patch.cleanupBufferMinutes !== undefined) await setSetting("booking.cleanupBufferMinutes", patch.cleanupBufferMinutes);
@@ -82,4 +89,16 @@ export async function updateKpiTargetAction(kpi: string, targetValue: number, ta
   });
   revalidatePath("/admin/settings");
   revalidatePath("/admin");
+}
+
+// Configuración → Permisos por rol. Owner only. The stored value is run
+// through normalizePermissionRows, which drops anything invalid and keeps the
+// Admin column locked. This is the reference matrix — it does not (yet) change
+// what each role can do; that is enforced in lib/auth/dal.ts.
+export async function updatePermissionsMatrixAction(rows: PermissionRow[]): Promise<{ error?: string }> {
+  await requireStaffRole(["OWNER"]);
+  const clean = normalizePermissionRows(rows).map((r) => ({ area: r.area, access: r.access }));
+  await setSetting("permissions.matrix", clean);
+  revalidatePath("/admin/settings");
+  return {};
 }

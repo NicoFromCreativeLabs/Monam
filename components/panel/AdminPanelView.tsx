@@ -146,7 +146,7 @@ export function AdminPanelView({
       const k = kpiMeta["attach-retail"];
       const value = snapshot.rates.attachRetail;
       const baseline = snapshot.ratesBaseline?.attachRetail ?? null;
-      const target = snapshot.kpiTargets["Attach retail (≤ 7 días)"]?.value ?? null;
+      const target = snapshot.kpiTargets["Visitas con compra de producto (≤ 7 días)"]?.value ?? null;
       const progress = value !== null && target ? Math.round((value / target) * 100) : null;
       const delta = formatDelta(value ?? 0, baseline, compareLabel, "pts");
       return {

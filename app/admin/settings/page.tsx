@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { normalizePermissionRows } from "@/lib/permissions-matrix";
 import {
   AdminSettingsView,
   type OperationalSettings,
@@ -37,6 +38,8 @@ export default async function AdminSettingsPage() {
             "discount.approvalThresholdPct",
             "booking.cleanupBufferMinutes",
             "booking.addonBufferMinutes",
+            "deposit.requiredTargeted",
+            "permissions.matrix",
           ],
         },
       },
@@ -47,6 +50,7 @@ export default async function AdminSettingsPage() {
   const initialOperationalSettings: OperationalSettings = {
     depositRequiredFirstTime: settingBool(settingRows, "deposit.requiredFirstTime", true),
     depositRequiredSignature: settingBool(settingRows, "deposit.requiredSignature", true),
+    depositRequiredTargeted: settingBool(settingRows, "deposit.requiredTargeted", false),
     cancellationWindowHours: settingNumber(settingRows, "cancellation.windowHours", 24),
     discountApprovalThresholdPct: settingNumber(settingRows, "discount.approvalThresholdPct", 10),
     cleanupBufferMinutes: settingNumber(settingRows, "booking.cleanupBufferMinutes", 20),
@@ -61,6 +65,7 @@ export default async function AdminSettingsPage() {
 
   return (
     <AdminSettingsView
+      initialPermissionRows={normalizePermissionRows(settingRows.find((r) => r.key === "permissions.matrix")?.value)}
       initialOperationalSettings={initialOperationalSettings}
       initialKpiTargets={initialKpiTargets}
     />
