@@ -2,15 +2,22 @@
 
 import Link from "next/link";
 import { Card } from "@/components/panel/Card";
-import { useClientBooking } from "@/components/panel/ClientBookingContext";
 import { useCurrentClient } from "@/components/panel/CurrentClientContext";
 import type { UpcomingAppointmentView } from "@/components/panel/ClientAppointmentsView";
+import type { PackageBalanceView } from "@/lib/packages-core";
 
-// "Próxima cita" is a real Appointment now (Booking phase) — "Saldo de
-// paquete" stays on ClientBookingContext's mock packageBalance pending the
-// Commerce phase's real PackagePurchase table.
-export function ClientHomeView({ nextAppointment }: { nextAppointment: UpcomingAppointmentView | null }) {
-  const { packageBalance: pack } = useClientBooking();
+// "Próxima cita" and "Saldo de paquete" are both real now — no invented
+// mock data shown to a client who's never booked or bought anything
+// (Commerce phase: see getPackageBalance in app/my/packages/page.tsx).
+export function ClientHomeView({
+  nextAppointment,
+  packageBalance: pack,
+  lastProtocolName,
+}: {
+  nextAppointment: UpcomingAppointmentView | null;
+  packageBalance: PackageBalanceView | null;
+  lastProtocolName: string | null;
+}) {
   const client = useCurrentClient();
 
   return (
@@ -60,30 +67,34 @@ export function ClientHomeView({ nextAppointment }: { nextAppointment: UpcomingA
         )}
       </Card>
 
-      <Card title="Reagenda rápida">
-        <p className="font-body text-sm text-ciruela/70">
-          Repite tu protocolo y elige tu próximo horario.
-        </p>
-        <Link
-          href="/my/book"
-          className="mt-4 inline-block rounded-full bg-ciruela px-5 py-2.5 font-body text-sm text-hueso"
-        >
-          Reagendar Glow
-        </Link>
-      </Card>
-
-      <Card title="Saldo de paquete">
-        <div className="flex items-center justify-between">
-          <div>
-            <p className="font-display text-lg text-ciruela">{pack.name}</p>
-            <p className="font-body text-sm text-ciruela/60">Vence el {pack.expiresOn}</p>
-          </div>
-          <p className="font-display text-2xl text-ciruela">
-            {pack.sessionsRemaining}{" "}
-            <span className="font-body text-sm text-ciruela/50">sesiones restantes</span>
+      {lastProtocolName && (
+        <Card title="Reagenda rápida">
+          <p className="font-body text-sm text-ciruela/70">
+            Repite tu protocolo y elige tu próximo horario.
           </p>
-        </div>
-      </Card>
+          <Link
+            href="/my/book"
+            className="mt-4 inline-block rounded-full bg-ciruela px-5 py-2.5 font-body text-sm text-hueso"
+          >
+            Reagendar {lastProtocolName}
+          </Link>
+        </Card>
+      )}
+
+      {pack && (
+        <Card title="Saldo de paquete">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="font-display text-lg text-ciruela">{pack.name}</p>
+              <p className="font-body text-sm text-ciruela/60">Vence el {pack.expiresOn}</p>
+            </div>
+            <p className="font-display text-2xl text-ciruela">
+              {pack.sessionsRemaining}{" "}
+              <span className="font-body text-sm text-ciruela/50">sesiones restantes</span>
+            </p>
+          </div>
+        </Card>
+      )}
     </div>
   );
 }

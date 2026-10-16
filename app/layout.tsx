@@ -8,7 +8,6 @@ import { ProtocolsProvider, type ProtocolRecord } from "@/components/panel/Proto
 import { AddOnsProvider, type AddOnRecord } from "@/components/panel/AddOnsContext";
 import { StaffRosterProvider } from "@/components/panel/StaffRosterContext";
 import type { StaffMember } from "@/lib/mock-data";
-import { ClientBookingProvider } from "@/components/panel/ClientBookingContext";
 import { BusinessRulesProvider, type BusinessRules } from "@/components/panel/BusinessRulesContext";
 import { LoadingCurtain } from "@/components/LoadingCurtain";
 import "./globals.css";
@@ -158,9 +157,7 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
               <ProtocolsProvider initialProtocols={initialProtocols}>
                 <AddOnsProvider addOns={initialAddOns}>
                   <StaffRosterProvider initialRoster={initialRoster}>
-                    <ClientBookingProvider>
-                      <BusinessRulesProvider initialRules={initialBusinessRules}>{children}</BusinessRulesProvider>
-                    </ClientBookingProvider>
+                    <BusinessRulesProvider initialRules={initialBusinessRules}>{children}</BusinessRulesProvider>
                   </StaffRosterProvider>
                 </AddOnsProvider>
               </ProtocolsProvider>

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { STRIPE_ENABLED } from "@/lib/feature-flags";
 import { constructWebhookEvent } from "@/lib/payments/stripe";
 import { confirmDepositAndBook } from "@/lib/booking-core";
+import { confirmPackagePurchase } from "@/lib/packages-core";
 
 // Registers at https://<domain>/api/stripe/webhook in the Stripe Dashboard
 // (Developers → Webhooks), subscribed to checkout.session.completed. Stripe
@@ -34,9 +35,25 @@ export async function POST(request: Request) {
     client_reference_id?: string | null;
     metadata?: Record<string, string> | null;
   };
-  const depositId = session.client_reference_id;
   const metadata = session.metadata;
-  if (!depositId || !metadata) {
+  if (!metadata) {
+    return NextResponse.json({ received: true });
+  }
+
+  // Package purchases (lib/packages-core.ts) tag their Checkout Session
+  // metadata.kind = "package" — everything else is a booking deposit, the
+  // original shape this webhook was built for (client_reference_id, not a
+  // metadata tag, since that path predates packages).
+  if (metadata.kind === "package") {
+    const { clientId, packageOptionId } = metadata;
+    if (clientId && packageOptionId) {
+      await confirmPackagePurchase(clientId, packageOptionId);
+    }
+    return NextResponse.json({ received: true });
+  }
+
+  const depositId = session.client_reference_id;
+  if (!depositId) {
     return NextResponse.json({ received: true });
   }
 

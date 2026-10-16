@@ -51,23 +51,18 @@ async function main() {
     locationByName.set(row.name, row.id);
   }
 
-  // --- Rooms & devices ----------------------------------------------------
-  // CALENDAR_ROOMS mocks the shared LED panel as a fourth "room" — the real
-  // schema models it correctly as a conflict-checked Device instead (spec
-  // §5.2: shared/portable devices are booking-conflict resources too, not
-  // rooms). Roma Norte is the only open location (spec: 4 treatment rooms
-  // at Roma Norte per the Discovery Doc, one shared LED panel).
+  // --- Rooms ----------------------------------------------------------
+  // No shared/portable Device is seeded — confirmed with the client there's
+  // no actual shared equipment (e.g. an LED panel) at Roma Norte despite
+  // the original spec assuming one (§5.2/§6.3/§13). The schema/booking
+  // engine still supports Device as a conflict-checked resource (see
+  // findAvailableAssignment, lib/booking-core.ts) in case a real shared
+  // unit is ever added, but nothing seeds one today.
   const romaNorteId = locationByName.get("Roma Norte");
   if (romaNorteId) {
     for (const name of ["Sala 1", "Sala 2", "Sala 3"]) {
       const existing = await prisma.room.findFirst({ where: { locationId: romaNorteId, name } });
       if (!existing) await prisma.room.create({ data: { locationId: romaNorteId, name } });
-    }
-    const existingDevice = await prisma.device.findFirst({
-      where: { locationId: romaNorteId, name: "Panel LED" },
-    });
-    if (!existingDevice) {
-      await prisma.device.create({ data: { locationId: romaNorteId, name: "Panel LED" } });
     }
   }
 

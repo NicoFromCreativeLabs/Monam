@@ -71,6 +71,49 @@ export async function createDepositCheckout(
   return { checkoutUrl: session.url, sessionId: session.id };
 }
 
+export interface PackageCheckoutInput {
+  amountMxn: number;
+  clientEmail?: string;
+  description: string; // e.g. "Pack Targeted x5"
+  successUrl: string;
+  cancelUrl: string;
+  // Tagged "kind: package" so the webhook (app/api/stripe/webhook/route.ts)
+  // can tell a package purchase apart from a booking deposit — both share
+  // the same checkout.session.completed event type.
+  metadata: Record<string, string>;
+}
+
+// A client buying a session pack straight from /my/packages — same real
+// Stripe Checkout pattern as createDepositCheckout, just no
+// client_reference_id (nothing else needs to look this session up by it).
+export async function createPackageCheckout(
+  input: PackageCheckoutInput,
+): Promise<DepositCheckoutResult> {
+  const stripe = getClient();
+  const session = await stripe.checkout.sessions.create({
+    mode: "payment",
+    customer_email: input.clientEmail,
+    line_items: [
+      {
+        price_data: {
+          currency: "mxn",
+          unit_amount: Math.round(input.amountMxn * 100),
+          product_data: { name: input.description },
+        },
+        quantity: 1,
+      },
+    ],
+    metadata: { kind: "package", ...input.metadata },
+    success_url: input.successUrl,
+    cancel_url: input.cancelUrl,
+  });
+
+  if (!session.url) {
+    throw new Error("Stripe did not return a Checkout URL.");
+  }
+  return { checkoutUrl: session.url, sessionId: session.id };
+}
+
 // Verifies the webhook came from Stripe (not a forged request hitting the
 // public endpoint) before anything in the payload is trusted — the one
 // security-critical step of this whole integration.

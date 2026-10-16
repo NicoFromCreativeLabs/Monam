@@ -204,12 +204,6 @@ export const CLIENT_SKIN_ID_PREVIEW = {
   lastTreatment: "Targeted — hace 3 semanas",
 };
 
-export const CLIENT_PACKAGE_BALANCE = {
-  name: "Pack Targeted x5",
-  sessionsRemaining: 2,
-  expiresOn: "2026-12-15",
-};
-
 // Packages available for purchase — priced at a discount vs. buying each
 // session individually at list price (Targeted $850, Signature $1,900).
 export const PACKAGE_OPTIONS = [
@@ -372,8 +366,8 @@ export const CLIENT_DETAIL = {
 // found admin/clients/[id] (and the single-client staff/clients view) always
 // rendering CLIENT_DETAIL ("Valentina Reyes") regardless of which client's
 // record was actually opened. Each entry's skinId/flags stay consistent with
-// CLIENTS_LIST (Renata's Compositae allergy, Camila's active package
-// matching CLIENT_PACKAGE_BALANCE, Daniela's topical retinoid).
+// CLIENTS_LIST (Renata's Compositae allergy, Camila's active package,
+// Daniela's topical retinoid).
 export const CLIENT_DETAILS_BY_ID: Record<string, Omit<typeof CLIENT_DETAIL, "id">> = {
   "cl-1": {
     name: "Sofía Marín",
@@ -834,31 +828,6 @@ export const CLIENT_APPOINTMENTS_LIST = {
     { id: "ca-4", date: "2026-07-20", time: "10:00", location: "Roma Norte", protocol: "Targeted" },
   ],
 };
-
-export const CLIENT_PURCHASES = [
-  { date: "2026-09-21", product: "Beauty of Joseon Glow Serum", size: "30 ml", price: 620 },
-  { date: "2026-08-24", product: "Anua Heartleaf Toner", size: "150 ml", price: 550 },
-];
-
-// Reuses the same protocol → top-retail-product link the admin analytics
-// views are built on (PROTOCOL_RETAIL_LINK), matched against this client's
-// own past visits — rather than inventing a separate recommendations shape.
-// Rendered on /my/appointments ("Mi rutina · Mis compras").
-export const POST_FACIAL_RECOMMENDATIONS = CLIENT_APPOINTMENTS_LIST.past
-  .map((visit) => {
-    const link = PROTOCOL_RETAIL_LINK.find((l) => l.protocol === visit.protocol);
-    if (!link) return null;
-    const inventory = RETAIL_INVENTORY.find((r) => r.product === link.topProduct);
-    const alreadyPurchased = CLIENT_PURCHASES.some((p) => p.product === link.topProduct);
-    return {
-      visitDate: visit.date,
-      protocol: visit.protocol,
-      product: link.topProduct,
-      price: inventory?.price,
-      alreadyPurchased,
-    };
-  })
-  .filter((r): r is NonNullable<typeof r> => r !== null);
 
 export const CLIENT_CONSENTS = [
   { type: "Tratamiento y responsabilidad", version: "v2.1", acceptedAt: "2026-06-02", revocable: false },

@@ -106,6 +106,7 @@ interface EditDraft {
   expiresOn: string;
   opensOn: string;
   pao: string;
+  error?: string;
 }
 
 const emptyNewProduct = {
@@ -135,6 +136,56 @@ function paoMesesToDays(text: string): number | undefined {
   return match ? Number(match[1]) * 30 : undefined;
 }
 
+type SortDir = "asc" | "desc";
+
+// One shared sort state reused across every tab's table — harmless even
+// though each tab has its own column set, since a column name that doesn't
+// exist on the row currently showing just never gets clicked again until
+// the user picks a column that does exist in that tab.
+function sortRows<T extends object>(rows: T[], col: string | null, dir: SortDir): T[] {
+  if (!col) return rows;
+  return [...rows].sort((a, b) => {
+    const av = (a as Record<string, unknown>)[col];
+    const bv = (b as Record<string, unknown>)[col];
+    let cmp: number;
+    if (typeof av === "number" && typeof bv === "number") cmp = av - bv;
+    else cmp = String(av ?? "").localeCompare(String(bv ?? ""), "es");
+    return dir === "asc" ? cmp : -cmp;
+  });
+}
+
+function SortTh({
+  label,
+  col,
+  sortCol,
+  sortDir,
+  onSort,
+  className,
+}: {
+  label: string;
+  col: string;
+  sortCol: string | null;
+  sortDir: SortDir;
+  onSort: (col: string) => void;
+  className?: string;
+}) {
+  const active = sortCol === col;
+  return (
+    <th className={className}>
+      <button
+        type="button"
+        onClick={() => onSort(col)}
+        className="inline-flex items-center gap-0.5 hover:text-ciruela"
+      >
+        {label}
+        <span className={active ? "opacity-100" : "opacity-20"}>
+          {active && sortDir === "desc" ? "↓" : "↑"}
+        </span>
+      </button>
+    </th>
+  );
+}
+
 export function AdminInventoryView({
   initialRetail,
   initialBackbar,
@@ -158,6 +209,17 @@ export function AdminInventoryView({
     ...emptyNewProduct,
     location: locations[0]?.name ?? "",
   });
+  const [sortCol, setSortCol] = useState<string | null>(null);
+  const [sortDir, setSortDir] = useState<SortDir>("asc");
+
+  function toggleSort(col: string) {
+    if (sortCol === col) {
+      setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    } else {
+      setSortCol(col);
+      setSortDir("asc");
+    }
+  }
 
   const retailByLocation = initialRetail.filter((i) => selectedNames.includes(i.location));
   const backbarByLocation = initialBackbar.filter((i) => selectedNames.includes(i.location));
@@ -213,7 +275,7 @@ export function AdminInventoryView({
       if (ledger !== originalLedger) {
         await moveInventoryLedgerAction(id, TO_DB_LEDGER[ledger]);
       }
-      await updateInventoryItemAction({
+      const result = await updateInventoryItemAction({
         inventoryItemId: id,
         par: parNum,
         priceMxn: ledger === "Retail" ? Number(price) || 0 : undefined,
@@ -221,7 +283,12 @@ export function AdminInventoryView({
         expiresOn: ledger !== "Backbar" ? expiresOn || undefined : undefined,
         openedOn: ledger === "Backbar" ? opensOn || undefined : undefined,
         paoDays: ledger === "Backbar" ? paoMesesToDays(pao) : undefined,
+        sku: editModal.sku,
       });
+      if ("error" in result) {
+        setEditModal((m) => (m ? { ...m, error: result.error } : m));
+        return;
+      }
       if (qtyDelta !== 0) {
         await adjustInventoryAction({ inventoryItemId: id, qtyDelta, reason: "Ajuste manual — Inventario" });
       }
@@ -422,7 +489,7 @@ export function AdminInventoryView({
         {addMode === "upload" && (
           <Card title="Actualizar inventario — subir Excel/CSV">
             <p className="mb-3 font-body text-xs text-ciruela/50">
-              Usa el mismo formato que "Descargar Excel": columnas SKU, Producto, Ledger
+              Usa el mismo formato que &ldquo;Descargar Excel&rdquo;: columnas SKU, Producto, Ledger
               (Piso/Backbar/Warehouse), Ubicacion, Cantidad, Par. La cantidad y el par del
               archivo reemplazan los valores actuales de cada SKU — es un recuento, no una suma.
             </p>
@@ -574,22 +641,26 @@ export function AdminInventoryView({
             <table className="w-full min-w-[640px] whitespace-nowrap font-body text-sm text-ciruela">
               <thead>
                 <tr className="text-left text-xs uppercase tracking-wide text-ciruela/40">
-                  <th className="pb-2">SKU</th>
-                  <th className="pb-2">Producto</th>
-                  <th className="pb-2">Ledger</th>
-                  <th className="pb-2 pr-6">Ubicación</th>
+                  <SortTh label="SKU" col="sku" sortCol={sortCol} sortDir={sortDir} onSort={toggleSort} className="pb-2" />
+                  <SortTh label="Producto" col="product" sortCol={sortCol} sortDir={sortDir} onSort={toggleSort} className="pb-2" />
+                  <SortTh label="Ledger" col="ledger" sortCol={sortCol} sortDir={sortDir} onSort={toggleSort} className="pb-2" />
+                  <SortTh label="Ubicación" col="location" sortCol={sortCol} sortDir={sortDir} onSort={toggleSort} className="pb-2 pr-6" />
                   <th className="pb-2 pr-6">Caducidad</th>
-                  <th className="pb-2 pr-3 text-right">Cant.</th>
-                  <th className="pb-2 pr-6 text-right">Par</th>
+                  <SortTh label="Cant." col="qty" sortCol={sortCol} sortDir={sortDir} onSort={toggleSort} className="pb-2 pr-3 text-right" />
+                  <SortTh label="Par" col="par" sortCol={sortCol} sortDir={sortDir} onSort={toggleSort} className="pb-2 pr-6 text-right" />
                   <th className="pb-2" />
                 </tr>
               </thead>
               <tbody>
-                {[
-                  ...retail.map((i) => ({ ...i, ledger: "Retail" as const })),
-                  ...backbar.map((i) => ({ ...i, ledger: "Backbar" as const })),
-                  ...warehouse.map((i) => ({ ...i, ledger: "Warehouse" as const })),
-                ].map((item) => {
+                {sortRows(
+                  [
+                    ...retail.map((i) => ({ ...i, ledger: "Retail" as const })),
+                    ...backbar.map((i) => ({ ...i, ledger: "Backbar" as const })),
+                    ...warehouse.map((i) => ({ ...i, ledger: "Warehouse" as const })),
+                  ],
+                  sortCol,
+                  sortDir,
+                ).map((item) => {
                   const low = item.qty < item.par;
                   return (
                     <tr key={item.id} className="border-t border-ciruela/8">
@@ -633,18 +704,18 @@ export function AdminInventoryView({
             <table className="w-full min-w-[640px] whitespace-nowrap font-body text-sm text-ciruela">
               <thead>
                 <tr className="text-left text-xs uppercase tracking-wide text-ciruela/40">
-                  <th className="pb-2">SKU</th>
-                  <th className="pb-2">Producto</th>
-                  <th className="pb-2 pr-6">Ubicación</th>
-                  <th className="pb-2 pr-3 text-right">Cant.</th>
-                  <th className="pb-2 pr-6 text-right">Par</th>
-                  <th className="pb-2 pr-6 text-right">Precio</th>
-                  <th className="pb-2">Vence</th>
+                  <SortTh label="SKU" col="sku" sortCol={sortCol} sortDir={sortDir} onSort={toggleSort} className="pb-2" />
+                  <SortTh label="Producto" col="product" sortCol={sortCol} sortDir={sortDir} onSort={toggleSort} className="pb-2" />
+                  <SortTh label="Ubicación" col="location" sortCol={sortCol} sortDir={sortDir} onSort={toggleSort} className="pb-2 pr-6" />
+                  <SortTh label="Cant." col="qty" sortCol={sortCol} sortDir={sortDir} onSort={toggleSort} className="pb-2 pr-3 text-right" />
+                  <SortTh label="Par" col="par" sortCol={sortCol} sortDir={sortDir} onSort={toggleSort} className="pb-2 pr-6 text-right" />
+                  <SortTh label="Precio" col="price" sortCol={sortCol} sortDir={sortDir} onSort={toggleSort} className="pb-2 pr-6 text-right" />
+                  <SortTh label="Vence" col="expiresOn" sortCol={sortCol} sortDir={sortDir} onSort={toggleSort} className="pb-2" />
                   <th className="pb-2" />
                 </tr>
               </thead>
               <tbody>
-                {retail.map((item) => {
+                {sortRows(retail, sortCol, sortDir).map((item) => {
                   const low = item.qty < item.par;
                   return (
                     <tr key={item.id} className="border-t border-ciruela/8">
@@ -684,18 +755,18 @@ export function AdminInventoryView({
             <table className="w-full min-w-[640px] whitespace-nowrap font-body text-sm text-ciruela">
               <thead>
                 <tr className="text-left text-xs uppercase tracking-wide text-ciruela/40">
-                  <th className="pb-2">SKU</th>
-                  <th className="pb-2">Producto</th>
-                  <th className="pb-2 pr-6">Ubicación</th>
-                  <th className="pb-2 pr-3 text-right">Cant.</th>
-                  <th className="pb-2 pr-6 text-right">Par</th>
-                  <th className="pb-2 pr-6">Abierto</th>
-                  <th className="pb-2">PAO</th>
+                  <SortTh label="SKU" col="sku" sortCol={sortCol} sortDir={sortDir} onSort={toggleSort} className="pb-2" />
+                  <SortTh label="Producto" col="product" sortCol={sortCol} sortDir={sortDir} onSort={toggleSort} className="pb-2" />
+                  <SortTh label="Ubicación" col="location" sortCol={sortCol} sortDir={sortDir} onSort={toggleSort} className="pb-2 pr-6" />
+                  <SortTh label="Cant." col="qty" sortCol={sortCol} sortDir={sortDir} onSort={toggleSort} className="pb-2 pr-3 text-right" />
+                  <SortTh label="Par" col="par" sortCol={sortCol} sortDir={sortDir} onSort={toggleSort} className="pb-2 pr-6 text-right" />
+                  <SortTh label="Abierto" col="opensOn" sortCol={sortCol} sortDir={sortDir} onSort={toggleSort} className="pb-2 pr-6" />
+                  <SortTh label="PAO" col="pao" sortCol={sortCol} sortDir={sortDir} onSort={toggleSort} className="pb-2" />
                   <th className="pb-2" />
                 </tr>
               </thead>
               <tbody>
-                {backbar.map((item) => {
+                {sortRows(backbar, sortCol, sortDir).map((item) => {
                   const low = item.qty < item.par;
                   return (
                     <tr key={item.id} className="border-t border-ciruela/8">
@@ -739,18 +810,18 @@ export function AdminInventoryView({
             <table className="w-full min-w-[640px] whitespace-nowrap font-body text-sm text-ciruela">
               <thead>
                 <tr className="text-left text-xs uppercase tracking-wide text-ciruela/40">
-                  <th className="pb-2">SKU</th>
-                  <th className="pb-2">Producto</th>
-                  <th className="pb-2 pr-6">Ubicación</th>
-                  <th className="pb-2 pr-3 text-right">Cant.</th>
-                  <th className="pb-2 pr-6 text-right">Par</th>
-                  <th className="pb-2 pr-6 text-right">Costo</th>
-                  <th className="pb-2">Vence</th>
+                  <SortTh label="SKU" col="sku" sortCol={sortCol} sortDir={sortDir} onSort={toggleSort} className="pb-2" />
+                  <SortTh label="Producto" col="product" sortCol={sortCol} sortDir={sortDir} onSort={toggleSort} className="pb-2" />
+                  <SortTh label="Ubicación" col="location" sortCol={sortCol} sortDir={sortDir} onSort={toggleSort} className="pb-2 pr-6" />
+                  <SortTh label="Cant." col="qty" sortCol={sortCol} sortDir={sortDir} onSort={toggleSort} className="pb-2 pr-3 text-right" />
+                  <SortTh label="Par" col="par" sortCol={sortCol} sortDir={sortDir} onSort={toggleSort} className="pb-2 pr-6 text-right" />
+                  <SortTh label="Costo" col="cost" sortCol={sortCol} sortDir={sortDir} onSort={toggleSort} className="pb-2 pr-6 text-right" />
+                  <SortTh label="Vence" col="expiresOn" sortCol={sortCol} sortDir={sortDir} onSort={toggleSort} className="pb-2" />
                   <th className="pb-2" />
                 </tr>
               </thead>
               <tbody>
-                {warehouse.map((item) => {
+                {sortRows(warehouse, sortCol, sortDir).map((item) => {
                   const low = item.qty < item.par;
                   return (
                     <tr key={item.id} className="border-t border-ciruela/8">
@@ -838,6 +909,14 @@ export function AdminInventoryView({
             </p>
 
             <div className="mb-4">
+              <TextInput
+                label="SKU"
+                value={editModal.sku}
+                onChange={(v) => setEditModal((m) => (m ? { ...m, sku: v, error: undefined } : m))}
+              />
+            </div>
+
+            <div className="mb-4">
               <label className="mb-1 block font-body text-xs uppercase tracking-[0.14em] text-ciruela/50">
                 Ledger
               </label>
@@ -887,6 +966,12 @@ export function AdminInventoryView({
                 </>
               )}
             </div>
+
+            {editModal.error && (
+              <p className="mt-3 rounded-lg bg-[#b3392f]/10 px-3 py-2 font-body text-xs text-[#b3392f]">
+                {editModal.error}
+              </p>
+            )}
 
             <div className="mt-5 flex justify-end gap-2">
               <button onClick={closeEdit} className="rounded-full border border-ciruela px-4 py-1.5 font-body text-xs text-ciruela hover:bg-ciruela hover:text-hueso">

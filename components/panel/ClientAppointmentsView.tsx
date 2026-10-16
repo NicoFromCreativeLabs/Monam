@@ -3,11 +3,19 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Card } from "@/components/panel/Card";
-import { PostFacialRecommendations } from "@/components/panel/PostFacialRecommendations";
+import {
+  PostFacialRecommendations,
+  type RecommendationView,
+} from "@/components/panel/PostFacialRecommendations";
 import { cancelAppointmentAction } from "@/lib/actions/booking";
-import { CLIENT_PURCHASES } from "@/lib/mock-data";
 
-const RECENT_PURCHASES_LIMIT = 3;
+export type { RecommendationView };
+
+export interface PurchaseView {
+  product: string;
+  date: string;
+  price: number;
+}
 
 export interface UpcomingAppointmentView {
   id: string;
@@ -37,11 +45,14 @@ export interface PastAppointmentView {
 export function ClientAppointmentsView({
   upcoming,
   past,
+  purchases,
+  recommendations,
 }: {
   upcoming: UpcomingAppointmentView[];
   past: PastAppointmentView[];
+  purchases: PurchaseView[];
+  recommendations: RecommendationView[];
 }) {
-  const recentPurchases = CLIENT_PURCHASES.slice(0, RECENT_PURCHASES_LIMIT);
   const router = useRouter();
   const [pendingAction, setPendingAction] = useState<{
     appt: UpcomingAppointmentView;
@@ -166,22 +177,24 @@ export function ClientAppointmentsView({
       </Card>
 
       <Card title="Mis compras">
-        <ul className="divide-y divide-ciruela/8">
-          {recentPurchases.map((p, i) => (
-            <li key={i} className="flex items-center justify-between py-3">
-              <div>
-                <p className="font-body text-sm text-ciruela">{p.product}</p>
-                <p className="font-body text-xs text-ciruela/50">
-                  {p.size} · {p.date}
-                </p>
-              </div>
-              <span className="font-body text-sm text-ciruela">${p.price} MXN</span>
-            </li>
-          ))}
-        </ul>
+        {purchases.length === 0 ? (
+          <p className="py-3 font-body text-sm text-ciruela/50">Sin compras todavía.</p>
+        ) : (
+          <ul className="divide-y divide-ciruela/8">
+            {purchases.map((p, i) => (
+              <li key={i} className="flex items-center justify-between py-3">
+                <div>
+                  <p className="font-body text-sm text-ciruela">{p.product}</p>
+                  <p className="font-body text-xs text-ciruela/50">{p.date}</p>
+                </div>
+                <span className="font-body text-sm text-ciruela">${p.price} MXN</span>
+              </li>
+            ))}
+          </ul>
+        )}
       </Card>
 
-      <PostFacialRecommendations />
+      <PostFacialRecommendations recommendations={recommendations} hasUpcoming={upcoming.length > 0} />
     </div>
   );
 }

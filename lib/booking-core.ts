@@ -102,6 +102,77 @@ export interface CreateAppointmentInput {
 
 export type CreateAppointmentResult = { error: string } | { appointmentId: string };
 
+// Shared by insertAppointment and getAvailableSlots below so both ever
+// derive the blocked window (duration + add-on minutes + buffers) the exact
+// same way — a slot the schedule step shows as free has to mean the same
+// thing as what insertAppointment itself will check moments later.
+async function resolveBookingWindow(params: {
+  locationName: string;
+  date: string;
+  durationTier: "Targeted" | "Signature";
+  protocolName: string | null;
+  addOnIds?: string[];
+}) {
+  const location = await prisma.location.findFirst({ where: { name: params.locationName } });
+  if (!location) return null;
+
+  const protocol = params.protocolName
+    ? await prisma.protocol.findUnique({ where: { name: params.protocolName } })
+    : null;
+
+  const MAX_ADD_ONS = 2;
+  const addOnIds = (params.addOnIds ?? []).slice(0, MAX_ADD_ONS);
+  const addOns = addOnIds.length > 0 ? await prisma.addOn.findMany({ where: { id: { in: addOnIds } } }) : [];
+  const addOnMinutes = addOns.reduce((sum, a) => sum + a.extraMinutes, 0);
+  const { cleanupBufferMin, addonSafetyBufferMin } = await getBookingBuffers();
+
+  const baseDurationMin = protocol?.durationMin ?? (params.durationTier === "Signature" ? 60 : 30);
+  // The actual add-ons picked always pad the slot by their real minutes; the
+  // addon safety buffer only applies on top when none were picked yet — it
+  // covers a client who asks for one in person, so the next appointment
+  // can't be booked flush against a slot that might still grow.
+  const blockedDurationMin =
+    baseDurationMin + addOnMinutes + cleanupBufferMin + (addOnMinutes === 0 ? addonSafetyBufferMin : 0);
+
+  const [year, month, day] = params.date.split("-").map(Number);
+  return { locationId: location.id, year, month, day, blockedDurationMin };
+}
+
+function slotWindow(window: { year: number; month: number; day: number; blockedDurationMin: number }, time: string) {
+  const [hour, minute] = time.split(":").map(Number);
+  const startAt = new Date(window.year, window.month - 1, window.day, hour, minute);
+  const endAt = new Date(startAt.getTime() + window.blockedDurationMin * 60000);
+  return { startAt, endAt };
+}
+
+// Drives the schedule step's grayed-out slots — for each candidate HH:MM
+// time, whether findAvailableAssignment would actually find a free
+// room+esthetician(+device for Signature). Same resolveBookingWindow/
+// findAvailableAssignment insertAppointment uses, so "shown as available"
+// can't drift from "actually bookable." One query round-trip per candidate
+// slot — fine at this studio's scale (a handful of rooms/estheticians over
+// a single day), not worth a bulkier batched query yet.
+export async function getAvailableSlots(params: {
+  locationName: string;
+  date: string;
+  durationTier: "Targeted" | "Signature";
+  protocolName: string | null;
+  addOnIds?: string[];
+  times: string[];
+}): Promise<Record<string, boolean>> {
+  const window = await resolveBookingWindow(params);
+  if (!window) return Object.fromEntries(params.times.map((t) => [t, false]));
+
+  const entries = await Promise.all(
+    params.times.map(async (time) => {
+      const { startAt, endAt } = slotWindow(window, time);
+      const assignment = await findAvailableAssignment(window.locationId, startAt, endAt, params.durationTier);
+      return [time, assignment !== null] as const;
+    }),
+  );
+  return Object.fromEntries(entries);
+}
+
 // Resolves location/protocol, finds a free room+esthetician+device, and
 // inserts. The EXCLUDE constraint is still the real safety net against a
 // race this (non-transactional) read misses; a caught insert error reads
@@ -116,40 +187,24 @@ export async function insertAppointment(params: {
   addOnIds?: string[];
   depositId?: string;
 }): Promise<CreateAppointmentResult> {
-  const location = await prisma.location.findFirst({ where: { name: params.locationName } });
-  if (!location) return { error: "Sucursal no encontrada." };
+  const window = await resolveBookingWindow(params);
+  if (!window) return { error: "Sucursal no encontrada." };
+  const { startAt, endAt } = slotWindow(window, params.time);
+
+  const assignment = await findAvailableAssignment(window.locationId, startAt, endAt, params.durationTier);
+  if (!assignment) {
+    return { error: "Ese horario ya no está disponible — elige otro." };
+  }
 
   const protocol = params.protocolName
     ? await prisma.protocol.findUnique({ where: { name: params.protocolName } })
     : null;
 
-  const addOnIds = params.addOnIds ?? [];
-  const addOns = addOnIds.length > 0 ? await prisma.addOn.findMany({ where: { id: { in: addOnIds } } }) : [];
-  const addOnMinutes = addOns.reduce((sum, a) => sum + a.extraMinutes, 0);
-  const { cleanupBufferMin, addonSafetyBufferMin } = await getBookingBuffers();
-
-  const [hour, minute] = params.time.split(":").map(Number);
-  const [year, month, day] = params.date.split("-").map(Number);
-  const startAt = new Date(year, month - 1, day, hour, minute);
-  const baseDurationMin = protocol?.durationMin ?? (params.durationTier === "Signature" ? 60 : 30);
-  // The actual add-ons picked always pad the slot by their real minutes; the
-  // addon safety buffer only applies on top when none were picked yet — it
-  // covers a client who asks for one in person, so the next appointment
-  // can't be booked flush against a slot that might still grow.
-  const blockedDurationMin =
-    baseDurationMin + addOnMinutes + cleanupBufferMin + (addOnMinutes === 0 ? addonSafetyBufferMin : 0);
-  const endAt = new Date(startAt.getTime() + blockedDurationMin * 60000);
-
-  const assignment = await findAvailableAssignment(location.id, startAt, endAt, params.durationTier);
-  if (!assignment) {
-    return { error: "Ese horario ya no está disponible — elige otro." };
-  }
-
   try {
     const appointment = await prisma.appointment.create({
       data: {
         clientId: params.clientId,
-        locationId: location.id,
+        locationId: window.locationId,
         roomId: assignment.roomId,
         estheticianId: assignment.estheticianId,
         deviceId: assignment.deviceId ?? undefined,

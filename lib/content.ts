@@ -37,6 +37,7 @@ export interface Content {
     standard: string;
     visit: string;
     bookNow: string;
+    signIn: string;
   };
   hero: {
     subtitle: string;

@@ -8,7 +8,7 @@ export default async function StaffLayout({ children }: LayoutProps<"/staff">) {
   const appUser = await requireStaffRole(["FRONT_DESK", "ESTHETICIAN", "OWNER", "CLINIC_MANAGER"]);
 
   return (
-    <StaffPanelShell currentUser={{ name: appUser.name, roleLabel: roleLabel(appUser.role) }}>
+    <StaffPanelShell currentUser={{ name: appUser.name, roleLabel: roleLabel(appUser.role), role: appUser.role }}>
       {children}
     </StaffPanelShell>
   );

@@ -14,12 +14,10 @@ import { StripeQuote } from "./StripeQuote";
 import { LocationHours } from "./LocationHours";
 import { Footer } from "./Footer";
 import { Reveal } from "@/components/Reveal";
-import { useHybridScrollSnap } from "./useHybridScrollSnap";
 
 export function LandingPage() {
   const [lang, setLang] = useState<Lang>("es");
   const content = getContent(lang);
-  useHybridScrollSnap();
 
   return (
     <>

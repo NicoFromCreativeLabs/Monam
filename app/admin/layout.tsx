@@ -59,7 +59,7 @@ export default async function AdminLayout({ children }: LayoutProps<"/admin">) {
   const appUser = await requireStaffRole(["OWNER", "CLINIC_MANAGER"]);
 
   return (
-    <CurrentAppUserProvider value={{ name: appUser.name, roleLabel: roleLabel(appUser.role) }}>
+    <CurrentAppUserProvider value={{ name: appUser.name, roleLabel: roleLabel(appUser.role), role: appUser.role }}>
       <PanelNavProvider>
         <div className="flex min-h-full flex-1">
           <Sidebar sections={SECTIONS} brandHref="/admin" />

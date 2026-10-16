@@ -5,6 +5,7 @@ import { createContext, useContext, type ReactNode } from "react";
 export interface CurrentAppUser {
   name: string;
   roleLabel: string;
+  role: "OWNER" | "CLINIC_MANAGER" | "FRONT_DESK" | "ESTHETICIAN";
 }
 
 const CurrentAppUserContext = createContext<CurrentAppUser | null>(null);

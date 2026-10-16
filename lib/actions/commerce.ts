@@ -422,12 +422,32 @@ export interface UpdateInventoryItemInput {
   expiresOn?: string;
   openedOn?: string;
   paoDays?: number;
+  sku?: string; // lives on Product, not InventoryItem — a correction, not a rename-to-merge (spec §5.3 never-merge still applies, so this never changes which ledger row the SKU belongs to)
 }
 
-// Metadata edits (par, price, cost, dates) — not a qty change, so no
+// Metadata edits (par, price, cost, dates, SKU) — not a qty change, so no
 // InventoryTransaction row; adjustInventoryAction covers qty deltas.
-export async function updateInventoryItemAction(input: UpdateInventoryItemInput) {
+export async function updateInventoryItemAction(
+  input: UpdateInventoryItemInput,
+): Promise<{ ok: true } | { error: string }> {
   await requireStaffRole(FRONT_DESK_ROLES);
+
+  if (input.sku !== undefined) {
+    const item = await prisma.inventoryItem.findUnique({
+      where: { id: input.inventoryItemId },
+      select: { productId: true },
+    });
+    if (!item) return { error: "Producto no encontrado." };
+    const sku = input.sku.trim();
+    if (sku) {
+      try {
+        await prisma.product.update({ where: { id: item.productId }, data: { sku } });
+      } catch {
+        return { error: "Ese SKU ya está en uso por otro producto." };
+      }
+    }
+  }
+
   await prisma.inventoryItem.update({
     where: { id: input.inventoryItemId },
     data: {
@@ -579,7 +599,8 @@ export async function importInventoryCsvAction(rows: ImportInventoryRow[]) {
         },
       });
     }
-    existing ? results.updated++ : results.created++;
+    if (existing) results.updated++;
+    else results.created++;
   }
 
   revalidatePath("/admin/inventory");

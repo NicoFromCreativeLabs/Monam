@@ -97,12 +97,27 @@ export function Nav({
             <SearchIcon className="h-4 w-4" />
           </a>
 
+          <a
+            href="/login"
+            className={`font-body text-[11px] uppercase tracking-[0.16em] transition-colors hover:opacity-100 ${inkMuted}`}
+          >
+            {content.nav.signIn}
+          </a>
+
           <Button href="#booking" variant="outline" inverted={!scrolled} className="!px-6 !py-2.5">
             {content.nav.bookNow}
           </Button>
         </div>
 
         <div className="flex items-center gap-3 min-[900px]:hidden">
+          <a
+            href="/login"
+            className={`flex min-h-9 items-center justify-center rounded-full border px-4 font-body text-xs transition-colors ${
+              scrolled ? "border-ciruela text-ciruela" : "border-hueso text-hueso"
+            }`}
+          >
+            {content.nav.signIn}
+          </a>
           <a
             href="#booking"
             className={`flex min-h-9 items-center justify-center rounded-full border px-4 font-body text-xs transition-colors ${
@@ -136,6 +151,9 @@ export function Nav({
               {l.label}
             </a>
           ))}
+          <a href="/login" onClick={() => setMobileOpen(false)} className="py-2 font-body text-sm text-ciruela">
+            {content.nav.signIn}
+          </a>
         </nav>
       )}
     </header>

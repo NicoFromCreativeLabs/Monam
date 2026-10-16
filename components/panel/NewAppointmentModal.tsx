@@ -46,8 +46,14 @@ export function NewAppointmentModal({
     ? addOns.filter((a) => a.availableOn.includes(protocolForAddOns))
     : [];
 
+  const MAX_ADD_ONS = 2;
+
   function toggleAddOn(id: string) {
-    setSelectedAddOns((prev) => (prev.includes(id) ? prev.filter((a) => a !== id) : [...prev, id]));
+    setSelectedAddOns((prev) => {
+      if (prev.includes(id)) return prev.filter((a) => a !== id);
+      if (prev.length >= MAX_ADD_ONS) return prev;
+      return [...prev, id];
+    });
   }
   const filtered = query.trim()
     ? clients.filter(
@@ -234,18 +240,22 @@ export function NewAppointmentModal({
             {availableAddOns.length > 0 && (
               <div className="mb-3">
                 <label className="mb-1 block font-body text-xs uppercase tracking-[0.14em] text-ciruela/50">
-                  Add-ons
+                  Add-ons · máximo {MAX_ADD_ONS}
                 </label>
                 <div className="space-y-1.5">
-                  {availableAddOns.map((a) => (
+                  {availableAddOns.map((a) => {
+                    const checked = selectedAddOns.includes(a.id);
+                    const atCap = !checked && selectedAddOns.length >= MAX_ADD_ONS;
+                    return (
                     <label
                       key={a.id}
-                      className="flex items-center justify-between rounded-lg border border-ciruela/20 px-3 py-1.5 font-body text-xs text-ciruela"
+                      className={`flex items-center justify-between rounded-lg border border-ciruela/20 px-3 py-1.5 font-body text-xs text-ciruela ${atCap ? "opacity-40" : ""}`}
                     >
                       <span className="flex items-center gap-2">
                         <input
                           type="checkbox"
-                          checked={selectedAddOns.includes(a.id)}
+                          checked={checked}
+                          disabled={atCap}
                           onChange={() => toggleAddOn(a.id)}
                           className="h-3.5 w-3.5 accent-ciruela"
                         />
@@ -253,7 +263,8 @@ export function NewAppointmentModal({
                       </span>
                       <span className="text-ciruela/40">+{a.extraMinutes} min</span>
                     </label>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             )}

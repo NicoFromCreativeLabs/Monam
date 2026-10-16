@@ -4,7 +4,6 @@ import { useState } from "react";
 import Link from "next/link";
 import { Card } from "@/components/panel/Card";
 import { TopBar } from "@/components/panel/TopBar";
-import { RoleToggle } from "@/components/panel/RoleToggle";
 import { useStaffRole } from "@/components/panel/StaffRoleContext";
 
 export interface StaffClientListing {
@@ -51,10 +50,7 @@ export function StaffClientsView({
     );
     return (
       <>
-        <TopBar
-          title="Perfil del cliente"
-          extra={<RoleToggle />}
-        />
+        <TopBar title="Perfil del cliente" />
         <div className="flex-1 px-8 py-6">
           <div className="mx-auto max-w-2xl space-y-4">
             <Card>
@@ -95,10 +91,7 @@ export function StaffClientsView({
 
   return (
     <>
-      <TopBar
-        title="Perfil del cliente"
-        extra={<RoleToggle />}
-      />
+      <TopBar title="Perfil del cliente" />
       <div className="flex-1 px-8 py-6">
         <div className="mx-auto max-w-2xl space-y-4">
           <Link href="/staff/clients" className="font-body text-xs text-ciruela underline underline-offset-2">

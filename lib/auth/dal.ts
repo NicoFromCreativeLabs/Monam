@@ -84,25 +84,52 @@ export async function requireClient(): Promise<Client> {
 }
 
 // Lets Owner/Clinic Manager open /my from the navbar's view switcher even
-// though they're an AppUser, not a Client — same "preview, no real auth
-// change" precedent as StaffRoleContext's RoleToggle. Falls back to the
-// earliest real client record so the preview reads live data instead of a
-// mock. Any other signed-in user with no Client row still bounces to /login.
-export async function requireClientOrPreview(): Promise<{ client: Client; isPreview: boolean }> {
+// though they're an AppUser, not a Client — same "no new authorization path,
+// just a navigation shortcut" precedent as the admin ViewSwitcher's
+// "Vendedor" entries (StaffRoleContext.tsx). This is their OWN client
+// identity, auto-provisioned on first visit and
+// linked to their own authUserId (findOrCreateClientForAppUser below) — not
+// a read-only look at some other real client's data. Every action /my takes
+// (booking, Stripe checkout, cancelling) is then a real action under their
+// own account, not a simulation. Any other signed-in user with no Client row
+// still bounces to /login.
+export async function requireClientOrPreview(): Promise<{ client: Client }> {
   const claims = await getVerifiedClaims();
   if (!claims) redirect("/login");
 
   const client = await getCurrentClient();
-  if (client) return { client, isPreview: false };
+  if (client) return { client };
 
   const appUser = await getCurrentAppUser();
   if (appUser && (appUser.role === "OWNER" || appUser.role === "CLINIC_MANAGER")) {
-    const preview = await prisma.client.findFirst({
-      where: { anonymizedAt: null },
-      orderBy: { createdAt: "asc" },
-    });
-    if (preview) return { client: preview, isPreview: true };
+    return { client: await findOrCreateClientForAppUser(appUser) };
   }
 
   redirect("/login");
+}
+
+// Synthesizes a placeholder phone value that can't collide with a real
+// WhatsApp number — findClientByPhone (lib/booking-core.ts) only ever
+// matches on a 10-digit suffix, and letters make sure fewer than 10 digits
+// survive that strip, so this never gets matched up with an incoming
+// WhatsApp booking by accident.
+function adminClientPlaceholderPhone(appUserId: string): string {
+  return `ADMIN-${appUserId}`;
+}
+
+// Every AppUser gets at most one of these — found by authUserId on repeat
+// visits, created once on the first. Lives under the AppUser's own name/
+// email so /my reads as "my own account in client mode," not someone else's.
+async function findOrCreateClientForAppUser(appUser: AppUser): Promise<Client> {
+  const existing = await prisma.client.findUnique({ where: { authUserId: appUser.id } });
+  if (existing) return existing;
+
+  return prisma.client.create({
+    data: {
+      authUserId: appUser.id,
+      name: appUser.name,
+      email: appUser.email,
+      phone: adminClientPlaceholderPhone(appUser.id),
+    },
+  });
 }

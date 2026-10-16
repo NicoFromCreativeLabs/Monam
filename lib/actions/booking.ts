@@ -1,31 +1,64 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { headers } from "next/headers";
 import { prisma } from "@/lib/prisma";
 import { requireClientOrPreview, requireStaffRole } from "@/lib/auth/dal";
 import {
   insertAppointment,
-  DEPOSIT_AMOUNT_MXN,
+  createPendingDepositCheckout,
+  getAvailableSlots,
   type CreateAppointmentInput,
   type CreateAppointmentResult,
 } from "@/lib/booking-core";
 
 export type { CreateAppointmentInput, CreateAppointmentResult };
 
+// Backs the schedule step's grayed-out slots — public booking-availability
+// info, not client-specific, so no auth gate beyond "is this app running."
+export async function getAvailableSlotsAction(input: {
+  locationName: string;
+  date: string;
+  durationTier: "Targeted" | "Signature";
+  protocolName: string | null;
+  addOnIds?: string[];
+  times: string[];
+}): Promise<Record<string, boolean>> {
+  return getAvailableSlots(input);
+}
+
+// Targeted never requires a deposit, so it still books straight through.
+// Signature used to also land here and just write a HELD deposit row with
+// no real charge behind it (a placeholder from before Stripe was wired up
+// — see schema.prisma's PaymentProvider.MANUAL comment). Now that Stripe is
+// configured, Signature goes through createClientDepositCheckoutAction
+// instead — this action no longer creates a deposit for it.
 export async function createAppointmentAction(
   input: CreateAppointmentInput,
 ): Promise<CreateAppointmentResult> {
   const { client } = await requireClientOrPreview();
+  return insertAppointment({ ...input, clientId: client.id });
+}
 
-  let depositId: string | undefined;
-  if (input.durationTier === "Signature") {
-    const deposit = await prisma.deposit.create({
-      data: { clientId: client.id, amountMxn: DEPOSIT_AMOUNT_MXN, status: "HELD" },
-    });
-    depositId = deposit.id;
-  }
+// Signature's real deposit path: creates a Stripe Checkout Session instead
+// of a bare deposit row — the appointment itself isn't written until the
+// Stripe webhook confirms payment (confirmDepositAndBook in booking-core),
+// same flow the WhatsApp bot already uses. If Stripe isn't configured,
+// callers should fall back to showing that as an error, not silently
+// booking for free.
+export async function createClientDepositCheckoutAction(
+  input: CreateAppointmentInput,
+): Promise<{ checkoutUrl: string } | { error: string }> {
+  const { client } = await requireClientOrPreview();
+  const origin = (await headers()).get("origin") ?? "";
 
-  return insertAppointment({ ...input, clientId: client.id, depositId });
+  return createPendingDepositCheckout(
+    { ...input, clientId: client.id },
+    {
+      successUrl: `${origin}/my/appointments?depositoConfirmado=1`,
+      cancelUrl: `${origin}/my/book`,
+    },
+  );
 }
 
 export interface CreateManualAppointmentInput extends CreateAppointmentInput {

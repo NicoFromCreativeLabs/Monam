@@ -1,13 +1,17 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Card } from "@/components/panel/Card";
 import { useLocations } from "@/components/panel/LocationsContext";
 import { useProtocols } from "@/components/panel/ProtocolsContext";
 import { useAddOns } from "@/components/panel/AddOnsContext";
 import { useScrollEdgeFade } from "@/components/panel/useScrollEdgeFade";
-import { createAppointmentAction } from "@/lib/actions/booking";
-import { BUSINESS_HOURS, CLIENT_PAYMENT_METHODS, type DayHours } from "@/lib/mock-data";
+import {
+  createAppointmentAction,
+  createClientDepositCheckoutAction,
+  getAvailableSlotsAction,
+} from "@/lib/actions/booking";
+import { BUSINESS_HOURS, type DayHours } from "@/lib/mock-data";
 
 // Booking flow: location → duration → (facial) → (add-ons) → day/slot →
 // deposit if required → confirmation. The client never picks a specific
@@ -100,8 +104,14 @@ export default function ClientBook() {
   const chosenAddOns = addOns.filter((a) => selectedAddOns.includes(a.id));
   const extraMinutesTotal = chosenAddOns.reduce((sum, a) => sum + a.extraMinutes, 0);
 
+  const MAX_ADD_ONS = 2;
+
   function toggleAddOn(id: string) {
-    setSelectedAddOns((prev) => (prev.includes(id) ? prev.filter((a) => a !== id) : [...prev, id]));
+    setSelectedAddOns((prev) => {
+      if (prev.includes(id)) return prev.filter((a) => a !== id);
+      if (prev.length >= MAX_ADD_ONS) return prev;
+      return [...prev, id];
+    });
   }
 
   // Approximate step order given what's known so far — used only to size the
@@ -130,7 +140,56 @@ export default function ClientBook() {
     setStep(compatibleAddOns.length > 0 ? "addons" : "schedule");
   }
 
+  // One step back along the same branch stepOrder already computed —
+  // nothing to go back to from "location" (the first step) or from
+  // "confirm" (the appointment is already written server-side by then,
+  // so "back" would be misleading, not just a step change).
+  function goBack() {
+    if (stepIndex <= 0) return;
+    setBookingError(null);
+    setStep(stepOrder[stepIndex - 1]);
+  }
+
   const daySlots = duration ? generateSlots(selectedDay.hours, duration) : [];
+
+  // Real per-slot availability (same room/esthetician/device check
+  // insertAppointment itself runs — lib/booking-core.ts's getAvailableSlots)
+  // so an already-full slot shows grayed out instead of only failing after
+  // the client picks it. Keyed by day+duration+protocol+add-ons+location so
+  // it refetches whenever any of those change the actual blocked window.
+  // The fetched result carries the key it was fetched for, so "loading" is
+  // derived (current key not fetched yet) instead of set inside the effect.
+  const availabilityKey = JSON.stringify([step, location, duration, protocol, selectedAddOns, dayIndex]);
+  const shouldFetchAvailability = step === "schedule" && !!location && !!duration && daySlots.length > 0;
+  const [fetchedAvailability, setFetchedAvailability] = useState<{
+    key: string;
+    slots: Record<string, boolean>;
+  } | null>(null);
+  const isCurrentAvailability = fetchedAvailability?.key === availabilityKey;
+  const slotAvailability = isCurrentAvailability ? fetchedAvailability.slots : {};
+  const loadingAvailability = shouldFetchAvailability && !isCurrentAvailability;
+  useEffect(() => {
+    if (!shouldFetchAvailability) return;
+    let cancelled = false;
+    getAvailableSlotsAction({
+      locationName: location,
+      date: selectedDay.date.toISOString().slice(0, 10),
+      durationTier: duration,
+      protocolName: duration === "Signature" ? protocol : null,
+      addOnIds: selectedAddOns,
+      times: daySlots,
+    })
+      .then((result) => {
+        if (!cancelled) setFetchedAvailability({ key: availabilityKey, slots: result });
+      })
+      .catch(() => {
+        if (!cancelled) setFetchedAvailability({ key: availabilityKey, slots: {} });
+      });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [availabilityKey]);
 
   // Writes a real Appointment row the moment the client actually reaches
   // the confirmation screen — from either transition into "confirm" (with
@@ -159,8 +218,40 @@ export default function ClientBook() {
     return true;
   }
 
+  // Signature's deposit: redirects to a real Stripe Checkout Session rather
+  // than booking anything directly — the appointment itself only gets
+  // written once the Stripe webhook confirms the charge actually went
+  // through (confirmDepositAndBook in lib/booking-core.ts), same real-money
+  // path the WhatsApp bot already uses.
+  async function payDepositAndBook(chosenSlot: string) {
+    setConfirming(true);
+    setBookingError(null);
+    const result = await createClientDepositCheckoutAction({
+      locationName: location!,
+      date: selectedDay.date.toISOString().slice(0, 10),
+      time: chosenSlot,
+      durationTier: duration!,
+      protocolName: duration === "Signature" ? protocol : null,
+      addOnIds: selectedAddOns,
+    });
+    if ("error" in result) {
+      setConfirming(false);
+      setBookingError(result.error);
+      return;
+    }
+    window.location.href = result.checkoutUrl;
+  }
+
   return (
     <div className="mx-auto max-w-lg">
+      {stepIndex > 0 && step !== "confirm" && (
+        <button
+          onClick={goBack}
+          className="mb-3 flex items-center gap-1 font-body text-xs text-ciruela/60 hover:text-ciruela"
+        >
+          ← Atrás
+        </button>
+      )}
       <div className="mb-6 flex items-center gap-2">
         {stepOrder.map((s, i) => (
           <div
@@ -257,18 +348,22 @@ export default function ClientBook() {
         <Card title="Agrega un add-on">
           <p className="mb-4 font-body text-xs text-ciruela/50">
             Compatibles con {protocolForAddOns} · opcionales, sin costo adicional — solo suman
-            tiempo a tu cita.
+            tiempo a tu cita. Máximo {MAX_ADD_ONS}.
           </p>
           <div className="space-y-2">
-            {availableAddOns.map((a) => (
+            {availableAddOns.map((a) => {
+              const checked = selectedAddOns.includes(a.id);
+              const atCap = !checked && selectedAddOns.length >= MAX_ADD_ONS;
+              return (
               <label
                 key={a.id}
-                className="flex items-center justify-between rounded-lg border border-ciruela/20 px-3 py-2 font-body text-sm text-ciruela"
+                className={`flex items-center justify-between rounded-lg border border-ciruela/20 px-3 py-2 font-body text-sm text-ciruela ${atCap ? "opacity-40" : ""}`}
               >
                 <span className="flex items-center gap-2">
                   <input
                     type="checkbox"
-                    checked={selectedAddOns.includes(a.id)}
+                    checked={checked}
+                    disabled={atCap}
                     onChange={() => toggleAddOn(a.id)}
                     className="h-4 w-4 accent-ciruela"
                   />
@@ -279,7 +374,8 @@ export default function ClientBook() {
                 </span>
                 <span className="text-xs text-ciruela/40">+{a.extraMinutes} min</span>
               </label>
-            ))}
+              );
+            })}
           </div>
           <button
             onClick={() => setStep("schedule")}
@@ -329,25 +425,41 @@ export default function ClientBook() {
             </p>
           ) : (
             <div className="grid grid-cols-3 gap-2">
-              {daySlots.map((s) => (
-                <button
-                  key={s}
-                  disabled={confirming}
-                  onClick={() => {
-                    setSlot(s);
-                    setBookingError(null);
-                    if (requiresDeposit) {
-                      setStep("deposit");
-                    } else {
-                      confirmBooking(s);
-                    }
-                  }}
-                  className="rounded-lg border border-ciruela/20 px-3 py-2 font-body text-sm text-ciruela hover:bg-ciruela hover:text-hueso disabled:opacity-50"
-                >
-                  {s}
-                </button>
-              ))}
+              {daySlots.map((s) => {
+                // Unknown (still loading) reads as available rather than
+                // flashing every slot as taken while the check is in
+                // flight — the post-pick server check is still the real
+                // guard either way.
+                const isUnavailable = slotAvailability[s] === false;
+                return (
+                  <button
+                    key={s}
+                    disabled={confirming || isUnavailable}
+                    aria-disabled={isUnavailable}
+                    title={isUnavailable ? "Ese horario ya está ocupado" : undefined}
+                    onClick={() => {
+                      setSlot(s);
+                      setBookingError(null);
+                      if (requiresDeposit) {
+                        setStep("deposit");
+                      } else {
+                        confirmBooking(s);
+                      }
+                    }}
+                    className={`rounded-lg border px-3 py-2 font-body text-sm disabled:cursor-not-allowed ${
+                      isUnavailable
+                        ? "border-ciruela/10 text-ciruela/30 line-through"
+                        : "border-ciruela/20 text-ciruela hover:bg-ciruela hover:text-hueso disabled:opacity-50"
+                    }`}
+                  >
+                    {s}
+                  </button>
+                );
+              })}
             </div>
+          )}
+          {loadingAvailability && (
+            <p className="mt-2 font-body text-xs text-ciruela/40">Revisando disponibilidad…</p>
           )}
           {bookingError && (
             <p className="mt-3 rounded-lg bg-[#b3392f]/10 px-3 py-2 font-body text-xs text-[#b3392f]">
@@ -367,20 +479,16 @@ export default function ClientBook() {
             <span>Depósito</span>
             <span>$500 MXN</span>
           </div>
-          {CLIENT_PAYMENT_METHODS[0] && (
-            <div className="mt-2 flex justify-between font-body text-xs text-ciruela/50">
-              <span>Se cobrará a</span>
-              <span>
-                {CLIENT_PAYMENT_METHODS[0].brand} •••• {CLIENT_PAYMENT_METHODS[0].last4}
-              </span>
-            </div>
-          )}
+          <p className="mt-2 font-body text-xs text-ciruela/50">
+            Pagas en el checkout seguro de Stripe — tu cita se reserva en cuanto el pago se
+            confirme.
+          </p>
           <button
-            onClick={() => confirmBooking(slot!)}
+            onClick={() => payDepositAndBook(slot!)}
             disabled={confirming}
             className="mt-6 w-full rounded-full bg-ciruela px-5 py-3 font-body text-sm text-hueso disabled:opacity-50"
           >
-            {confirming ? "Confirmando…" : "Pagar depósito y confirmar"}
+            {confirming ? "Redirigiendo a pago…" : "Pagar depósito y confirmar"}
           </button>
           {bookingError && (
             <p className="mt-3 rounded-lg bg-[#b3392f]/10 px-3 py-2 font-body text-xs text-[#b3392f]">
@@ -399,12 +507,6 @@ export default function ClientBook() {
           {chosenAddOns.length > 0 && (
             <p className="mt-2 font-body text-xs text-ciruela/60">
               Add-ons: {chosenAddOns.map((a) => a.name).join(", ")} (+{extraMinutesTotal} min)
-            </p>
-          )}
-          {requiresDeposit && CLIENT_PAYMENT_METHODS[0] && (
-            <p className="mt-2 font-body text-xs text-ciruela/60">
-              Depósito de $500 MXN cobrado a {CLIENT_PAYMENT_METHODS[0].brand} ••••{" "}
-              {CLIENT_PAYMENT_METHODS[0].last4}.
             </p>
           )}
           <p className="mt-4 font-body text-xs text-ciruela/50">

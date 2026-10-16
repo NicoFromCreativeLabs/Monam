@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { TopBar } from "@/components/panel/TopBar";
 import { Card } from "@/components/panel/Card";
-import { RoleToggle } from "@/components/panel/RoleToggle";
 import { useStaffRole } from "@/components/panel/StaffRoleContext";
 import { LOW_STOCK_ALERTS } from "@/lib/mock-data";
 import type { TodayAppointmentView, PendingCheckoutView } from "@/lib/appointments";
@@ -42,7 +41,7 @@ export function StaffTodayView({
 
   return (
     <>
-      <TopBar title="Hoy" extra={<RoleToggle />} />
+      <TopBar title="Hoy" />
       <div className="flex-1 px-8 py-6">
         {role === "Front Desk" ? (
           <FrontDeskToday agenda={agenda} pending={pendingCheckouts} />
