@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { getCurrentAppUser } from "@/lib/auth/dal";
-import { getTodayAppointments, getPendingCheckouts } from "@/lib/appointments";
+import { getTodayAppointments, getPendingCheckouts, isAppointmentDone, pickNextAppointment } from "@/lib/appointments";
 import { StaffTodayView, type EstheticianNextClient } from "@/components/panel/StaffTodayView";
 
 export default async function StaffToday() {
@@ -17,10 +17,8 @@ export default async function StaffToday() {
   // "Done" = the treatment is recorded. Recording one marks the appointment
   // COMPLETED, but an appointment that has a treatment record counts as done
   // either way, so a finished client never stays as "next".
-  const isDone = (a: (typeof agenda)[number]) => a.statusRaw === "COMPLETED" || a.treatmentFinished;
-  const undone = agenda.filter((a) => !isDone(a));
-  const ownAppointments = currentUser ? undone.filter((a) => a.estheticianId === currentUser.id) : [];
-  const next = ownAppointments[0] ?? undone[0] ?? null;
+  const isDone = isAppointmentDone;
+  const next = pickNextAppointment(agenda, currentUser?.id ?? null);
 
   // The esthetician's own finished clients (everyone's, in the preview).
   const doneToday = agenda.filter(isDone);

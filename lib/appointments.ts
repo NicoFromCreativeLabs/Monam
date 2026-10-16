@@ -144,3 +144,26 @@ export async function getPendingCheckouts(locationId: string): Promise<PendingCh
       finishedAt: formatTime(a.treatmentRecord!.completedAt),
     }));
 }
+
+// Done = the treatment is recorded. Recording one marks the appointment
+// COMPLETED, but one that has a treatment record counts as done either way.
+export function isAppointmentDone(a: TodayAppointmentView): boolean {
+  return a.statusRaw === "COMPLETED" || a.treatmentFinished;
+}
+
+const ARRIVED_STATUSES = ["REGISTERED", "IN_PROGRESS"];
+
+// The client the esthetician should treat now. The logged-in esthetician's
+// own appointments come first (everyone's, for an Owner or manager previewing
+// the panel), and among those someone already checked in goes before someone
+// who is only confirmed. Used by both "Siguiente cliente" and the treatment
+// record, so the two always show the same person.
+export function pickNextAppointment(
+  agenda: TodayAppointmentView[],
+  userId: string | null,
+): TodayAppointmentView | null {
+  const undone = agenda.filter((a) => !isAppointmentDone(a));
+  const own = userId ? undone.filter((a) => a.estheticianId === userId) : [];
+  const pool = own.length > 0 ? own : undone;
+  return pool.find((a) => ARRIVED_STATUSES.includes(a.statusRaw)) ?? pool[0] ?? null;
+}

@@ -227,7 +227,7 @@ function EstheticianToday({
             Abrir perfil del cliente
           </Link>
           <Link
-            href="/staff/treatment-record"
+            href={`/staff/treatment-record?appointment=${next.id}`}
             className="rounded-full border border-ciruela px-4 py-2 font-body text-xs text-ciruela"
           >
             Registrar tratamiento

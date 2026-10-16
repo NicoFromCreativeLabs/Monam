@@ -1,9 +1,14 @@
 import { prisma } from "@/lib/prisma";
 import { getCurrentAppUser } from "@/lib/auth/dal";
-import { getTodayAppointments } from "@/lib/appointments";
+import { getTodayAppointments, isAppointmentDone, pickNextAppointment } from "@/lib/appointments";
 import { StaffTreatmentRecordView, type TreatmentClient } from "@/components/panel/StaffTreatmentRecordView";
 
-export default async function StaffTreatmentRecord() {
+export default async function StaffTreatmentRecord({
+  searchParams,
+}: {
+  searchParams: Promise<{ appointment?: string }>;
+}) {
+  const { appointment: requestedId } = await searchParams;
   const romaNorte = await prisma.location.findFirst({ where: { name: "Roma Norte" } });
   const agenda = romaNorte ? await getTodayAppointments(romaNorte.id) : [];
   const currentUser = await getCurrentAppUser();
@@ -13,9 +18,10 @@ export default async function StaffTreatmentRecord() {
   // left to do here): the real logged-in esthetician's own next
   // appointment, falling back to the location's earliest for the
   // role-toggle preview.
-  const undone = agenda.filter((a) => a.statusRaw !== "COMPLETED");
-  const ownAppointments = currentUser ? undone.filter((a) => a.estheticianId === currentUser.id) : [];
-  const next = ownAppointments[0] ?? undone[0] ?? null;
+  // The one chosen from "Siguiente cliente" (?appointment=...) if it is still
+  // pending; otherwise the same pick "Siguiente cliente" makes.
+  const requested = requestedId ? agenda.find((a) => a.id === requestedId && !isAppointmentDone(a)) : null;
+  const next = requested ?? pickNextAppointment(agenda, currentUser?.id ?? null);
 
   let client: TreatmentClient | null = null;
 
@@ -35,5 +41,15 @@ export default async function StaffTreatmentRecord() {
     };
   }
 
-  return <StaffTreatmentRecordView client={client} />;
+  // Real backbar stock at this location (the products an esthetician can log).
+  const backbarItems = romaNorte
+    ? await prisma.inventoryItem.findMany({
+        where: { locationId: romaNorte.id, product: { ledger: "BACKBAR", isActive: true } },
+        include: { product: true },
+        orderBy: { product: { name: "asc" } },
+      })
+    : [];
+  const backbarProducts = backbarItems.map((i) => ({ sku: i.product.sku, name: i.product.name }));
+
+  return <StaffTreatmentRecordView client={client} backbarProducts={backbarProducts} />;
 }

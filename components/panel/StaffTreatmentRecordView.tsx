@@ -3,11 +3,9 @@
 import { useState, useTransition } from "react";
 import { TopBar } from "@/components/panel/TopBar";
 import { Card } from "@/components/panel/Card";
-import { staffIdentity, useStaffRole } from "@/components/panel/StaffRoleContext";
 import { useProtocols } from "@/components/panel/ProtocolsContext";
 import { useAddOns } from "@/components/panel/AddOnsContext";
 import { completeTreatmentAction } from "@/lib/actions/treatment";
-import { BACKBAR_INVENTORY } from "@/lib/mock-data";
 
 type UsedProduct = { sku: string; amountMl: string };
 
@@ -27,15 +25,18 @@ const REVISIT_OPTIONS = ["2 semanas", "4 semanas", "6 semanas"];
 // tratamiento" writes a real TreatmentRecord (Treatment phase) — the
 // esthetician→front-desk hand-off is now getPendingCheckouts() reading the
 // newly COMPLETED appointment, not an in-memory queue.
-export function StaffTreatmentRecordView({ client }: { client: TreatmentClient | null }) {
-  const { role } = useStaffRole();
-  const identity = staffIdentity(role);
+export function StaffTreatmentRecordView({
+  client,
+  backbarProducts,
+}: {
+  client: TreatmentClient | null;
+  backbarProducts: { sku: string; name: string }[];
+}) {
   const { protocols } = useProtocols();
   const addOns = useAddOns();
   const [isPending, startTransition] = useTransition();
   const tierProtocols = client ? protocols.filter((p) => p.tier === client.tier) : [];
   const [protocol, setProtocol] = useState(tierProtocols[0]?.name ?? "");
-  const backbarAtLocation = BACKBAR_INVENTORY.filter((b) => b.location === identity.location);
   const [usedProducts, setUsedProducts] = useState<UsedProduct[]>([{ sku: "", amountMl: "" }]);
   const [selectedAddOns, setSelectedAddOns] = useState<string[]>(client?.bookedAddOnIds ?? []);
   const [clinicalNotes, setClinicalNotes] = useState("");
@@ -195,9 +196,9 @@ export function StaffTreatmentRecordView({ client }: { client: TreatmentClient |
                       className="flex-1 rounded-lg border border-ciruela/20 bg-hueso px-3 py-2 font-body text-sm text-ciruela focus:outline-none focus:ring-1 focus:ring-ciruela/40"
                     >
                       <option value="">Selecciona un producto</option>
-                      {backbarAtLocation.map((b) => (
+                      {backbarProducts.map((b) => (
                         <option key={b.sku} value={b.sku}>
-                          {b.product}
+                          {b.name}
                         </option>
                       ))}
                     </select>
