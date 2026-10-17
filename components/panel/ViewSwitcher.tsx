@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
+import { useStaffPreviewRole } from "./StaffRoleContext";
 import { getSwitchableRole } from "@/lib/actions/auth";
 
 const VIEWS = [
@@ -17,7 +18,7 @@ const VIEWS = [
 export function ViewSwitcher() {
   const [role, setRole] = useState<"OWNER" | "CLINIC_MANAGER" | null>(null);
   const pathname = usePathname();
-  const searchParams = useSearchParams();
+  const previewRole = useStaffPreviewRole();
   const router = useRouter();
 
   useEffect(() => {
@@ -26,9 +27,9 @@ export function ViewSwitcher() {
 
   if (!role) return null;
 
-  // /staff hosts two views (Vendedor and Esteticista), told apart by ?role= —
+  // /staff hosts two views (Vendedor and Esteticista), told apart by the remembered preview role —
   // matching on the path alone always picked the first one.
-  const staffView = searchParams.get("role") === "esthetician" ? "Esteticista" : "Vendedor";
+  const staffView = previewRole === "esthetician" ? "Esteticista" : "Vendedor";
   const current = pathname.startsWith("/staff")
     ? staffView
     : (VIEWS.find((v) => pathname.startsWith(v.match))?.label ?? "Admin");
