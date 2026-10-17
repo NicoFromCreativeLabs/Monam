@@ -32,12 +32,16 @@ export function StaffTodayView({
   agenda,
   nextClient,
   completed,
+  upcoming,
   pendingCheckouts,
+  shiftLabel,
 }: {
   agenda: TodayAppointmentView[];
   nextClient: EstheticianNextClient;
   completed: TodayAppointmentView[];
+  upcoming: TodayAppointmentView[];
   pendingCheckouts: PendingCheckoutView[];
+  shiftLabel: string | null;
 }) {
   const { role } = useStaffRole();
 
@@ -48,7 +52,7 @@ export function StaffTodayView({
         {role === "Front Desk" ? (
           <FrontDeskToday agenda={agenda} pending={pendingCheckouts} />
         ) : (
-          <EstheticianToday nextClient={nextClient} completed={completed} />
+          <EstheticianToday nextClient={nextClient} completed={completed} upcoming={upcoming} shiftLabel={shiftLabel} />
         )}
       </div>
     </>
@@ -160,18 +164,67 @@ function FrontDeskToday({
   );
 }
 
+function ShiftBanner({ label }: { label: string | null }) {
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-2 rounded-[18px] bg-ciruela/5 px-5 py-3">
+      <p className="font-body text-sm text-ciruela">
+        {label ? (
+          <>
+            En turno · <strong>{label}</strong>
+          </>
+        ) : (
+          "Sin entrada registrada"
+        )}
+      </p>
+      <Link href="/staff/shift" className="rounded-full border border-ciruela px-3 py-1.5 font-body text-xs text-ciruela">
+        {label ? "Registrar salida" : "Registrar entrada"}
+      </Link>
+    </div>
+  );
+}
+
+function UpcomingToday({ upcoming }: { upcoming: TodayAppointmentView[] }) {
+  if (upcoming.length === 0) return null;
+  return (
+    <Card title={`Después en tu cabina (${upcoming.length})`}>
+      <ul className="divide-y divide-ciruela/8">
+        {upcoming.map((apt) => (
+          <li key={apt.id} className="flex items-center justify-between py-3">
+            <div className="flex items-center gap-4">
+              <span className="w-14 font-body text-sm text-ciruela/60">{apt.time}</span>
+              <p className="font-body text-sm text-ciruela">
+                {apt.clientName} <span className="text-ciruela/50">· {apt.tier}</span>
+              </p>
+            </div>
+            <span
+              className={`rounded-full px-3 py-1 font-body text-xs ${STATUS_STYLE[apt.status] ?? "bg-ciruela/8 text-ciruela/70"}`}
+            >
+              {apt.status}
+            </span>
+          </li>
+        ))}
+      </ul>
+    </Card>
+  );
+}
+
 function EstheticianToday({
   nextClient,
   completed,
+  upcoming,
+  shiftLabel,
 }: {
   nextClient: EstheticianNextClient;
   completed: TodayAppointmentView[];
+  upcoming: TodayAppointmentView[];
+  shiftLabel: string | null;
 }) {
   const { appointment: next } = nextClient;
 
   if (!next) {
     return (
       <div className="mx-auto max-w-xl space-y-4">
+        <ShiftBanner label={shiftLabel} />
         <Card title="Siguiente cliente">
           <p className="py-4 text-center font-body text-sm text-ciruela/50">
             {completed.length > 0
@@ -186,6 +239,7 @@ function EstheticianToday({
 
   return (
     <div className="mx-auto max-w-xl space-y-4">
+      <ShiftBanner label={shiftLabel} />
       {/* Safety flags — unmissable, at the very top. Spec §7.2. */}
       {nextClient.allergies.length > 0 && (
         <div className="rounded-[18px] border-2 border-crepe bg-crepe/15 px-6 py-4">
@@ -234,6 +288,7 @@ function EstheticianToday({
           </Link>
         </div>
       </Card>
+      <UpcomingToday upcoming={upcoming} />
       <CompletedToday completed={completed} />
     </div>
   );

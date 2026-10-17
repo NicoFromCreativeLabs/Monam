@@ -55,6 +55,7 @@ model Location {
   cashSessions     CashRegisterSession[]
   pnlOverrides     PnlOverride[]
   pnlMonthCloses   PnlMonthClose[]
+  shifts           StaffShift[]
 
   @@map("locations")
 }
@@ -117,6 +118,7 @@ model AppUser {
   approvalRequestsMade      ApprovalRequest[]         @relation("ApprovalRequested")
   approvalRequestsDecided   ApprovalRequest[]         @relation("ApprovalDecided")
   saleLineItemsPerformed    SaleLineItem[]            @relation("SaleLineItemPerformedBy")
+  shifts                    StaffShift[]
 
   @@map("app_users")
 }
@@ -260,8 +262,34 @@ model Room {
 
   location     Location      @relation(fields: [locationId], references: [id])
   appointments Appointment[]
+  shifts       StaffShift[]
 
   @@map("rooms")
+}
+
+// An esthetician's working day: she checks in choosing the location and the
+// cabina she will work in (which decides the clients she sees), and checks out
+// at the end signing that she left the station clean. Only one open shift per
+// person (partial unique index in the migration); a shift left open past its
+// day is closed as `autoClosed` the next time the person checks in.
+model StaffShift {
+  id           String    @id @default(uuid())
+  userId       String
+  locationId   String
+  roomId       String
+  checkInAt    DateTime  @default(now())
+  checkOutAt   DateTime?
+  cleanSignoff Boolean   @default(false)
+  checkOutNote String?
+  autoClosed   Boolean   @default(false)
+
+  user     AppUser  @relation(fields: [userId], references: [id])
+  location Location @relation(fields: [locationId], references: [id])
+  room     Room     @relation(fields: [roomId], references: [id])
+
+  @@index([userId, checkInAt])
+  @@index([roomId, checkOutAt])
+  @@map("staff_shifts")
 }
 
 model Device {

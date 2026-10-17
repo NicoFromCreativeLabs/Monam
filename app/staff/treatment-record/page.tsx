@@ -1,6 +1,8 @@
+import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { getCurrentAppUser } from "@/lib/auth/dal";
 import { getTodayAppointments, isAppointmentDone, pickNextAppointment } from "@/lib/appointments";
+import { getActiveShift } from "@/lib/shifts";
 import { StaffTreatmentRecordView, type TreatmentClient } from "@/components/panel/StaffTreatmentRecordView";
 
 export default async function StaffTreatmentRecord({
@@ -10,8 +12,14 @@ export default async function StaffTreatmentRecord({
 }) {
   const { appointment: requestedId } = await searchParams;
   const romaNorte = await prisma.location.findFirst({ where: { name: "Roma Norte" } });
-  const agenda = romaNorte ? await getTodayAppointments(romaNorte.id) : [];
+  const allAgenda = romaNorte ? await getTodayAppointments(romaNorte.id) : [];
   const currentUser = await getCurrentAppUser();
+
+  // An esthetician records treatments for the clients of the cabina she
+  // checked into; without a check-in she is sent to register her entrance.
+  const shift = currentUser && currentUser.role !== "FRONT_DESK" ? await getActiveShift(currentUser.id) : null;
+  if (currentUser?.role === "ESTHETICIAN" && !shift) redirect("/staff/shift");
+  const agenda = shift ? allAgenda.filter((a) => a.roomId === shift.roomId) : allAgenda;
 
   // Same "which appointment is up next" scoping as app/staff/page.tsx,
   // excluding appointments already completed (already recorded, nothing
@@ -21,7 +29,7 @@ export default async function StaffTreatmentRecord({
   // The one chosen from "Siguiente cliente" (?appointment=...) if it is still
   // pending; otherwise the same pick "Siguiente cliente" makes.
   const requested = requestedId ? agenda.find((a) => a.id === requestedId && !isAppointmentDone(a)) : null;
-  const next = requested ?? pickNextAppointment(agenda, currentUser?.id ?? null);
+  const next = requested ?? pickNextAppointment(agenda, shift ? null : (currentUser?.id ?? null));
 
   let client: TreatmentClient | null = null;
 

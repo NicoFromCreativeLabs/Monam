@@ -1,6 +1,8 @@
+import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { getCurrentAppUser } from "@/lib/auth/dal";
 import { getTodayAppointments, getPendingCheckouts, isAppointmentDone, pickNextAppointment } from "@/lib/appointments";
+import { getActiveShift } from "@/lib/shifts";
 import { StaffTodayView, type EstheticianNextClient } from "@/components/panel/StaffTodayView";
 
 export default async function StaffToday() {
@@ -8,6 +10,22 @@ export default async function StaffToday() {
   const agenda = romaNorte ? await getTodayAppointments(romaNorte.id) : [];
   const pendingCheckouts = romaNorte ? await getPendingCheckouts(romaNorte.id) : [];
   const currentUser = await getCurrentAppUser();
+
+  // An esthetician works from the cabina she checked into: no check-in, no
+  // clients — she is sent to register her entrance first. An Owner/manager
+  // previewing the panel is not forced to, but sees the same room-scoped view
+  // once they have checked in.
+  const shift = currentUser && currentUser.role !== "FRONT_DESK" ? await getActiveShift(currentUser.id) : null;
+  if (currentUser?.role === "ESTHETICIAN" && !shift) redirect("/staff/shift");
+
+  // The esthetician's own picture of the day: everything in her cabina when she
+  // is checked in (whoever the appointment was booked under), otherwise the
+  // whole location's agenda (the role-toggle preview).
+  const shiftAgenda = shift
+    ? (shift.locationId === romaNorte?.id ? agenda : await getTodayAppointments(shift.locationId)).filter(
+        (a) => a.roomId === shift.roomId,
+      )
+    : agenda;
 
   // Scoped to the real logged-in AppUser's own appointments when they
   // actually are the assigned esthetician, excluding ones already treated;
@@ -18,12 +36,15 @@ export default async function StaffToday() {
   // COMPLETED, but an appointment that has a treatment record counts as done
   // either way, so a finished client never stays as "next".
   const isDone = isAppointmentDone;
-  const next = pickNextAppointment(agenda, currentUser?.id ?? null);
+  const next = pickNextAppointment(shiftAgenda, shift ? null : (currentUser?.id ?? null));
 
   // The esthetician's own finished clients (everyone's, in the preview).
-  const doneToday = agenda.filter(isDone);
-  const ownDone = currentUser ? doneToday.filter((a) => a.estheticianId === currentUser.id) : [];
+  const doneToday = shiftAgenda.filter(isDone);
+  const ownDone = !shift && currentUser ? doneToday.filter((a) => a.estheticianId === currentUser.id) : [];
   const completed = ownDone.length > 0 ? ownDone : doneToday;
+
+  // The rest of the cabina's day after the one up next.
+  const upcoming = shift ? shiftAgenda.filter((a) => !isDone(a) && a.id !== next?.id) : [];
 
   let nextClient: EstheticianNextClient = {
     listingId: null,
@@ -66,7 +87,9 @@ export default async function StaffToday() {
       agenda={agenda}
       nextClient={nextClient}
       completed={completed}
+      upcoming={upcoming}
       pendingCheckouts={pendingCheckouts}
+      shiftLabel={shift ? `${shift.roomName} · ${shift.locationName}` : null}
     />
   );
 }

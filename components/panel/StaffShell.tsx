@@ -32,7 +32,10 @@ const FRONT_DESK_ITEMS: NavSection[] = [
 
 const ESTHETICIAN_ITEMS: NavSection[] = [
   {
-    items: [{ href: "/staff", label: "Hoy" }],
+    items: [
+      { href: "/staff", label: "Hoy" },
+      { href: "/staff/shift", label: "Mi turno" },
+    ],
   },
   {
     heading: "Clientes",
