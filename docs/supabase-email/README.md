@@ -11,15 +11,16 @@ más simple: su plan gratis alcanza de sobra para un estudio (revisa los límite
 vigentes en su página de precios).
 
 1. Crea la cuenta en resend.com con un correo del negocio.
-2. **Domains → Add Domain** → `monam.mx` (si prefieres separar el correo de cuentas del
-   resto, usa un subdominio como `mail.monam.mx`).
+2. **Domains → Add Domain** → `mail.monam.mx` (subdominio, para separar la reputación del
+   correo de cuentas del de `monam.mx`). Ya está creado y **verificado** (región us-east-1).
 3. Resend muestra unos registros DNS (SPF, DKIM y uno de retorno). Agrégalos donde
    esté el DNS de `monam.mx` (el registrador o Netlify DNS) y pulsa **Verify**. Puede
    tardar de minutos a unas horas.
-4. Recomendado, en el mismo DNS, un registro DMARC (TXT en `_dmarc.monam.mx`):
-   `v=DMARC1; p=none; rua=mailto:hola@monam.mx`
-5. **API Keys → Create API Key** (permiso "Sending access"). Cópiala: solo se muestra
-   una vez. Es la contraseña del SMTP.
+4. DMARC: `monam.mx` ya tiene uno (GoDaddy), que cubre el subdominio. No hay que agregar otro.
+   Los MX de Google Workspace están en `@` y no chocan con el MX de `send.mail`.
+5. **API Keys → Create API Key** con permiso **Sending access** y dominio `mail.monam.mx`.
+   Cópiala: solo se muestra una vez. Es la contraseña del SMTP. No uses una llave de acceso
+   completo para esto, y bórrala de Resend cuando termines la configuración.
 
 ## 2. Poner el SMTP en Supabase
 
@@ -28,7 +29,7 @@ anteriores: Project Settings → Auth) → activa **Enable custom SMTP**:
 
 | Campo | Valor |
 |---|---|
-| Sender email | `no-reply@monam.mx` (debe ser del dominio verificado) |
+| Sender email | `no-reply@mail.monam.mx` (debe ser del dominio verificado en Resend) |
 | Sender name | `MONÂM Skin Studio` |
 | Host | `smtp.resend.com` |
 | Port | `465` |
