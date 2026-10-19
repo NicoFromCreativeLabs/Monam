@@ -463,6 +463,11 @@ export default function ClientBook() {
               </span>
             </label>
           )}
+          {!packageForTier && packages.length > 0 && (
+            <p className="mb-4 rounded-lg bg-ciruela/5 px-3 py-2 font-body text-xs text-ciruela/70">
+              Tu paquete {packages[0].name} solo se puede usar en citas {packages[0].tier}.
+            </p>
+          )}
           <p className="mb-3 font-body text-xs text-ciruela/50">
             {selectedDay.dayName} · {selectedDay.hours.open}–{selectedDay.hours.close} · te
             asignaremos una esteticista disponible

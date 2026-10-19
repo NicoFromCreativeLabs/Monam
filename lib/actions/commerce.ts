@@ -13,6 +13,7 @@ import {
   refundPayment,
 } from "@/lib/payments/stripe";
 import type { Role } from "@/lib/generated/prisma/client";
+import { earnsCommission } from "@/lib/commission-policy";
 
 const FRONT_DESK_ROLES: Role[] = ["FRONT_DESK", "OWNER", "CLINIC_MANAGER"];
 const MANAGER_ROLES: Role[] = ["OWNER", "CLINIC_MANAGER"];
@@ -209,6 +210,8 @@ export async function createSaleAction(input: CreateSaleInput): Promise<CreateSa
 
   const commissionRules = await prisma.commissionRule.findMany({ where: { isActive: true } });
   function findRule(basis: "SERVICE" | "ADD_ON" | "RETAIL" | "PACKAGE", role: Role) {
+    // The esthetician earns commission only on the retail she recommended.
+    if (!earnsCommission(basis, role)) return undefined;
     return (
       commissionRules.find((r) => r.basis === basis && r.role === role) ??
       commissionRules.find((r) => r.basis === basis && r.role === null)
