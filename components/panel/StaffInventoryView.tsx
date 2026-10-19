@@ -8,6 +8,7 @@ import { staffIdentity, useStaffRole } from "@/components/panel/StaffRoleContext
 import { useCurrentAppUser } from "@/components/panel/CurrentAppUserContext";
 import { adjustInventoryAction, importInventoryCsvAction, removeInventoryItemAction } from "@/lib/actions/commerce";
 import { downloadInventoryXlsx, readInventoryFile } from "@/lib/inventory-file";
+import { inventoryExportRow, type InventoryExportRow } from "@/lib/inventory-columns";
 
 export interface InventoryRow {
   id: string;
@@ -19,24 +20,35 @@ export interface InventoryRow {
   expiresOn?: string;
   opensOn?: string;
   pao?: string;
+  // Needed for the spreadsheet (stock and waste control).
+  price?: number;
+  cost?: number; // only sent to Admin / Clinic Manager
+  contentMl?: number;
+  scope?: "COMMUNAL" | "INDIVIDUAL";
+  paoDays?: number;
+  openCount?: number;
+  openMl?: number;
 }
 
 export function StaffInventoryView({
   retail,
   backbar,
   warehouse,
+  includeCost,
 }: {
   retail: InventoryRow[];
   backbar: InventoryRow[];
   warehouse: InventoryRow[];
+  includeCost: boolean;
 }) {
   const { role } = useStaffRole();
   const identity = staffIdentity(role);
 
+  const opts = { includeCost };
   const exportRows = [
-    ...retail.map((i) => toExportRow(i, "Piso")),
-    ...backbar.map((i) => toExportRow(i, "Backbar")),
-    ...warehouse.map((i) => toExportRow(i, "Warehouse")),
+    ...retail.map((i) => inventoryExportRow(i, "Piso", opts)),
+    ...backbar.map((i) => inventoryExportRow(i, "Backbar", opts)),
+    ...warehouse.map((i) => inventoryExportRow(i, "Warehouse", opts)),
   ].filter((r) => r.Ubicacion === identity.location);
 
   return (
@@ -62,22 +74,10 @@ export function StaffInventoryView({
   );
 }
 
-function toExportRow(i: InventoryRow, ledger: string) {
-  return {
-    SKU: i.sku,
-    Producto: i.product,
-    Ledger: ledger,
-    Ubicacion: i.location,
-    Cantidad: i.qty,
-    Par: i.par,
-    Vence: i.expiresOn,
-  };
-}
-
 // Update the stock from a spreadsheet: download the current inventory as Excel,
 // change the quantities (or add rows), and upload it back. The quantity in the
 // file replaces the current one — it is a recount, not an addition.
-function ExcelCard({ location, rows }: { location: string; rows: Record<string, string | number | undefined>[] }) {
+function ExcelCard({ location, rows }: { location: string; rows: InventoryExportRow[] }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);

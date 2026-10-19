@@ -37,6 +37,17 @@ function toNumber(text: string | undefined): number | undefined {
   return Number.isFinite(n) ? n : undefined;
 }
 
+// "2027-03-01" or "01/03/2027" (day first, as written in Mexico) → "2027-03-01".
+// Anything else (a dash, text) is ignored rather than stored.
+function toIsoDate(text: string | undefined): string | undefined {
+  if (!text) return undefined;
+  const iso = text.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (iso) return `${iso[1]}-${iso[2]}-${iso[3]}`;
+  const dmy = text.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (dmy) return `${dmy[3]}-${dmy[2].padStart(2, "0")}-${dmy[1].padStart(2, "0")}`;
+  return undefined;
+}
+
 export type ParsedInventoryRows = { rows: ImportInventoryRow[] } | { error: string };
 
 const EXPECTED = "Columnas esperadas: SKU, Producto, Ledger (Piso/Backbar/Warehouse), Ubicacion, Cantidad, Par.";
@@ -69,7 +80,7 @@ export function parseInventoryRecords(records: Record<string, string>[]): Parsed
       contentMl: toNumber(r.contentMl),
       scope,
       paoDays: toNumber(r.paoDays),
-      expiresOn: r.expiresOn || undefined,
+      expiresOn: toIsoDate(r.expiresOn),
     });
   }
   return { rows };

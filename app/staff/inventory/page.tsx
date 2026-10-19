@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { getCurrentAppUser } from "@/lib/auth/dal";
 import { StaffInventoryView, type InventoryRow } from "@/components/panel/StaffInventoryView";
 
 function formatDate(d: Date | null) {
@@ -22,6 +23,17 @@ export default async function StaffInventory() {
     orderBy: { product: { name: "asc" } },
   });
 
+  // Costs are for Admin / Clinic Manager only — never sent to other roles.
+  const user = await getCurrentAppUser();
+  const canSeeCost = user?.role === "OWNER" || user?.role === "CLINIC_MANAGER";
+
+  const openAgg = await prisma.openContainer.groupBy({
+    by: ["inventoryItemId"],
+    where: { status: "OPEN" },
+    _count: true,
+    _sum: { remainingMl: true },
+  });
+
   const toRow = (i: (typeof items)[number]): InventoryRow => ({
     id: i.id,
     sku: i.product.sku,
@@ -32,11 +44,18 @@ export default async function StaffInventory() {
     expiresOn: i.expiresOn ? formatDate(i.expiresOn) : undefined,
     opensOn: i.openedOn ? formatDate(i.openedOn) : undefined,
     pao: i.paoDays ? paoLabel(i.paoDays) : undefined,
+    price: i.priceMxn ?? undefined,
+    cost: canSeeCost ? (i.costMxn ?? undefined) : undefined,
+    contentMl: i.contentMl ?? undefined,
+    scope: i.scope,
+    paoDays: i.paoDays ?? undefined,
+    openCount: openAgg.find((o) => o.inventoryItemId === i.id)?._count ?? 0,
+    openMl: openAgg.find((o) => o.inventoryItemId === i.id)?._sum.remainingMl ?? 0,
   });
 
   const retail = items.filter((i) => i.product.ledger === "RETAIL").map(toRow);
   const backbar = items.filter((i) => i.product.ledger === "BACKBAR").map(toRow);
   const warehouse = items.filter((i) => i.product.ledger === "WAREHOUSE").map(toRow);
 
-  return <StaffInventoryView retail={retail} backbar={backbar} warehouse={warehouse} />;
+  return <StaffInventoryView retail={retail} backbar={backbar} warehouse={warehouse} includeCost={canSeeCost} />;
 }

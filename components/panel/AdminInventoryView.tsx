@@ -6,8 +6,9 @@ import { useRouter } from "next/navigation";
 import { TopBar } from "@/components/panel/TopBar";
 import { Card, StatTile } from "@/components/panel/Card";
 import { Badge } from "@/components/panel/Badge";
-import { downloadCsv } from "@/lib/csv";
-import { readInventoryFile } from "@/lib/inventory-file";
+
+import { downloadInventoryXlsx, readInventoryFile } from "@/lib/inventory-file";
+import { inventoryExportRow } from "@/lib/inventory-columns";
 import { useLocations } from "@/components/panel/LocationsContext";
 import {
   receiveInventoryAction,
@@ -409,33 +410,23 @@ export function AdminInventoryView({
     });
   }
 
+  // One format for every download (and for the upload): all the stock and
+  // waste-control columns, so a file can be edited and uploaded back.
+  const rowsRetail = () => retail.map((i) => inventoryExportRow(i, "Piso"));
+  const rowsBackbar = () => backbar.map((i) => inventoryExportRow(i, "Backbar"));
+  const rowsWarehouse = () => warehouse.map((i) => inventoryExportRow(i, "Warehouse"));
+
   function exportTodos() {
-    downloadCsv("inventario-monam.csv", [
-      ...retail.map((i) => ({ SKU: i.sku, Producto: i.product, Ledger: "Piso", Ubicacion: i.location, Cantidad: i.qty, Par: i.par })),
-      ...backbar.map((i) => ({ SKU: i.sku, Producto: i.product, Ledger: "Backbar", Ubicacion: i.location, Cantidad: i.qty, Par: i.par })),
-      ...warehouse.map((i) => ({ SKU: i.sku, Producto: i.product, Ledger: "Warehouse", Ubicacion: i.location, Cantidad: i.qty, Par: i.par })),
-    ]);
+    downloadInventoryXlsx("inventario-monam.xlsx", [...rowsRetail(), ...rowsBackbar(), ...rowsWarehouse()]);
   }
-
   function exportRetail() {
-    downloadCsv(
-      "inventario-piso-monam.csv",
-      retail.map((i) => ({ SKU: i.sku, Producto: i.product, Ubicacion: i.location, Cantidad: i.qty, Par: i.par, Precio: i.price, Vence: i.expiresOn })),
-    );
+    downloadInventoryXlsx("inventario-piso-monam.xlsx", rowsRetail());
   }
-
   function exportBackbar() {
-    downloadCsv(
-      "inventario-backbar-monam.csv",
-      backbar.map((i) => ({ SKU: i.sku, Producto: i.product, Ubicacion: i.location, Cantidad: i.qty, Par: i.par, "ML por envase": i.contentMl, Alcance: i.scope === "COMMUNAL" ? "Comunal" : "Individual", "Duracion (dias)": i.paoDays, Costo: i.cost, Caducidad: i.expiresOn })),
-    );
+    downloadInventoryXlsx("inventario-backbar-monam.xlsx", rowsBackbar());
   }
-
   function exportWarehouse() {
-    downloadCsv(
-      "inventario-warehouse-monam.csv",
-      warehouse.map((i) => ({ SKU: i.sku, Producto: i.product, Ubicacion: i.location, Cantidad: i.qty, Par: i.par, Costo: i.cost, Vence: i.expiresOn })),
-    );
+    downloadInventoryXlsx("inventario-warehouse-monam.xlsx", rowsWarehouse());
   }
 
   const exportForTab = { todos: exportTodos, retail: exportRetail, backbar: exportBackbar, warehouse: exportWarehouse }[tab];
@@ -497,8 +488,10 @@ export function AdminInventoryView({
         {addMode === "upload" && (
           <Card title="Actualizar inventario — subir Excel/CSV">
             <p className="mb-3 font-body text-xs text-ciruela/50">
-              Usa el mismo formato que &ldquo;Descargar Excel&rdquo;: columnas SKU, Producto, Ledger
-              (Piso/Backbar/Warehouse), Ubicacion, Cantidad, Par. La cantidad y el par del
+              Usa el mismo formato que &ldquo;Descargar Excel&rdquo;: SKU, Producto, Ledger
+              (Piso/Backbar/Warehouse), Ubicacion, Cantidad, Par, y opcionales: Precio, Costo,
+              ML por envase, Alcance, Duracion (dias) y Caducidad. Las columnas &ldquo;Envases
+              abiertos&rdquo; y &ldquo;ML abiertos&rdquo; son solo informativas. La cantidad y el par del
               archivo reemplazan los valores actuales de cada SKU — es un recuento, no una suma.
             </p>
             <input
