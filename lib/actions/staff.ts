@@ -151,6 +151,61 @@ export async function toggleStaffStatusAction(userId: string) {
   revalidatePath("/admin/staff");
 }
 
+export type DeleteStaffResult = { error: string } | { ok: true };
+
+// Removes a person from the team for good. Only possible while they have no
+// history (appointments, treatments, sales, commissions, shifts…): those rows
+// point at them, and deleting the person would erase or break the records —
+// someone with history is deactivated instead. If the same login also belongs
+// to a client account, the login stays (they simply stop being staff);
+// otherwise the login is deleted too so it cannot be used any more.
+export async function deleteStaffAction(userId: string): Promise<DeleteStaffResult> {
+  const me = await requireStaffRole(["OWNER"]);
+  if (userId === me.id) return { error: "No puedes eliminar tu propia cuenta." };
+
+  const target = await prisma.appUser.findUnique({ where: { id: userId } });
+  if (!target) return { ok: true };
+
+  if (target.role === "OWNER" && target.status !== "INACTIVE") {
+    const otherOwners = await prisma.appUser.count({
+      where: { role: "OWNER", status: { not: "INACTIVE" }, id: { not: userId } },
+    });
+    if (otherOwners === 0) return { error: "Debe quedar al menos un Admin activo." };
+  }
+
+  try {
+    await prisma.$transaction([
+      prisma.clientPreference.updateMany({
+        where: { preferredEstheticianId: userId },
+        data: { preferredEstheticianId: null },
+      }),
+      prisma.staffLocationAssignment.deleteMany({ where: { userId } }),
+      prisma.appUser.delete({ where: { id: userId } }),
+    ]);
+  } catch (e) {
+    const code = (e as { code?: string }).code;
+    const message = e instanceof Error ? e.message.toLowerCase() : "";
+    if (code === "P2003" || message.includes("foreign key")) {
+      return {
+        error: "Esta persona ya tiene historial (citas, tratamientos, ventas o turnos). Desactívala para conservarlo.",
+      };
+    }
+    return { error: "No se pudo eliminar. Intenta de nuevo." };
+  }
+
+  const alsoClient = await prisma.client.findFirst({ where: { authUserId: userId }, select: { id: true } });
+  if (!alsoClient) {
+    await createAdminClient()
+      .auth.admin.deleteUser(userId)
+      .catch(() => {
+        // The team record is already gone; a leftover login cannot open the panel.
+      });
+  }
+
+  revalidatePath("/admin/staff");
+  return { ok: true };
+}
+
 export interface AccountSuggestion {
   name: string;
   email: string;

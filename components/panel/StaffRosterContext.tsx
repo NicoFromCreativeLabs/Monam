@@ -2,13 +2,14 @@
 
 import { createContext, useContext, useState, type ReactNode } from "react";
 import type { StaffMember } from "@/lib/mock-data";
-import { inviteStaffAction, updateStaffAction, toggleStaffStatusAction } from "@/lib/actions/staff";
+import { inviteStaffAction, updateStaffAction, toggleStaffStatusAction, deleteStaffAction } from "@/lib/actions/staff";
 
 const StaffRosterContext = createContext<{
   roster: StaffMember[];
   addStaff: (member: Omit<StaffMember, "id"> & { email: string }) => void;
   updateStaff: (id: string, patch: Partial<StaffMember>) => void;
   toggleStatus: (id: string) => void;
+  removeStaff: (id: string) => Promise<{ error: string } | { ok: true }>;
 } | null>(null);
 
 // App-wide so Admin Analytics → P&L can sum active salaries into the
@@ -76,8 +77,20 @@ export function StaffRosterProvider({
     toggleStaffStatusAction(id).catch((err) => console.error("Failed to persist status toggle:", err));
   }
 
+  // Unlike the edits above this waits for the server: it can refuse (the person
+  // has history, or it is the last Admin), and then they must stay on the list.
+  async function removeStaff(id: string) {
+    try {
+      const result = await deleteStaffAction(id);
+      if ("ok" in result) setRoster((prev) => prev.filter((s) => s.id !== id));
+      return result;
+    } catch {
+      return { error: "No se pudo eliminar. Intenta de nuevo." };
+    }
+  }
+
   return (
-    <StaffRosterContext.Provider value={{ roster, addStaff, updateStaff, toggleStatus }}>
+    <StaffRosterContext.Provider value={{ roster, addStaff, updateStaff, toggleStatus, removeStaff }}>
       {children}
     </StaffRosterContext.Provider>
   );

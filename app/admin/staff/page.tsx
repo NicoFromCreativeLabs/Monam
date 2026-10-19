@@ -21,7 +21,10 @@ const ROLE_OPTIONS = ["Admin", "Recepción", "Esteticista", "Gerente de clínica
 export default function AdminStaff() {
   const { locations } = useLocations();
   const LOCATION_OPTIONS = [...locations.map((l) => l.name), "Ambas"];
-  const { roster, addStaff, updateStaff, toggleStatus } = useStaffRoster();
+  const { roster, addStaff, updateStaff, toggleStatus, removeStaff } = useStaffRoster();
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   const [formOpen, setFormOpen] = useState(false);
   const [form, setForm] = useState<{
     name: string;
@@ -58,6 +61,15 @@ export default function AdminStaff() {
     setPickedExisting(false);
     setForm({ name: "", email: "", role: ROLE_OPTIONS[1], location: locations[0].name, salary: "" });
     setFormOpen(false);
+  }
+
+  async function confirmDelete(id: string) {
+    setDeleting(true);
+    setDeleteError(null);
+    const result = await removeStaff(id);
+    setDeleting(false);
+    if ("error" in result) setDeleteError(result.error);
+    else setConfirmDeleteId(null);
   }
 
   function startEdit(s: StaffMember) {
@@ -285,20 +297,60 @@ export default function AdminStaff() {
                           </Badge>
                         </td>
                         <td className="py-3 text-right">
-                          <div className="flex justify-end gap-3">
-                            <button
-                              onClick={() => startEdit(s)}
-                              className="font-body text-[11px] text-ciruela underline"
-                            >
-                              Editar
-                            </button>
-                            <button
-                              onClick={() => toggleStatus(s.id)}
-                              className="font-body text-[11px] text-ciruela underline"
-                            >
-                              {s.status === "Inactivo" ? "Reactivar" : "Desactivar"}
-                            </button>
-                          </div>
+                          {confirmDeleteId === s.id ? (
+                            <div className="flex flex-col items-end gap-1">
+                              <span className="font-body text-[11px] text-ciruela">
+                                ¿Eliminar a {s.name}? No se puede deshacer.
+                              </span>
+                              {deleteError && (
+                                <span className="max-w-[260px] whitespace-normal text-right font-body text-[11px] text-[#b3392f]">
+                                  {deleteError}
+                                </span>
+                              )}
+                              <div className="flex gap-3">
+                                <button
+                                  onClick={() => confirmDelete(s.id)}
+                                  disabled={deleting}
+                                  className="font-body text-[11px] text-[#b3392f] underline disabled:opacity-50"
+                                >
+                                  {deleting ? "Eliminando…" : "Sí, eliminar"}
+                                </button>
+                                <button
+                                  onClick={() => {
+                                    setConfirmDeleteId(null);
+                                    setDeleteError(null);
+                                  }}
+                                  className="font-body text-[11px] text-ciruela underline"
+                                >
+                                  Cancelar
+                                </button>
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="flex justify-end gap-3">
+                              <button
+                                onClick={() => startEdit(s)}
+                                className="font-body text-[11px] text-ciruela underline"
+                              >
+                                Editar
+                              </button>
+                              <button
+                                onClick={() => toggleStatus(s.id)}
+                                className="font-body text-[11px] text-ciruela underline"
+                              >
+                                {s.status === "Inactivo" ? "Reactivar" : "Desactivar"}
+                              </button>
+                              <button
+                                onClick={() => {
+                                  setDeleteError(null);
+                                  setConfirmDeleteId(s.id);
+                                }}
+                                className="font-body text-[11px] text-[#b3392f] underline"
+                              >
+                                Eliminar
+                              </button>
+                            </div>
+                          )}
                         </td>
                       </>
                     )}
