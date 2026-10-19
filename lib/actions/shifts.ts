@@ -25,6 +25,19 @@ const FRONT_DESK_SHIFT_ROLES = ["FRONT_DESK", "OWNER", "CLINIC_MANAGER"] as cons
 
 export type ShiftResult = { error: string } | { ok: true };
 
+// Someone has one open shift at a time. Say which one is in the way, since it
+// may be the other kind (an Admin who tried the esthetician's check-in and is
+// now trying the front desk's).
+function ownShiftMessage(shift: {
+  kind: "ESTHETICIAN" | "FRONT_DESK";
+  room: { name: string } | null;
+  location: { name: string };
+}): string {
+  return shift.kind === "ESTHETICIAN"
+    ? `Ya tienes un turno abierto como esteticista (${shift.room?.name ?? shift.location.name}). Registra primero esa salida, en la vista Esteticista → Mi turno.`
+    : `Ya tienes un turno abierto como vendedor en ${shift.location.name}. Registra primero esa salida, en la vista Vendedor → Mi turno.`;
+}
+
 export async function checkInAction(input: { locationId: string; roomId: string }): Promise<ShiftResult> {
   const user = await requireStaffRole([...SHIFT_ROLES]);
 
@@ -34,7 +47,7 @@ export async function checkInAction(input: { locationId: string; roomId: string 
 
   const open = await prisma.staffShift.findMany({
     where: { checkOutAt: null, autoClosed: false, OR: [{ userId: user.id }, { roomId: room.id }] },
-    include: { user: { select: { name: true } } },
+    include: { user: { select: { name: true } }, room: true, location: true },
   });
   const now = new Date();
 
@@ -48,7 +61,8 @@ export async function checkInAction(input: { locationId: string; roomId: string 
     });
   }
   const live = open.filter((s) => !isShiftStale(s.checkInAt, now));
-  if (live.some((s) => s.userId === user.id)) return { error: "Ya registraste tu entrada hoy." };
+  const mine = live.find((s) => s.userId === user.id);
+  if (mine) return { error: ownShiftMessage(mine) };
   const taken = live.find((s) => s.roomId === room.id);
   if (taken) return { error: `${room.name} ya está ocupada por ${taken.user.name}. Elige otra cabina.` };
 
@@ -109,12 +123,14 @@ export async function frontDeskCheckInAction(input: {
   const now = new Date();
   const myOpen = await prisma.staffShift.findMany({
     where: { userId: user.id, checkOutAt: null, autoClosed: false },
+    include: { room: true, location: true },
   });
   const stale = myOpen.filter((s) => isShiftStale(s.checkInAt, now));
   if (stale.length > 0) {
     await prisma.staffShift.updateMany({ where: { id: { in: stale.map((s) => s.id) } }, data: { autoClosed: true } });
   }
-  if (myOpen.some((s) => !isShiftStale(s.checkInAt, now))) return { error: "Ya registraste tu entrada hoy." };
+  const mineNow = myOpen.find((s) => !isShiftStale(s.checkInAt, now));
+  if (mineNow) return { error: ownShiftMessage(mineNow) };
 
   // The cash register: one open per sede. One left open from an earlier day is
   // closed without a count (it was forgotten); one from today is shared.
