@@ -12,7 +12,9 @@ import {
   createAppointmentAction,
   createClientDepositCheckoutAction,
   getAvailableSlotsAction,
+  getMyUsablePackagesAction,
 } from "@/lib/actions/booking";
+import type { UsablePackage } from "@/lib/package-use";
 import { BUSINESS_HOURS, type DayHours } from "@/lib/mock-data";
 
 // Booking flow: location → duration → (facial) → (add-ons) → day/slot →
@@ -99,7 +101,18 @@ export default function ClientBook() {
   // tier this page thought was free (rules changed since the page loaded),
   // that tier is remembered here and the client goes on to the deposit step.
   const [depositForcedTier, setDepositForcedTier] = useState<string | null>(null);
-  const requiresDeposit = duration
+  // Packages the client can book with. A package session of the chosen type
+  // takes the place of the deposit (she already paid for it).
+  const [packages, setPackages] = useState<UsablePackage[]>([]);
+  const [usePackageChoice, setUsePackageChoice] = useState(true);
+  useEffect(() => {
+    getMyUsablePackagesAction()
+      .then(setPackages)
+      .catch(() => setPackages([]));
+  }, []);
+  const packageForTier = duration ? (packages.find((p) => p.tier === duration) ?? null) : null;
+  const usingPackage = !!packageForTier && usePackageChoice;
+  const requiresDeposit = duration && !usingPackage
     ? depositForcedTier === duration ||
       depositRequiredForTier(duration, {
         signature: rules.depositRequiredSignature,
@@ -221,6 +234,7 @@ export default function ClientBook() {
       durationTier: duration!,
       protocolName: duration === "Signature" ? protocol : null,
       addOnIds: selectedAddOns,
+      usePackage: usingPackage,
     });
     setConfirming(false);
     if ("error" in result) {
@@ -432,6 +446,23 @@ export default function ClientBook() {
               <div className="pointer-events-none absolute inset-y-0 right-0 w-8 bg-gradient-to-l from-hueso to-transparent" />
             )}
           </div>
+          {packageForTier && (
+            <label className="mb-4 flex cursor-pointer items-start gap-2 rounded-lg border border-ciruela/15 bg-ciruela/5 p-3 font-body text-sm text-ciruela">
+              <input
+                type="checkbox"
+                checked={usePackageChoice}
+                onChange={(e) => setUsePackageChoice(e.target.checked)}
+                className="mt-0.5 h-4 w-4 accent-[#4a1f3d]"
+              />
+              <span>
+                Usar una sesión de mi paquete <strong>{packageForTier.name}</strong>
+                <span className="block text-xs text-ciruela/60">
+                  Te quedan {packageForTier.sessionsRemaining}{" "}
+                  {packageForTier.sessionsRemaining === 1 ? "sesión" : "sesiones"} · sin depósito.
+                </span>
+              </span>
+            </label>
+          )}
           <p className="mb-3 font-body text-xs text-ciruela/50">
             {selectedDay.dayName} · {selectedDay.hours.open}–{selectedDay.hours.close} · te
             asignaremos una esteticista disponible

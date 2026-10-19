@@ -38,6 +38,7 @@ export default async function StaffCheckout({
         protocol: true,
         deposit: true,
         addOns: { include: { addOn: true } },
+        packageRedemption: { include: { packagePurchase: { include: { packageOption: true } } } },
         treatmentRecord: { include: { esthetician: true, retailTags: { include: { product: true } } } },
       },
     });
@@ -50,8 +51,10 @@ export default async function StaffCheckout({
         locationName: "Roma Norte",
         clientName: appointment.client.name,
         service: {
-          name: appointment.protocol?.name ?? "Facial",
-          price: appointment.protocol?.priceMxn ?? 0,
+          name: appointment.packageRedemption
+            ? `${appointment.protocol?.name ?? "Facial"} — sesión de paquete (${appointment.packageRedemption.packagePurchase.packageOption.name})`
+            : (appointment.protocol?.name ?? "Facial"),
+          price: appointment.packageRedemption ? 0 : (appointment.protocol?.priceMxn ?? 0),
         },
         addOns: appointment.addOns.map((a) => ({ name: a.addOn.name, price: a.priceMxn })),
         retailItems: appointment.treatmentRecord.retailTags.map((t) => ({

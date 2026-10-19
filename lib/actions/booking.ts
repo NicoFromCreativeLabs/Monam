@@ -5,6 +5,7 @@ import { headers } from "next/headers";
 import { prisma } from "@/lib/prisma";
 import { requireClientOrPreview, requireStaffRole } from "@/lib/auth/dal";
 import { isDepositRequired } from "@/lib/deposit-settings";
+import { findUsablePackage, getUsablePackages, redeemPackageForAppointment, releasePackageRedemption, type UsablePackage } from "@/lib/package-use";
 import {
   insertAppointment,
   createPendingDepositCheckout,
@@ -38,12 +39,37 @@ export async function getAvailableSlotsAction(input: {
 // instead of showing a dead-end error.
 export type BookAppointmentResult = CreateAppointmentResult | { error: string; depositRequired: true };
 
-export async function createAppointmentAction(input: CreateAppointmentInput): Promise<BookAppointmentResult> {
+export async function createAppointmentAction(
+  input: CreateAppointmentInput & { usePackage?: boolean },
+): Promise<BookAppointmentResult> {
   const { client } = await requireClientOrPreview();
-  if (await isDepositRequired(input.durationTier)) {
+  const { usePackage, ...booking } = input;
+
+  // Paying with a package session replaces the deposit: the client already
+  // paid for it. The session is taken only once the appointment exists.
+  if (usePackage) {
+    const pack = await findUsablePackage(client.id, booking.durationTier);
+    if (!pack) return { error: "Ya no tienes sesiones disponibles en tu paquete para este tipo de cita." };
+    const result = await insertAppointment({ ...booking, clientId: client.id });
+    if ("error" in result) return result;
+    if (!(await redeemPackageForAppointment(pack.purchaseId, result.appointmentId))) {
+      await prisma.appointment.update({ where: { id: result.appointmentId }, data: { status: "CANCELLED" } });
+      return { error: "No se pudo usar tu paquete. Intenta de nuevo." };
+    }
+    return result;
+  }
+
+  if (await isDepositRequired(booking.durationTier)) {
     return { error: "Este tipo de cita requiere depósito.", depositRequired: true };
   }
-  return insertAppointment({ ...input, clientId: client.id });
+  return insertAppointment({ ...booking, clientId: client.id });
+}
+
+// Packages the client can still book with — the booking page offers them in
+// place of the deposit.
+export async function getMyUsablePackagesAction(): Promise<UsablePackage[]> {
+  const { client } = await requireClientOrPreview();
+  return getUsablePackages(client.id);
 }
 
 // Signature's real deposit path: creates a Stripe Checkout Session instead
@@ -98,7 +124,10 @@ export async function cancelAppointmentAction(appointmentId: string) {
     throw new Error("No se encontró la cita.");
   }
   await prisma.appointment.update({ where: { id: appointmentId }, data: { status: "CANCELLED" } });
+  // A package session used for it goes back to the package.
+  await releasePackageRedemption(appointmentId);
   revalidatePath("/my/appointments");
+  revalidatePath("/my/packages");
   revalidatePath("/my");
 }
 

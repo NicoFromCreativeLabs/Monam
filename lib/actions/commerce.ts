@@ -128,7 +128,8 @@ async function quoteSale(
     }
   }
 
-  const servicePrice = appointment?.protocol?.priceMxn ?? 0;
+  // An appointment booked with a package session has no service charge.
+  const servicePrice = appointment?.packageRedemption ? 0 : (appointment?.protocol?.priceMxn ?? 0);
   const retailTotal = input.retailItems.reduce((sum, line) => {
     const item = itemBySku.get(line.sku);
     return sum + (item?.priceMxn ?? 0) * line.qty;
@@ -525,6 +526,7 @@ async function loadAppointmentForCheckout(appointmentId: string) {
       deposit: true,
       sale: true,
       addOns: true,
+      packageRedemption: true,
       treatmentRecord: { include: { retailTags: { include: { treatmentRecord: true } } } },
     },
   });
