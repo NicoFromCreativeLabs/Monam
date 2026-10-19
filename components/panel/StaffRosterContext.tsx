@@ -2,14 +2,15 @@
 
 import { createContext, useContext, useState, type ReactNode } from "react";
 import type { StaffMember } from "@/lib/mock-data";
-import { inviteStaffAction, updateStaffAction, toggleStaffStatusAction, deleteStaffAction } from "@/lib/actions/staff";
+import { inviteStaffAction, updateStaffAction, toggleStaffStatusAction, deleteStaffAction, archiveStaffAction } from "@/lib/actions/staff";
 
 const StaffRosterContext = createContext<{
   roster: StaffMember[];
   addStaff: (member: Omit<StaffMember, "id"> & { email: string }) => void;
   updateStaff: (id: string, patch: Partial<StaffMember>) => void;
   toggleStatus: (id: string) => void;
-  removeStaff: (id: string) => Promise<{ error: string } | { ok: true }>;
+  removeStaff: (id: string) => Promise<{ error: string; canArchive?: boolean } | { ok: true }>;
+  archiveStaff: (id: string) => Promise<{ error: string } | { ok: true }>;
 } | null>(null);
 
 // App-wide so Admin Analytics → P&L can sum active salaries into the
@@ -89,8 +90,20 @@ export function StaffRosterProvider({
     }
   }
 
+  async function archiveStaff(id: string) {
+    try {
+      const result = await archiveStaffAction(id);
+      if ("ok" in result) setRoster((prev) => prev.filter((s) => s.id !== id));
+      return result;
+    } catch {
+      return { error: "No se pudo archivar. Intenta de nuevo." };
+    }
+  }
+
   return (
-    <StaffRosterContext.Provider value={{ roster, addStaff, updateStaff, toggleStatus, removeStaff }}>
+    <StaffRosterContext.Provider
+      value={{ roster, addStaff, updateStaff, toggleStatus, removeStaff, archiveStaff }}
+    >
       {children}
     </StaffRosterContext.Provider>
   );

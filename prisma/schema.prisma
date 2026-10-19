@@ -105,6 +105,9 @@ model AppUser {
   salaryMxn Int? // monthly gross; feeds P&L "Nómina base" rollup
   status    StaffStatus @default(INVITED)
   createdAt DateTime    @default(now())
+  // Archived: hidden from the roster but kept, with everything they did
+  // (appointments, treatments, sales, commissions). Always also INACTIVE.
+  archivedAt DateTime?
 
   locationAssignments       StaffLocationAssignment[]
   appointmentsAsEsthetician Appointment[]             @relation("EstheticianAppointments")

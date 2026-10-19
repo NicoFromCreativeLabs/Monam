@@ -21,7 +21,8 @@ const ROLE_OPTIONS = ["Admin", "Recepción", "Esteticista", "Gerente de clínica
 export default function AdminStaff() {
   const { locations } = useLocations();
   const LOCATION_OPTIONS = [...locations.map((l) => l.name), "Ambas"];
-  const { roster, addStaff, updateStaff, toggleStatus, removeStaff } = useStaffRoster();
+  const { roster, addStaff, updateStaff, toggleStatus, removeStaff, archiveStaff } = useStaffRoster();
+  const [canArchive, setCanArchive] = useState(false);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
@@ -68,8 +69,26 @@ export default function AdminStaff() {
     setDeleteError(null);
     const result = await removeStaff(id);
     setDeleting(false);
-    if ("error" in result) setDeleteError(result.error);
-    else setConfirmDeleteId(null);
+    if ("error" in result) {
+      setDeleteError(result.error);
+      setCanArchive(!!result.canArchive);
+    } else {
+      setConfirmDeleteId(null);
+    }
+  }
+
+  async function confirmArchive(id: string) {
+    setDeleting(true);
+    setDeleteError(null);
+    const result = await archiveStaff(id);
+    setDeleting(false);
+    if ("error" in result) {
+      setDeleteError(result.error);
+      setCanArchive(false);
+    } else {
+      setConfirmDeleteId(null);
+      setCanArchive(false);
+    }
   }
 
   function startEdit(s: StaffMember) {
@@ -308,17 +327,28 @@ export default function AdminStaff() {
                                 </span>
                               )}
                               <div className="flex gap-3">
-                                <button
-                                  onClick={() => confirmDelete(s.id)}
-                                  disabled={deleting}
-                                  className="font-body text-[11px] text-[#b3392f] underline disabled:opacity-50"
-                                >
-                                  {deleting ? "Eliminando…" : "Sí, eliminar"}
-                                </button>
+                                {canArchive ? (
+                                  <button
+                                    onClick={() => confirmArchive(s.id)}
+                                    disabled={deleting}
+                                    className="font-body text-[11px] text-ciruela underline disabled:opacity-50"
+                                  >
+                                    {deleting ? "Archivando…" : "Archivar (conserva el historial)"}
+                                  </button>
+                                ) : (
+                                  <button
+                                    onClick={() => confirmDelete(s.id)}
+                                    disabled={deleting}
+                                    className="font-body text-[11px] text-[#b3392f] underline disabled:opacity-50"
+                                  >
+                                    {deleting ? "Eliminando…" : "Sí, eliminar"}
+                                  </button>
+                                )}
                                 <button
                                   onClick={() => {
                                     setConfirmDeleteId(null);
                                     setDeleteError(null);
+                                    setCanArchive(false);
                                   }}
                                   className="font-body text-[11px] text-ciruela underline"
                                 >
@@ -343,6 +373,7 @@ export default function AdminStaff() {
                               <button
                                 onClick={() => {
                                   setDeleteError(null);
+                                  setCanArchive(false);
                                   setConfirmDeleteId(s.id);
                                 }}
                                 className="font-body text-[11px] text-[#b3392f] underline"

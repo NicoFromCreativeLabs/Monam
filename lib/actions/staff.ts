@@ -74,6 +74,9 @@ export async function inviteStaffAction(input: InviteStaffInput): Promise<Invite
 
   if (userId) {
     const alreadyStaff = await prisma.appUser.findUnique({ where: { id: userId } });
+    if (alreadyStaff?.archivedAt) {
+      return { error: "Esta persona está archivada. Pídele a soporte que la restaure." };
+    }
     if (alreadyStaff) return { error: "Esta persona ya está en el equipo." };
   } else {
     const { data, error } = await admin.auth.admin.createUser({
@@ -151,7 +154,9 @@ export async function toggleStaffStatusAction(userId: string) {
   revalidatePath("/admin/staff");
 }
 
-export type DeleteStaffResult = { error: string } | { ok: true };
+// `canArchive`: the delete was refused because of their history, so the
+// screen can offer archiving instead.
+export type DeleteStaffResult = { error: string; canArchive?: boolean } | { ok: true };
 
 // Removes a person from the team for good. Only possible while they have no
 // history (appointments, treatments, sales, commissions, shifts…): those rows
@@ -187,7 +192,8 @@ export async function deleteStaffAction(userId: string): Promise<DeleteStaffResu
     const message = e instanceof Error ? e.message.toLowerCase() : "";
     if (code === "P2003" || message.includes("foreign key")) {
       return {
-        error: "Esta persona ya tiene historial (citas, tratamientos, ventas o turnos). Desactívala para conservarlo.",
+        error: "Esta persona ya tiene historial (citas, tratamientos, ventas o turnos), así que no se puede borrar.",
+        canArchive: true,
       };
     }
     return { error: "No se pudo eliminar. Intenta de nuevo." };
@@ -202,6 +208,27 @@ export async function deleteStaffAction(userId: string): Promise<DeleteStaffResu
       });
   }
 
+  revalidatePath("/admin/staff");
+  return { ok: true };
+}
+
+// Takes someone off the roster without losing anything they did: they are
+// deactivated (so they cannot sign in or be booked) and hidden from the list.
+export async function archiveStaffAction(userId: string): Promise<DeleteStaffResult> {
+  const me = await requireStaffRole(["OWNER"]);
+  if (userId === me.id) return { error: "No puedes archivar tu propia cuenta." };
+
+  const target = await prisma.appUser.findUnique({ where: { id: userId } });
+  if (!target) return { ok: true };
+
+  if (target.role === "OWNER" && target.status !== "INACTIVE") {
+    const otherOwners = await prisma.appUser.count({
+      where: { role: "OWNER", status: { not: "INACTIVE" }, id: { not: userId }, archivedAt: null },
+    });
+    if (otherOwners === 0) return { error: "Debe quedar al menos un Admin activo." };
+  }
+
+  await prisma.appUser.update({ where: { id: userId }, data: { status: "INACTIVE", archivedAt: new Date() } });
   revalidatePath("/admin/staff");
   return { ok: true };
 }

@@ -97,7 +97,7 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
         },
       },
     }),
-    prisma.appUser.findMany({ include: { locationAssignments: { include: { location: true } } }, orderBy: { name: "asc" } }),
+    prisma.appUser.findMany({ where: { archivedAt: null }, include: { locationAssignments: { include: { location: true } } }, orderBy: { name: "asc" } }),
   ]);
 
   const initialLocations: LocationRecord[] = locations.map((l) => ({
