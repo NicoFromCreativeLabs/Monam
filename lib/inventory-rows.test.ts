@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseInventoryRecords } from "./inventory-rows";
+import { ledgerFromSheetName, parseInventoryRecords } from "./inventory-rows";
 
 describe("parseInventoryRecords", () => {
   it("reads the round-trip columns", () => {
@@ -64,5 +64,27 @@ describe("parseInventoryRecords", () => {
 
   it("rejects an empty file", () => {
     expect(parseInventoryRecords([])).toEqual({ error: expect.stringContaining("vacío") });
+  });
+});
+
+describe("ledger from the sheet name", () => {
+  it("recognises the three sheets, ignoring case and accents", () => {
+    expect(ledgerFromSheetName("Piso")).toBe("RETAIL");
+    expect(ledgerFromSheetName(" BACKBAR ")).toBe("BACKBAR");
+    expect(ledgerFromSheetName("warehouse")).toBe("WAREHOUSE");
+    expect(ledgerFromSheetName("Hoja1")).toBeUndefined();
+  });
+
+  it("uses the sheet's ledger for rows that have no Ledger column", () => {
+    const result = parseInventoryRecords(
+      [{ SKU: "A", Producto: "P", Ubicacion: "Roma Norte", Cantidad: "4", Par: "2", "ML por envase": "150" }],
+      "BACKBAR",
+    );
+    expect(result).toMatchObject({ rows: [{ ledger: "BACKBAR", qty: 4, contentMl: 150 }] });
+  });
+
+  it("still asks for a ledger when there is neither a column nor a known sheet", () => {
+    const result = parseInventoryRecords([{ SKU: "A", Producto: "P", Ubicacion: "Roma Norte", Cantidad: "4", Par: "2" }]);
+    expect(result).toEqual({ error: expect.stringContaining("fila 2") });
   });
 });

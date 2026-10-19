@@ -7,8 +7,8 @@ import { Card } from "@/components/panel/Card";
 import { staffIdentity, useStaffRole } from "@/components/panel/StaffRoleContext";
 import { useCurrentAppUser } from "@/components/panel/CurrentAppUserContext";
 import { adjustInventoryAction, importInventoryCsvAction, removeInventoryItemAction } from "@/lib/actions/commerce";
-import { downloadInventoryXlsx, readInventoryFile } from "@/lib/inventory-file";
-import { inventoryExportRow, type InventoryExportRow } from "@/lib/inventory-columns";
+import { downloadInventoryWorkbook, readInventoryFile } from "@/lib/inventory-file";
+import { inventorySheet, type InventorySheet } from "@/lib/inventory-columns";
 
 export interface InventoryRow {
   id: string;
@@ -45,17 +45,18 @@ export function StaffInventoryView({
   const identity = staffIdentity(role);
 
   const opts = { includeCost };
-  const exportRows = [
-    ...retail.map((i) => inventoryExportRow(i, "Piso", opts)),
-    ...backbar.map((i) => inventoryExportRow(i, "Backbar", opts)),
-    ...warehouse.map((i) => inventoryExportRow(i, "Warehouse", opts)),
-  ].filter((r) => r.Ubicacion === identity.location);
+  const here = (items: InventoryRow[]) => items.filter((i) => i.location === identity.location);
+  const sheets = [
+    inventorySheet("Piso", here(retail), opts),
+    inventorySheet("Backbar", here(backbar), opts),
+    inventorySheet("Warehouse", here(warehouse), opts),
+  ];
 
   return (
     <>
       <TopBar title="Inventario" />
       <div className="flex-1 space-y-6 px-8 py-6">
-        <ExcelCard location={identity.location} rows={exportRows} />
+        <ExcelCard location={identity.location} sheets={sheets} />
         <InventoryCard
           title={`Piso — ${identity.location}`}
           items={retail.filter((i) => i.location === identity.location)}
@@ -77,7 +78,7 @@ export function StaffInventoryView({
 // Update the stock from a spreadsheet: download the current inventory as Excel,
 // change the quantities (or add rows), and upload it back. The quantity in the
 // file replaces the current one — it is a recount, not an addition.
-function ExcelCard({ location, rows }: { location: string; rows: InventoryExportRow[] }) {
+function ExcelCard({ location, sheets }: { location: string; sheets: InventorySheet[] }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -101,13 +102,13 @@ function ExcelCard({ location, rows }: { location: string; rows: InventoryExport
   return (
     <Card title="Actualizar con Excel">
       <p className="mb-3 font-body text-xs text-ciruela/50">
-        Descarga el inventario de {location}, cambia las cantidades en Excel y súbelo de nuevo (.xlsx o .csv). La
+        Descarga el inventario de {location} (un Excel con una hoja para Piso, Backbar y Warehouse), cambia las cantidades y súbelo de nuevo (.xlsx o .csv). La
         cantidad del archivo reemplaza la actual de cada SKU; no se suma.
       </p>
       <div className="flex flex-wrap items-center gap-3">
         <button
-          onClick={() => downloadInventoryXlsx(`inventario-${location.toLowerCase().replace(/\s+/g, "-")}.xlsx`, rows)}
-          disabled={rows.length === 0}
+          onClick={() => downloadInventoryWorkbook(`inventario-${location.toLowerCase().replace(/\s+/g, "-")}.xlsx`, sheets)}
+          disabled={sheets.every((sh) => sh.rows.length === 0)}
           className="rounded-full border border-ciruela px-4 py-1.5 font-body text-xs text-ciruela hover:bg-ciruela hover:text-hueso disabled:opacity-40"
         >
           Descargar Excel

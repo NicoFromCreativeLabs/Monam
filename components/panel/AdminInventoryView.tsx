@@ -7,8 +7,8 @@ import { TopBar } from "@/components/panel/TopBar";
 import { Card, StatTile } from "@/components/panel/Card";
 import { Badge } from "@/components/panel/Badge";
 
-import { downloadInventoryXlsx, readInventoryFile } from "@/lib/inventory-file";
-import { inventoryExportRow } from "@/lib/inventory-columns";
+import { downloadInventoryWorkbook, readInventoryFile } from "@/lib/inventory-file";
+import { inventorySheet } from "@/lib/inventory-columns";
 import { useLocations } from "@/components/panel/LocationsContext";
 import {
   receiveInventoryAction,
@@ -410,23 +410,23 @@ export function AdminInventoryView({
     });
   }
 
-  // One format for every download (and for the upload): all the stock and
-  // waste-control columns, so a file can be edited and uploaded back.
-  const rowsRetail = () => retail.map((i) => inventoryExportRow(i, "Piso"));
-  const rowsBackbar = () => backbar.map((i) => inventoryExportRow(i, "Backbar"));
-  const rowsWarehouse = () => warehouse.map((i) => inventoryExportRow(i, "Warehouse"));
+  // One workbook with a sheet per ledger (Piso, Backbar, Warehouse), with all the
+  // stock and waste-control columns, so it can be edited and uploaded back.
+  const sheetPiso = () => inventorySheet("Piso", retail);
+  const sheetBackbar = () => inventorySheet("Backbar", backbar);
+  const sheetWarehouse = () => inventorySheet("Warehouse", warehouse);
 
   function exportTodos() {
-    downloadInventoryXlsx("inventario-monam.xlsx", [...rowsRetail(), ...rowsBackbar(), ...rowsWarehouse()]);
+    downloadInventoryWorkbook("inventario-monam.xlsx", [sheetPiso(), sheetBackbar(), sheetWarehouse()]);
   }
   function exportRetail() {
-    downloadInventoryXlsx("inventario-piso-monam.xlsx", rowsRetail());
+    downloadInventoryWorkbook("inventario-piso-monam.xlsx", [sheetPiso()]);
   }
   function exportBackbar() {
-    downloadInventoryXlsx("inventario-backbar-monam.xlsx", rowsBackbar());
+    downloadInventoryWorkbook("inventario-backbar-monam.xlsx", [sheetBackbar()]);
   }
   function exportWarehouse() {
-    downloadInventoryXlsx("inventario-warehouse-monam.xlsx", rowsWarehouse());
+    downloadInventoryWorkbook("inventario-warehouse-monam.xlsx", [sheetWarehouse()]);
   }
 
   const exportForTab = { todos: exportTodos, retail: exportRetail, backbar: exportBackbar, warehouse: exportWarehouse }[tab];
@@ -488,10 +488,11 @@ export function AdminInventoryView({
         {addMode === "upload" && (
           <Card title="Actualizar inventario — subir Excel/CSV">
             <p className="mb-3 font-body text-xs text-ciruela/50">
-              Usa el mismo formato que &ldquo;Descargar Excel&rdquo;: SKU, Producto, Ledger
-              (Piso/Backbar/Warehouse), Ubicacion, Cantidad, Par, y opcionales: Precio, Costo,
-              ML por envase, Alcance, Duracion (dias) y Caducidad. Las columnas &ldquo;Envases
-              abiertos&rdquo; y &ldquo;ML abiertos&rdquo; son solo informativas. La cantidad y el par del
+              Usa el mismo formato que &ldquo;Descargar Excel&rdquo;: un archivo con una hoja por ledger
+              (Piso, Backbar, Warehouse). Cada hoja trae SKU, Producto, Ubicacion, Cantidad, Par y
+              sus datos propios (Precio, Costo, ML por envase, Alcance, Duracion (dias),
+              Caducidad). &ldquo;Envases abiertos&rdquo; y &ldquo;ML abiertos&rdquo; son solo
+              informativas. Un CSV sigue funcionando si trae la columna Ledger. La cantidad y el par del
               archivo reemplazan los valores actuales de cada SKU — es un recuento, no una suma.
             </p>
             <input

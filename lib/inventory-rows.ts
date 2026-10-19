@@ -50,9 +50,27 @@ function toIsoDate(text: string | undefined): string | undefined {
 
 export type ParsedInventoryRows = { rows: ImportInventoryRow[] } | { error: string };
 
-const EXPECTED = "Columnas esperadas: SKU, Producto, Ledger (Piso/Backbar/Warehouse), Ubicacion, Cantidad, Par.";
+const EXPECTED =
+  "Columnas esperadas: SKU, Producto, Ubicacion, Cantidad, Par (y Ledger Piso/Backbar/Warehouse si no hay una hoja por ledger).";
 
-export function parseInventoryRecords(records: Record<string, string>[]): ParsedInventoryRows {
+// A sheet called Piso, Retail, Backbar or Warehouse (any case/accents) names its ledger.
+export function ledgerFromSheetName(name: string): ImportInventoryRow["ledger"] | undefined {
+  const k = name
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .trim();
+  return { piso: "RETAIL", retail: "RETAIL", backbar: "BACKBAR", warehouse: "WAREHOUSE" }[k] as
+    | ImportInventoryRow["ledger"]
+    | undefined;
+}
+
+// `defaultLedger` is used for rows with no Ledger column — the workbook's sheet
+// name (Piso / Backbar / Warehouse) says which ledger the rows are.
+export function parseInventoryRecords(
+  records: Record<string, string>[],
+  defaultLedger?: ImportInventoryRow["ledger"],
+): ParsedInventoryRows {
   if (records.length === 0) return { error: "El archivo está vacío o no se pudo leer." };
 
   const rows: ImportInventoryRow[] = [];
@@ -63,7 +81,7 @@ export function parseInventoryRecords(records: Record<string, string>[]): Parsed
       if (column) r[column] = (value ?? "").trim();
     }
 
-    const ledger = CSV_LEDGER[r.ledger ?? ""];
+    const ledger = CSV_LEDGER[r.ledger ?? ""] ?? defaultLedger;
     if (!ledger || !r.sku || !r.product || !r.location) {
       return { error: `${EXPECTED} Revisa la fila ${index + 2}.` };
     }
