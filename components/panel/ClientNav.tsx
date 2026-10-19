@@ -22,7 +22,6 @@ const LINKS = [
 const PROFILE_LINKS = [
   { href: "/my/preferences", label: "Preferencias" },
   { href: "/my/consent", label: "Centro de consentimiento" },
-  { href: "/my/payment", label: "Métodos de pago" },
 ];
 
 export function ClientNav() {
