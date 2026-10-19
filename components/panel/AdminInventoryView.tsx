@@ -6,7 +6,8 @@ import { useRouter } from "next/navigation";
 import { TopBar } from "@/components/panel/TopBar";
 import { Card, StatTile } from "@/components/panel/Card";
 import { Badge } from "@/components/panel/Badge";
-import { downloadCsv, parseCsv, CSV_LEDGER } from "@/lib/csv";
+import { downloadCsv } from "@/lib/csv";
+import { readInventoryFile } from "@/lib/inventory-file";
 import { useLocations } from "@/components/panel/LocationsContext";
 import {
   receiveInventoryAction,
@@ -14,8 +15,8 @@ import {
   updateInventoryItemAction,
   moveInventoryLedgerAction,
   importInventoryCsvAction,
+  removeInventoryItemAction,
   type LedgerName as DbLedger,
-  type ImportInventoryRow,
 } from "@/lib/actions/commerce";
 
 export interface RetailInventoryRow {
@@ -204,6 +205,7 @@ export function AdminInventoryView({
   const [isPending, startTransition] = useTransition();
   const [tab, setTab] = useState<Tab>("todos");
   const [editModal, setEditModal] = useState<EditDraft | null>(null);
+  const [confirmingRemove, setConfirmingRemove] = useState(false);
   const [restockOnly, setRestockOnly] = useState(false);
   const [addMode, setAddMode] = useState<"closed" | "choose" | "manual" | "upload">("closed");
   const addProductOpen = addMode === "manual";
@@ -277,6 +279,22 @@ export function AdminInventoryView({
 
   function closeEdit() {
     setEditModal(null);
+    setConfirmingRemove(false);
+  }
+
+  function removeProduct() {
+    if (!editModal) return;
+    const { id } = editModal;
+    startTransition(async () => {
+      const result = await removeInventoryItemAction(id);
+      if ("error" in result) {
+        setEditModal((m) => (m ? { ...m, error: result.error } : m));
+        setConfirmingRemove(false);
+        return;
+      }
+      closeEdit();
+      router.refresh();
+    });
   }
 
   function saveEditModal() {
@@ -376,52 +394,19 @@ export function AdminInventoryView({
     });
   }
 
-  function handleCsvFile(file: File) {
+  async function handleCsvFile(file: File) {
     setCsvError(null);
     setCsvResult(null);
-    const reader = new FileReader();
-    reader.onload = () => {
-      const text = String(reader.result ?? "");
-      const parsed = parseCsv(text);
-      if (parsed.length === 0) {
-        setCsvError("El archivo está vacío o no se pudo leer.");
-        return;
-      }
-
-      const rows: ImportInventoryRow[] = [];
-      for (const r of parsed) {
-        const ledger = CSV_LEDGER[r.Ledger?.trim() ?? ""];
-        const sku = r.SKU?.trim();
-        const product = r.Producto?.trim();
-        const locationName = r.Ubicacion?.trim();
-        if (!ledger || !sku || !product || !locationName) {
-          setCsvError(
-            `Columnas esperadas: SKU, Producto, Ledger (Piso/Backbar/Warehouse), Ubicacion, Cantidad, Par. Fila inválida: ${JSON.stringify(r)}`,
-          );
-          return;
-        }
-        rows.push({
-          sku,
-          product,
-          ledger,
-          locationName,
-          qty: Number(r.Cantidad) || 0,
-          par: Number(r.Par) || 0,
-          contentMl: r["ML por envase"] ? Number(r["ML por envase"]) || undefined : undefined,
-          scope: /indiv/i.test(r.Alcance ?? "") ? "INDIVIDUAL" : /comun/i.test(r.Alcance ?? "") ? "COMMUNAL" : undefined,
-          paoDays: r["Duracion (dias)"] ? Number(r["Duracion (dias)"]) || undefined : undefined,
-          costMxn: r.Costo ? Number(r.Costo) || undefined : undefined,
-          expiresOn: r.Caducidad?.trim() || undefined,
-        });
-      }
-
-      startTransition(async () => {
-        const result = await importInventoryCsvAction(rows);
-        setCsvResult({ updated: result.updated, created: result.created, skipped: result.skipped });
-        router.refresh();
-      });
-    };
-    reader.readAsText(file);
+    const parsed = await readInventoryFile(file);
+    if ("error" in parsed) {
+      setCsvError(parsed.error);
+      return;
+    }
+    startTransition(async () => {
+      const result = await importInventoryCsvAction(parsed.rows);
+      setCsvResult({ updated: result.updated, created: result.created, skipped: result.skipped });
+      router.refresh();
+    });
   }
 
   function exportTodos() {
@@ -518,7 +503,7 @@ export function AdminInventoryView({
             </p>
             <input
               type="file"
-              accept=".csv,text/csv"
+              accept=".xlsx,.csv,text/csv"
               onChange={(e) => {
                 const file = e.target.files?.[0];
                 if (file) handleCsvFile(file);
@@ -1030,7 +1015,25 @@ export function AdminInventoryView({
               </p>
             )}
 
-            <div className="mt-5 flex justify-end gap-2">
+            <div className="mt-5 flex items-center justify-end gap-2">
+              {confirmingRemove ? (
+                <span className="mr-auto flex items-center gap-2 font-body text-xs text-[#b3392f]">
+                  ¿Eliminar de {editModal.location}?
+                  <button onClick={removeProduct} disabled={isPending} className="underline disabled:opacity-50">
+                    Sí, eliminar
+                  </button>
+                  <button onClick={() => setConfirmingRemove(false)} className="text-ciruela underline">
+                    No
+                  </button>
+                </span>
+              ) : (
+                <button
+                  onClick={() => setConfirmingRemove(true)}
+                  className="mr-auto font-body text-xs text-[#b3392f] underline"
+                >
+                  Eliminar producto
+                </button>
+              )}
               <button onClick={closeEdit} className="rounded-full border border-ciruela px-4 py-1.5 font-body text-xs text-ciruela hover:bg-ciruela hover:text-hueso">
                 Cancelar
               </button>

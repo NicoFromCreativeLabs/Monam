@@ -957,6 +957,7 @@ function importExtras(row: ImportInventoryRow) {
     ...(row.scope !== undefined ? { scope: row.scope } : {}),
     ...(row.paoDays !== undefined ? { paoDays: row.paoDays } : {}),
     ...(row.costMxn !== undefined ? { costMxn: row.costMxn } : {}),
+    ...(row.priceMxn !== undefined ? { priceMxn: row.priceMxn } : {}),
     ...(row.expiresOn ? { expiresOn: new Date(row.expiresOn) } : {}),
   };
 }
@@ -973,6 +974,7 @@ export interface ImportInventoryRow {
   scope?: "COMMUNAL" | "INDIVIDUAL";
   paoDays?: number;
   costMxn?: number;
+  priceMxn?: number; // retail sale price
   expiresOn?: string;
 }
 
@@ -1047,11 +1049,39 @@ export async function moveInventoryLedgerAction(inventoryItemId: string, toLedge
   return { ok: true, productId: product.id };
 }
 
-export async function removeInventoryItemAction(inventoryItemId: string) {
+// Takes a product out of this location's inventory. The product itself stays in
+// the catalog (past sales and recommendations still point at it), it just stops
+// being stocked here — adding the same SKU again brings it back. The stock
+// movements and containers of that stock line go with it. Not while an opened
+// container is still in use.
+export async function removeInventoryItemAction(
+  inventoryItemId: string,
+): Promise<{ error: string } | { ok: true }> {
   await requireStaffRole(MANAGER_ROLES);
-  await prisma.inventoryItem.delete({ where: { id: inventoryItemId } });
+
+  const item = await prisma.inventoryItem.findUnique({ where: { id: inventoryItemId } });
+  if (!item) return { ok: true };
+
+  const open = await prisma.openContainer.count({ where: { inventoryItemId, status: "OPEN" } });
+  if (open > 0) {
+    return { error: "Tiene envases abiertos. Termínalos o tíralos antes de eliminar el producto." };
+  }
+
+  try {
+    await prisma.$transaction([
+      prisma.containerUsage.deleteMany({ where: { container: { inventoryItemId } } }),
+      prisma.openContainer.deleteMany({ where: { inventoryItemId } }),
+      prisma.inventoryTransaction.deleteMany({ where: { inventoryItemId } }),
+      prisma.inventoryItem.delete({ where: { id: inventoryItemId } }),
+    ]);
+  } catch {
+    return { error: "No se pudo eliminar el producto. Intenta de nuevo." };
+  }
+
   revalidatePath("/admin/inventory");
   revalidatePath("/staff/inventory");
+  revalidatePath("/staff/checkout");
+  return { ok: true };
 }
 
 // ---------------------------------------------------------------------------

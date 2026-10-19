@@ -5,7 +5,9 @@ import { useRouter } from "next/navigation";
 import { TopBar } from "@/components/panel/TopBar";
 import { Card } from "@/components/panel/Card";
 import { staffIdentity, useStaffRole } from "@/components/panel/StaffRoleContext";
-import { adjustInventoryAction } from "@/lib/actions/commerce";
+import { useCurrentAppUser } from "@/components/panel/CurrentAppUserContext";
+import { adjustInventoryAction, importInventoryCsvAction, removeInventoryItemAction } from "@/lib/actions/commerce";
+import { downloadInventoryXlsx, readInventoryFile } from "@/lib/inventory-file";
 
 export interface InventoryRow {
   id: string;
@@ -31,10 +33,17 @@ export function StaffInventoryView({
   const { role } = useStaffRole();
   const identity = staffIdentity(role);
 
+  const exportRows = [
+    ...retail.map((i) => toExportRow(i, "Piso")),
+    ...backbar.map((i) => toExportRow(i, "Backbar")),
+    ...warehouse.map((i) => toExportRow(i, "Warehouse")),
+  ].filter((r) => r.Ubicacion === identity.location);
+
   return (
     <>
       <TopBar title="Inventario" />
       <div className="flex-1 space-y-6 px-8 py-6">
+        <ExcelCard location={identity.location} rows={exportRows} />
         <InventoryCard
           title={`Piso — ${identity.location}`}
           items={retail.filter((i) => i.location === identity.location)}
@@ -53,6 +62,79 @@ export function StaffInventoryView({
   );
 }
 
+function toExportRow(i: InventoryRow, ledger: string) {
+  return {
+    SKU: i.sku,
+    Producto: i.product,
+    Ledger: ledger,
+    Ubicacion: i.location,
+    Cantidad: i.qty,
+    Par: i.par,
+    Vence: i.expiresOn,
+  };
+}
+
+// Update the stock from a spreadsheet: download the current inventory as Excel,
+// change the quantities (or add rows), and upload it back. The quantity in the
+// file replaces the current one — it is a recount, not an addition.
+function ExcelCard({ location, rows }: { location: string; rows: Record<string, string | number | undefined>[] }) {
+  const router = useRouter();
+  const [isPending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+  const [result, setResult] = useState<{ updated: number; created: number; skipped: number } | null>(null);
+
+  async function onFile(file: File) {
+    setError(null);
+    setResult(null);
+    const parsed = await readInventoryFile(file);
+    if ("error" in parsed) {
+      setError(parsed.error);
+      return;
+    }
+    startTransition(async () => {
+      const done = await importInventoryCsvAction(parsed.rows);
+      setResult({ updated: done.updated, created: done.created, skipped: done.skipped });
+      router.refresh();
+    });
+  }
+
+  return (
+    <Card title="Actualizar con Excel">
+      <p className="mb-3 font-body text-xs text-ciruela/50">
+        Descarga el inventario de {location}, cambia las cantidades en Excel y súbelo de nuevo (.xlsx o .csv). La
+        cantidad del archivo reemplaza la actual de cada SKU; no se suma.
+      </p>
+      <div className="flex flex-wrap items-center gap-3">
+        <button
+          onClick={() => downloadInventoryXlsx(`inventario-${location.toLowerCase().replace(/\s+/g, "-")}.xlsx`, rows)}
+          disabled={rows.length === 0}
+          className="rounded-full border border-ciruela px-4 py-1.5 font-body text-xs text-ciruela hover:bg-ciruela hover:text-hueso disabled:opacity-40"
+        >
+          Descargar Excel
+        </button>
+        <input
+          type="file"
+          accept=".xlsx,.csv,text/csv"
+          onChange={(e) => {
+            const file = e.target.files?.[0];
+            if (file) onFile(file);
+            e.target.value = "";
+          }}
+          className="block font-body text-sm text-ciruela file:mr-3 file:rounded-full file:border-0 file:bg-ciruela file:px-4 file:py-1.5 file:font-body file:text-xs file:text-hueso"
+        />
+      </div>
+      {isPending && <p className="mt-3 font-body text-xs text-ciruela/50">Importando…</p>}
+      {error && <p className="mt-3 font-body text-xs text-red-700">{error}</p>}
+      {result && (
+        <p className="mt-3 font-body text-xs text-oliva">
+          Listo — {result.updated} actualizados, {result.created} nuevos
+          {result.skipped > 0 ? `, ${result.skipped} omitidos` : ""}.
+        </p>
+      )}
+    </Card>
+  );
+}
+
 function InventoryCard({
   title,
   items,
@@ -67,6 +149,24 @@ function InventoryCard({
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draftQty, setDraftQty] = useState("");
   const [draftReason, setDraftReason] = useState("");
+  const [confirmRemoveId, setConfirmRemoveId] = useState<string | null>(null);
+  const [removeError, setRemoveError] = useState<string | null>(null);
+  // Only an Admin or Clinic Manager can take a product out of the inventory.
+  const currentUser = useCurrentAppUser();
+  const canRemove = currentUser.role === "OWNER" || currentUser.role === "CLINIC_MANAGER";
+
+  function remove(id: string) {
+    startTransition(async () => {
+      const done = await removeInventoryItemAction(id);
+      if ("error" in done) {
+        setRemoveError(done.error);
+        return;
+      }
+      setConfirmRemoveId(null);
+      setRemoveError(null);
+      router.refresh();
+    });
+  }
 
   const editingItem = items.find((i) => i.id === editingId);
   const newQty = Math.max(0, Number(draftQty) || 0);
@@ -148,6 +248,29 @@ function InventoryCard({
                       />
                     )}
                   </div>
+                ) : confirmRemoveId === item.id ? (
+                  <div className="flex flex-col items-end gap-1">
+                    <span className="text-xs text-[#b3392f]">¿Eliminar de {item.location}?</span>
+                    {removeError && <span className="max-w-[220px] text-right text-xs text-[#b3392f]">{removeError}</span>}
+                    <div className="flex gap-3 text-xs">
+                      <button
+                        onClick={() => remove(item.id)}
+                        disabled={isPending}
+                        className="text-[#b3392f] underline disabled:opacity-50"
+                      >
+                        {isPending ? "Eliminando…" : "Sí, eliminar"}
+                      </button>
+                      <button
+                        onClick={() => {
+                          setConfirmRemoveId(null);
+                          setRemoveError(null);
+                        }}
+                        className="text-ciruela underline"
+                      >
+                        No
+                      </button>
+                    </div>
+                  </div>
                 ) : (
                   <>
                     <span className="w-8 text-right">{item.qty}</span>
@@ -161,6 +284,17 @@ function InventoryCard({
                     >
                       Editar
                     </button>
+                    {canRemove && (
+                      <button
+                        onClick={() => {
+                          setRemoveError(null);
+                          setConfirmRemoveId(item.id);
+                        }}
+                        className="font-body text-xs text-[#b3392f] underline"
+                      >
+                        Eliminar
+                      </button>
+                    )}
                   </>
                 )}
               </div>
