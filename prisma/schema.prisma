@@ -270,7 +270,12 @@ model Room {
   @@map("rooms")
 }
 
-// An esthetician's working day: she checks in choosing the location and the
+enum ShiftKind {
+  ESTHETICIAN
+  FRONT_DESK
+}
+
+// A working day for an esthetician or the front desk. The esthetician's: she checks in choosing the location and the
 // cabina she will work in (which decides the clients she sees), and checks out
 // at the end signing that she left the station clean. Only one open shift per
 // person (partial unique index in the migration); a shift left open past its
@@ -278,17 +283,24 @@ model Room {
 model StaffShift {
   id           String    @id @default(uuid())
   userId       String
+  kind         ShiftKind @default(ESTHETICIAN)
   locationId   String
-  roomId       String
+  roomId       String? // esthetician: the cabina she works in; front desk: none
+  // Front desk: the cash register they work with (opened at check-in or already
+  // open that day) and, at check-out by the last person out, the cash counted.
+  cashSessionId   String?
+  cashCountedMxn  Int?
+  cashExpectedMxn Int?
   checkInAt    DateTime  @default(now())
   checkOutAt   DateTime?
   cleanSignoff Boolean   @default(false)
   checkOutNote String?
   autoClosed   Boolean   @default(false)
 
-  user     AppUser  @relation(fields: [userId], references: [id])
-  location Location @relation(fields: [locationId], references: [id])
-  room     Room     @relation(fields: [roomId], references: [id])
+  user        AppUser              @relation(fields: [userId], references: [id])
+  location    Location             @relation(fields: [locationId], references: [id])
+  room        Room?                @relation(fields: [roomId], references: [id])
+  cashSession CashRegisterSession? @relation(fields: [cashSessionId], references: [id])
 
   @@index([userId, checkInAt])
   @@index([roomId, checkOutAt])
@@ -859,6 +871,7 @@ model CashRegisterSession {
   location Location @relation(fields: [locationId], references: [id])
   openedBy AppUser  @relation("CashSessionOpenedBy", fields: [openedByUserId], references: [id])
   sales    Sale[]
+  shifts   StaffShift[]
 
   @@map("cash_register_sessions")
 }

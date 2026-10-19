@@ -42,19 +42,15 @@ function formatDay(iso: string) {
 // "Mi turno": the esthetician checks in choosing the sede and the cabina she
 // will work in — that choice decides which clients she sees — and checks out
 // at the end, signing that she left the station clean.
-export function StaffShiftView({
-  userName,
-  locations,
-  active,
-  forgotten,
-  recent,
-}: {
+export interface StaffShiftViewProps {
   userName: string;
   locations: ShiftLocation[];
   active: ActiveShiftRow | null;
   forgotten: { roomName: string; checkInAt: string } | null;
   recent: RecentShiftRow[];
-}) {
+}
+
+export function StaffShiftView({ userName, locations, active, forgotten, recent }: StaffShiftViewProps) {
   const router = useRouter();
   const [locationId, setLocationId] = useState(locations.length === 1 ? locations[0].id : "");
   const [roomId, setRoomId] = useState("");

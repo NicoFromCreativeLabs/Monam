@@ -1,8 +1,12 @@
 import { prisma } from "@/lib/prisma";
+import { getCurrentAppUser } from "@/lib/auth/dal";
+import { requireFrontDeskShift } from "@/lib/shifts";
 import { getTodayAppointments } from "@/lib/appointments";
 import { StaffCheckInView } from "@/components/panel/StaffCheckInView";
 
 export default async function StaffCheckIn() {
+  const currentUser = await getCurrentAppUser();
+  if (currentUser) await requireFrontDeskShift(currentUser);
   const romaNorte = await prisma.location.findFirst({ where: { name: "Roma Norte" } });
   const queue = romaNorte ? await getTodayAppointments(romaNorte.id) : [];
   const clients = await prisma.client.findMany({

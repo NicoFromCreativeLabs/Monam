@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { getCurrentAppUser } from "@/lib/auth/dal";
 import { getTodayAppointments, getPendingCheckouts, isAppointmentDone, pickNextAppointment } from "@/lib/appointments";
-import { getActiveShift } from "@/lib/shifts";
+import { getActiveShift, requireFrontDeskShift } from "@/lib/shifts";
 import { StaffTodayView, type EstheticianNextClient } from "@/components/panel/StaffTodayView";
 
 export default async function StaffToday() {
@@ -17,6 +17,7 @@ export default async function StaffToday() {
   // once they have checked in.
   const shift = currentUser && currentUser.role !== "FRONT_DESK" ? await getActiveShift(currentUser.id) : null;
   if (currentUser?.role === "ESTHETICIAN" && !shift) redirect("/staff/shift");
+  if (currentUser) await requireFrontDeskShift(currentUser);
 
   // The esthetician's own picture of the day: everything in her cabina when she
   // is checked in (whoever the appointment was booked under), otherwise the

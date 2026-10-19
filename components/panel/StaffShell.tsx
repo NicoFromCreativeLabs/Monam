@@ -9,6 +9,7 @@ const FRONT_DESK_ITEMS: NavSection[] = [
   {
     items: [
       { href: "/staff", label: "Hoy" },
+      { href: "/staff/shift", label: "Mi turno" },
       { href: "/staff/check-in", label: "Check-in" },
       { href: "/staff/checkout", label: "Cobro / POS" },
       { href: "/staff/refunds", label: "Reembolsos" },
