@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { getCurrentAppUser } from "@/lib/auth/dal";
+import { requireOnShift } from "@/lib/shifts";
 import { getTodayAppointments } from "@/lib/appointments";
 import {
   StaffRetailTagsView,
@@ -11,6 +12,7 @@ export default async function StaffRetailTags() {
   const romaNorte = await prisma.location.findFirst({ where: { name: "Roma Norte" } });
   const agenda = romaNorte ? await getTodayAppointments(romaNorte.id) : [];
   const currentUser = await getCurrentAppUser();
+  if (currentUser) await requireOnShift(currentUser);
 
   // The esthetician's own most recently completed treatment today (last in
   // time order); falls back to the location's most recent completed

@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { requireStaffRole } from "@/lib/auth/dal";
 import { studioNow } from "@/lib/booking-time";
 import { getTodayAppointments } from "@/lib/appointments";
+import { flagForgottenShifts } from "@/lib/shift-alerts";
 import {
   CLEAN_CHECKLIST,
   canCheckOut,
@@ -39,7 +40,7 @@ function ownShiftMessage(shift: {
 }
 
 export async function checkInAction(input: { locationId: string; roomId: string }): Promise<ShiftResult> {
-  const user = await requireStaffRole([...SHIFT_ROLES]);
+  const user = await requireStaffRole([...SHIFT_ROLES], { allowWithoutShift: true });
 
   const room = await prisma.room.findUnique({ where: { id: input.roomId }, include: { location: true } });
   if (!room || room.locationId !== input.locationId) return { error: "Elige una sede y una cabina válidas." };
@@ -55,6 +56,7 @@ export async function checkInAction(input: { locationId: string; roomId: string 
   // forgotten so they stop holding the cabina.
   const stale = open.filter((s) => isShiftStale(s.checkInAt, now));
   if (stale.length > 0) {
+    await flagForgottenShifts(stale.map((s) => s.id));
     await prisma.staffShift.updateMany({
       where: { id: { in: stale.map((s) => s.id) } },
       data: { autoClosed: true },
@@ -83,7 +85,7 @@ export async function checkOutAction(input: {
   cleanSignoff: boolean;
   note?: string;
 }): Promise<ShiftResult> {
-  const user = await requireStaffRole([...SHIFT_ROLES]);
+  const user = await requireStaffRole([...SHIFT_ROLES], { allowWithoutShift: true });
 
   if (!canCheckOut({ checklist: input.checklist, cleanSignoff: input.cleanSignoff })) {
     return { error: `Confirma los ${CLEAN_CHECKLIST.length} puntos y firma que dejaste tu estación limpia.` };
@@ -115,7 +117,7 @@ export async function frontDeskCheckInAction(input: {
   locationId: string;
   openingFloatMxn: number;
 }): Promise<ShiftResult> {
-  const user = await requireStaffRole([...FRONT_DESK_SHIFT_ROLES]);
+  const user = await requireStaffRole([...FRONT_DESK_SHIFT_ROLES], { allowWithoutShift: true });
 
   const location = await prisma.location.findUnique({ where: { id: input.locationId } });
   if (!location || !location.isActive) return { error: "Elige una sede válida." };
@@ -127,6 +129,7 @@ export async function frontDeskCheckInAction(input: {
   });
   const stale = myOpen.filter((s) => isShiftStale(s.checkInAt, now));
   if (stale.length > 0) {
+    await flagForgottenShifts(stale.map((s) => s.id));
     await prisma.staffShift.updateMany({ where: { id: { in: stale.map((s) => s.id) } }, data: { autoClosed: true } });
   }
   const mineNow = myOpen.find((s) => !isShiftStale(s.checkInAt, now));
@@ -171,7 +174,7 @@ export async function frontDeskCheckOutAction(input: {
   countedCashMxn: number | null;
   note?: string;
 }): Promise<FrontDeskCheckOutResult> {
-  const user = await requireStaffRole([...FRONT_DESK_SHIFT_ROLES]);
+  const user = await requireStaffRole([...FRONT_DESK_SHIFT_ROLES], { allowWithoutShift: true });
 
   const open = await prisma.staffShift.findMany({
     where: { userId: user.id, kind: "FRONT_DESK", checkOutAt: null, autoClosed: false },

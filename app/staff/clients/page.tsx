@@ -1,4 +1,6 @@
 import { prisma } from "@/lib/prisma";
+import { getCurrentAppUser } from "@/lib/auth/dal";
+import { requireOnShift } from "@/lib/shifts";
 import {
   StaffClientsView,
   type StaffClientListing,
@@ -11,6 +13,8 @@ export default async function StaffClientProfile({
   searchParams: Promise<{ id?: string }>;
 }) {
   const { id } = await searchParams;
+  const currentUser = await getCurrentAppUser();
+  if (currentUser) await requireOnShift(currentUser);
 
   if (id) {
     const client = await prisma.client.findUnique({

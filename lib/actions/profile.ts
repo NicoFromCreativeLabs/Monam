@@ -23,7 +23,7 @@ export async function updateOwnProfileAction(
   if (!name) return { error: "El nombre no puede estar vacío." };
 
   if (kind === "staff") {
-    const appUser = await requireStaffRole(["OWNER", "CLINIC_MANAGER", "FRONT_DESK", "ESTHETICIAN"]);
+    const appUser = await requireStaffRole(["OWNER", "CLINIC_MANAGER", "FRONT_DESK", "ESTHETICIAN"], { allowWithoutShift: true });
     await prisma.appUser.update({ where: { id: appUser.id }, data: { name } });
     revalidatePath("/admin", "layout");
     revalidatePath("/staff", "layout");

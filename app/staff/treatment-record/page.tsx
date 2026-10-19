@@ -1,8 +1,7 @@
-import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { getCurrentAppUser } from "@/lib/auth/dal";
 import { getTodayAppointments, isAppointmentDone, pickNextAppointment } from "@/lib/appointments";
-import { getActiveShift } from "@/lib/shifts";
+import { getActiveShift, requireOnShift } from "@/lib/shifts";
 import { StaffTreatmentRecordView, type TreatmentClient } from "@/components/panel/StaffTreatmentRecordView";
 
 export default async function StaffTreatmentRecord({
@@ -18,7 +17,7 @@ export default async function StaffTreatmentRecord({
   // An esthetician records treatments for the clients of the cabina she
   // checked into; without a check-in she is sent to register her entrance.
   const shift = currentUser && currentUser.role !== "FRONT_DESK" ? await getActiveShift(currentUser.id) : null;
-  if (currentUser?.role === "ESTHETICIAN" && !shift) redirect("/staff/shift");
+  if (currentUser) await requireOnShift(currentUser);
   const agenda = shift ? allAgenda.filter((a) => a.roomId === shift.roomId) : allAgenda;
 
   // Same "which appointment is up next" scoping as app/staff/page.tsx,

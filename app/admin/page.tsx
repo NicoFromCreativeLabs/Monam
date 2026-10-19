@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { AdminPanelView } from "@/components/panel/AdminPanelView";
 import { getReportingSnapshotAction } from "@/lib/actions/reporting";
 import { getTodayAppointments } from "@/lib/appointments";
+import { flagForgottenShifts } from "@/lib/shift-alerts";
 
 // Panel (Hoy) — rebuilt per client review, Sep 2026. Three visually
 // distinct bands — Pulso (KPIs), Requiere acción (tasks), Hoy (today's
@@ -12,6 +13,8 @@ import { getTodayAppointments } from "@/lib/appointments";
 // numbers read near-zero until real usage accumulates. Requiere acción and
 // the day's agenda read real ApprovalRequest/Alert/Appointment rows too.
 export default async function AdminPanelPage() {
+  // Anyone who left their shift open without checking out becomes an alert below.
+  await flagForgottenShifts();
   const locations = await prisma.location.findMany({ orderBy: { createdAt: "asc" } });
 
   const [snapshot, pendingApprovals, inventoryItems, alerts, romaNorte] = await Promise.all([

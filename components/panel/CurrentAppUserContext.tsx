@@ -6,6 +6,9 @@ export interface CurrentAppUser {
   name: string;
   roleLabel: string;
   role: "OWNER" | "CLINIC_MANAGER" | "FRONT_DESK" | "ESTHETICIAN";
+  // Staff panel: false when a Front Desk / Esthetician login has not checked in
+  // today (they only get "Mi turno" until they do). Undefined elsewhere.
+  onShift?: boolean;
 }
 
 const CurrentAppUserContext = createContext<CurrentAppUser | null>(null);

@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { prisma } from "@/lib/prisma";
 import type { AppUser, Client, Role } from "@/lib/generated/prisma/client";
+import { requireOnShift } from "@/lib/shifts";
 
 // The Data Access Layer — the real authorization boundary (Next.js's own
 // auth guide: "the majority of security checks should be performed as
@@ -61,7 +62,14 @@ export function roleLabel(role: Role): string {
 // they're signed in but hold the wrong role — never silently renders
 // nothing (spec §9's permission boundaries are enforced here, not by
 // hiding UI on the client).
-export async function requireStaffRole(allowed: Role[]): Promise<AppUser> {
+//
+// A Front Desk or Esthetician login must also have checked in today
+// (lib/shifts.ts) — otherwise it is sent to "Mi turno". Only the shift screens,
+// the layout and the profile opt out with `allowWithoutShift`.
+export async function requireStaffRole(
+  allowed: Role[],
+  options: { allowWithoutShift?: boolean } = {},
+): Promise<AppUser> {
   const claims = await getVerifiedClaims();
   if (!claims) redirect("/login");
 
@@ -69,6 +77,7 @@ export async function requireStaffRole(allowed: Role[]): Promise<AppUser> {
   if (!appUser) redirect("/login");
   if (appUser.status === "INACTIVE") redirect("/login");
   if (!allowed.includes(appUser.role)) redirect(homeForRole(appUser.role));
+  if (!options.allowWithoutShift) await requireOnShift(appUser);
 
   return appUser;
 }

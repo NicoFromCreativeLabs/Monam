@@ -151,7 +151,9 @@ async function loadFrontDesk(user: StaffUser): Promise<FrontDeskShiftData> {
 // cash register). Owner / Clinic Manager previewing the panel get both, and the
 // view they are previewing decides which one shows.
 export default async function StaffShift() {
-  const user = await requireStaffRole(["ESTHETICIAN", "FRONT_DESK", "OWNER", "CLINIC_MANAGER"]);
+  const user = await requireStaffRole(["ESTHETICIAN", "FRONT_DESK", "OWNER", "CLINIC_MANAGER"], {
+    allowWithoutShift: true,
+  });
   const [esthetician, frontDesk] = await Promise.all([
     user.role === "FRONT_DESK" ? null : loadEsthetician(user),
     user.role === "ESTHETICIAN" ? null : loadFrontDesk(user),

@@ -4,7 +4,7 @@ import { requireStaffRole, roleLabel } from "@/lib/auth/dal";
 import { prisma } from "@/lib/prisma";
 
 export default async function StaffProfile() {
-  const user = await requireStaffRole(["OWNER", "CLINIC_MANAGER", "FRONT_DESK", "ESTHETICIAN"]);
+  const user = await requireStaffRole(["OWNER", "CLINIC_MANAGER", "FRONT_DESK", "ESTHETICIAN"], { allowWithoutShift: true });
   const assignments = await prisma.staffLocationAssignment.findMany({
     where: { userId: user.id },
     include: { location: true },

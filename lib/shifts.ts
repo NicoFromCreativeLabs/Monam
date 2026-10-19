@@ -71,12 +71,19 @@ export async function getActiveFrontDeskShift(userId: string): Promise<ActiveFro
   };
 }
 
-// A real Front Desk login works from the shift it checked into: without one it
-// is sent to register its entrance first. (Owner / Clinic Manager previewing the
-// panel are not forced to.)
-export async function requireFrontDeskShift(user: { id: string; role: string }): Promise<void> {
-  if (user.role !== "FRONT_DESK") return;
-  if (!(await getActiveFrontDeskShift(user.id))) redirect("/staff/shift");
+// Whether a real Front Desk / Esthetician login has checked in today (their
+// own kind of shift). Owner and Clinic Manager are never held back.
+export async function isOnShift(user: { id: string; role: string }): Promise<boolean> {
+  if (user.role === "FRONT_DESK") return (await getActiveFrontDeskShift(user.id)) !== null;
+  if (user.role === "ESTHETICIAN") return (await getActiveShift(user.id)) !== null;
+  return true;
+}
+
+// Without a check-in a Front Desk or Esthetician login can do nothing: it is
+// sent to register its entrance first, every day. Used by every staff page and,
+// through requireStaffRole, by every action.
+export async function requireOnShift(user: { id: string; role: string }): Promise<void> {
+  if (!(await isOnShift(user))) redirect("/staff/shift");
 }
 
 export interface CashSummary {

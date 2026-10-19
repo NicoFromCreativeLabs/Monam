@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { getCurrentAppUser } from "@/lib/auth/dal";
-import { requireFrontDeskShift } from "@/lib/shifts";
+import { requireOnShift } from "@/lib/shifts";
 import {
   StaffCheckoutView,
   type CheckoutCatalogItem,
@@ -14,7 +14,7 @@ export default async function StaffCheckout({
 }) {
   const { session: appointmentId } = await searchParams;
   const shiftUser = await getCurrentAppUser();
-  if (shiftUser) await requireFrontDeskShift(shiftUser);
+  if (shiftUser) await requireOnShift(shiftUser);
 
   const romaNorte = await prisma.location.findFirst({ where: { name: "Roma Norte" } });
   const items = romaNorte

@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { getCurrentAppUser } from "@/lib/auth/dal";
+import { requireOnShift } from "@/lib/shifts";
 import { StaffInventoryView, type InventoryRow } from "@/components/panel/StaffInventoryView";
 
 function formatDate(d: Date | null) {
@@ -25,6 +26,7 @@ export default async function StaffInventory() {
 
   // Costs are for Admin / Clinic Manager only — never sent to other roles.
   const user = await getCurrentAppUser();
+  if (user) await requireOnShift(user);
   const canSeeCost = user?.role === "OWNER" || user?.role === "CLINIC_MANAGER";
 
   const openAgg = await prisma.openContainer.groupBy({
