@@ -580,6 +580,7 @@ model Product {
   id       String  @id @default(uuid())
   sku      String  @unique
   name     String
+  brand    String? // e.g. "Anua", "Beauty of Joseon", "SKIN1004"
   ledger   Ledger // structural never-merge rule, spec §5.3 — a backbar-only line simply never gets a RETAIL row
   isActive Boolean @default(true)
 

@@ -14,6 +14,7 @@ export interface InventoryRow {
   id: string;
   sku: string;
   product: string;
+  brand?: string;
   location: string;
   qty: number;
   par: number;
@@ -210,7 +211,7 @@ function InventoryCard({
               <div>
                 <p>{item.product}</p>
                 <p className="text-xs text-ciruela/50">
-                  SKU {item.sku} · Par {item.par}
+                  {item.brand ? `${item.brand} · ` : ""}SKU {item.sku} · Par {item.par}
                   {item.expiresOn ? ` · Vence ${item.expiresOn}` : ""}
                   {showPao && item.pao ? ` · Abierto ${item.opensOn} · PAO ${item.pao}` : ""}
                 </p>

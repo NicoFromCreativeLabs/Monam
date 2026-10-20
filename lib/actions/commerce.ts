@@ -822,6 +822,7 @@ export interface UpdateInventoryItemInput {
   paoDays?: number;
   contentMl?: number; // backbar: ml in one container
   scope?: "COMMUNAL" | "INDIVIDUAL"; // backbar: one open container per cabina, or per esthetician
+  brand?: string; // lives on Product too; an empty string clears it
   sku?: string; // lives on Product, not InventoryItem — a correction, not a rename-to-merge (spec §5.3 never-merge still applies, so this never changes which ledger row the SKU belongs to)
 }
 
@@ -848,6 +849,15 @@ export async function updateInventoryItemAction(
     }
   }
 
+  if (input.brand !== undefined) {
+    const owner = await prisma.inventoryItem.findUnique({
+      where: { id: input.inventoryItemId },
+      select: { productId: true },
+    });
+    if (!owner) return { error: "Producto no encontrado." };
+    await prisma.product.update({ where: { id: owner.productId }, data: { brand: input.brand.trim() || null } });
+  }
+
   await prisma.inventoryItem.update({
     where: { id: input.inventoryItemId },
     data: {
@@ -868,6 +878,7 @@ export async function updateInventoryItemAction(
 
 export interface ReceiveInventoryInput {
   productName: string;
+  brand?: string;
   sku: string;
   ledger: LedgerName;
   locationName: string;
@@ -894,8 +905,8 @@ export async function receiveInventoryAction(input: ReceiveInventoryInput) {
 
   const product = await prisma.product.upsert({
     where: { sku: input.sku },
-    create: { sku: input.sku, name: input.productName, ledger: input.ledger },
-    update: { name: input.productName },
+    create: { sku: input.sku, name: input.productName, ledger: input.ledger, brand: input.brand?.trim() || undefined },
+    update: { name: input.productName, ...(input.brand?.trim() ? { brand: input.brand.trim() } : {}) },
   });
 
   const existing = await prisma.inventoryItem.findUnique({
@@ -965,6 +976,7 @@ function importExtras(row: ImportInventoryRow) {
 export interface ImportInventoryRow {
   sku: string;
   product: string;
+  brand?: string;
   ledger: LedgerName;
   locationName: string;
   qty: number;
@@ -1002,8 +1014,8 @@ export async function importInventoryCsvAction(rows: ImportInventoryRow[]) {
 
     const product = await prisma.product.upsert({
       where: { sku: row.sku },
-      create: { sku: row.sku, name: row.product, ledger: row.ledger },
-      update: { name: row.product },
+      create: { sku: row.sku, name: row.product, ledger: row.ledger, brand: row.brand || undefined },
+      update: { name: row.product, ...(row.brand ? { brand: row.brand } : {}) },
     });
 
     const existing = await prisma.inventoryItem.findUnique({

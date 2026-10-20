@@ -18,6 +18,7 @@ function key(header: string): string {
 const COLUMNS: Record<string, string> = {
   sku: "sku",
   producto: "product",
+  marca: "brand",
   ledger: "ledger",
   ubicacion: "location",
   cantidad: "qty",
@@ -89,6 +90,7 @@ export function parseInventoryRecords(
     rows.push({
       sku: r.sku,
       product: r.product,
+      brand: r.brand || undefined,
       ledger,
       locationName: r.location,
       qty: toNumber(r.qty) ?? 0,

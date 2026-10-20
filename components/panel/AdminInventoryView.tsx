@@ -24,6 +24,7 @@ export interface RetailInventoryRow {
   id: string;
   sku: string;
   product: string;
+  brand: string;
   location: string;
   qty: number;
   par: number;
@@ -35,6 +36,7 @@ export interface BackbarInventoryRow {
   id: string;
   sku: string;
   product: string;
+  brand: string;
   location: string;
   qty: number; // sealed containers in stock
   par: number;
@@ -51,6 +53,7 @@ export interface WarehouseInventoryRow {
   id: string;
   sku: string;
   product: string;
+  brand: string;
   location: string;
   qty: number;
   par: number;
@@ -104,6 +107,7 @@ interface EditDraft {
   sku: string;
   originalLedger: LedgerName;
   product: string;
+  brand: string;
   location: string;
   ledger: LedgerName;
   qty: string;
@@ -120,6 +124,7 @@ interface EditDraft {
 
 const emptyNewProduct = {
   name: "",
+  brand: "",
   location: "",
   ledgers: ["Retail"] as LedgerName[],
   retailSku: "",
@@ -254,6 +259,7 @@ export function AdminInventoryView({
       sku: item.sku,
       originalLedger: ledger,
       product: item.product,
+      brand: item.brand,
       location: item.location,
       ledger,
       qty: String(item.qty),
@@ -319,6 +325,7 @@ export function AdminInventoryView({
         scope: ledger === "Backbar" ? scope : undefined,
         paoDays: ledger === "Backbar" ? Number(paoDays) || undefined : undefined,
         sku: editModal.sku,
+        brand: editModal.brand,
       });
       if ("error" in result) {
         setEditModal((m) => (m ? { ...m, error: result.error } : m));
@@ -353,6 +360,7 @@ export function AdminInventoryView({
       if (newProduct.ledgers.includes("Retail")) {
         await receiveInventoryAction({
           productName: newProduct.name.trim(),
+          brand: newProduct.brand.trim() || undefined,
           sku: newProduct.retailSku.trim() || `SKU-${Date.now()}`,
           ledger: "RETAIL",
           locationName: newProduct.location,
@@ -366,6 +374,7 @@ export function AdminInventoryView({
       if (newProduct.ledgers.includes("Backbar")) {
         await receiveInventoryAction({
           productName: newProduct.name.trim(),
+          brand: newProduct.brand.trim() || undefined,
           sku: newProduct.backbarSku.trim() || `SKU-${Date.now()}-B`,
           ledger: "BACKBAR",
           locationName: newProduct.location,
@@ -380,6 +389,7 @@ export function AdminInventoryView({
       if (newProduct.ledgers.includes("Warehouse")) {
         await receiveInventoryAction({
           productName: newProduct.name.trim(),
+          brand: newProduct.brand.trim() || undefined,
           sku: newProduct.warehouseSku.trim() || `SKU-${Date.now()}-W`,
           ledger: "WAREHOUSE",
           locationName: newProduct.location,
@@ -534,6 +544,17 @@ export function AdminInventoryView({
                 </div>
                 <div>
                   <label className="mb-1 block font-body text-xs uppercase tracking-[0.14em] text-ciruela/50">
+                    Marca
+                  </label>
+                  <input
+                    value={newProduct.brand}
+                    onChange={(e) => setNewProduct((f) => ({ ...f, brand: e.target.value }))}
+                    placeholder="p. ej. Anua"
+                    className="w-full rounded-lg border border-ciruela/20 bg-hueso px-3 py-2 font-body text-sm text-ciruela placeholder:text-ciruela/40 focus:outline-none focus:ring-1 focus:ring-ciruela/40"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block font-body text-xs uppercase tracking-[0.14em] text-ciruela/50">
                     Ubicación
                   </label>
                   <select
@@ -658,6 +679,7 @@ export function AdminInventoryView({
                 <tr className="text-left text-xs uppercase tracking-wide text-ciruela/40">
                   <SortTh label="SKU" col="sku" sortCol={sortCol} sortDir={sortDir} onSort={toggleSort} className="pb-2" />
                   <SortTh label="Producto" col="product" sortCol={sortCol} sortDir={sortDir} onSort={toggleSort} className="pb-2" />
+                  <SortTh label="Marca" col="brand" sortCol={sortCol} sortDir={sortDir} onSort={toggleSort} className="pb-2 pr-4" />
                   <SortTh label="Ledger" col="ledger" sortCol={sortCol} sortDir={sortDir} onSort={toggleSort} className="pb-2" />
                   <SortTh label="Ubicación" col="location" sortCol={sortCol} sortDir={sortDir} onSort={toggleSort} className="pb-2 pr-6" />
                   <th className="pb-2 pr-6">Caducidad</th>
@@ -681,6 +703,7 @@ export function AdminInventoryView({
                     <tr key={item.id} className="border-t border-ciruela/8">
                       <td className="py-3 text-ciruela/50">{item.sku}</td>
                       <td className="py-3">{item.product}</td>
+                      <td className="py-3 pr-4 text-ciruela/60">{item.brand || "—"}</td>
                       <td className="py-3">
                         <Badge tone={LEDGER_TONE[item.ledger]}>{LEDGER_LABEL[item.ledger]}</Badge>
                       </td>
@@ -721,6 +744,7 @@ export function AdminInventoryView({
                 <tr className="text-left text-xs uppercase tracking-wide text-ciruela/40">
                   <SortTh label="SKU" col="sku" sortCol={sortCol} sortDir={sortDir} onSort={toggleSort} className="pb-2" />
                   <SortTh label="Producto" col="product" sortCol={sortCol} sortDir={sortDir} onSort={toggleSort} className="pb-2" />
+                  <SortTh label="Marca" col="brand" sortCol={sortCol} sortDir={sortDir} onSort={toggleSort} className="pb-2 pr-4" />
                   <SortTh label="Ubicación" col="location" sortCol={sortCol} sortDir={sortDir} onSort={toggleSort} className="pb-2 pr-6" />
                   <SortTh label="Cant." col="qty" sortCol={sortCol} sortDir={sortDir} onSort={toggleSort} className="pb-2 pr-3 text-right" />
                   <SortTh label="Par" col="par" sortCol={sortCol} sortDir={sortDir} onSort={toggleSort} className="pb-2 pr-6 text-right" />
@@ -736,6 +760,7 @@ export function AdminInventoryView({
                     <tr key={item.id} className="border-t border-ciruela/8">
                       <td className="py-3 text-ciruela/50">{item.sku}</td>
                       <td className="py-3">{item.product}</td>
+                      <td className="py-3 pr-4 text-ciruela/60">{item.brand || "—"}</td>
                       <td className="py-3 pr-6 text-ciruela/60">{item.location}</td>
                       <td className="py-3 pr-3 text-right">{item.qty}</td>
                       <td className="py-3 pr-6 text-right text-ciruela/50">{item.par}</td>
@@ -772,6 +797,7 @@ export function AdminInventoryView({
                 <tr className="text-left text-xs uppercase tracking-wide text-ciruela/40">
                   <SortTh label="SKU" col="sku" sortCol={sortCol} sortDir={sortDir} onSort={toggleSort} className="pb-2" />
                   <SortTh label="Producto" col="product" sortCol={sortCol} sortDir={sortDir} onSort={toggleSort} className="pb-2" />
+                  <SortTh label="Marca" col="brand" sortCol={sortCol} sortDir={sortDir} onSort={toggleSort} className="pb-2 pr-4" />
                   <SortTh label="Ubicación" col="location" sortCol={sortCol} sortDir={sortDir} onSort={toggleSort} className="pb-2 pr-6" />
                   <SortTh label="Cant." col="qty" sortCol={sortCol} sortDir={sortDir} onSort={toggleSort} className="pb-2 pr-3 text-right" />
                   <SortTh label="Par" col="par" sortCol={sortCol} sortDir={sortDir} onSort={toggleSort} className="pb-2 pr-6 text-right" />
@@ -790,6 +816,7 @@ export function AdminInventoryView({
                     <tr key={item.id} className="border-t border-ciruela/8">
                       <td className="py-3 text-ciruela/50">{item.sku}</td>
                       <td className="py-3">{item.product}</td>
+                      <td className="py-3 pr-4 text-ciruela/60">{item.brand || "—"}</td>
                       <td className="py-3 pr-6 text-ciruela/60">{item.location}</td>
                       <td className="py-3 pr-3 text-right">{item.qty}</td>
                       <td className="py-3 pr-6 text-right text-ciruela/50">{item.par}</td>
@@ -835,6 +862,7 @@ export function AdminInventoryView({
                 <tr className="text-left text-xs uppercase tracking-wide text-ciruela/40">
                   <SortTh label="SKU" col="sku" sortCol={sortCol} sortDir={sortDir} onSort={toggleSort} className="pb-2" />
                   <SortTh label="Producto" col="product" sortCol={sortCol} sortDir={sortDir} onSort={toggleSort} className="pb-2" />
+                  <SortTh label="Marca" col="brand" sortCol={sortCol} sortDir={sortDir} onSort={toggleSort} className="pb-2 pr-4" />
                   <SortTh label="Ubicación" col="location" sortCol={sortCol} sortDir={sortDir} onSort={toggleSort} className="pb-2 pr-6" />
                   <SortTh label="Cant." col="qty" sortCol={sortCol} sortDir={sortDir} onSort={toggleSort} className="pb-2 pr-3 text-right" />
                   <SortTh label="Par" col="par" sortCol={sortCol} sortDir={sortDir} onSort={toggleSort} className="pb-2 pr-6 text-right" />
@@ -850,6 +878,7 @@ export function AdminInventoryView({
                     <tr key={item.id} className="border-t border-ciruela/8">
                       <td className="py-3 text-ciruela/50">{item.sku}</td>
                       <td className="py-3">{item.product}</td>
+                      <td className="py-3 pr-4 text-ciruela/60">{item.brand || "—"}</td>
                       <td className="py-3 pr-6 text-ciruela/60">{item.location}</td>
                       <td className="py-3 pr-3 text-right">{item.qty}</td>
                       <td className="py-3 pr-6 text-right text-ciruela/50">{item.par}</td>
@@ -931,11 +960,16 @@ export function AdminInventoryView({
               {editModal.product} · {editModal.location}
             </p>
 
-            <div className="mb-4">
+            <div className="mb-4 grid grid-cols-2 gap-3">
               <TextInput
                 label="SKU"
                 value={editModal.sku}
                 onChange={(v) => setEditModal((m) => (m ? { ...m, sku: v, error: undefined } : m))}
+              />
+              <TextInput
+                label="Marca"
+                value={editModal.brand}
+                onChange={(v) => setEditModal((m) => (m ? { ...m, brand: v } : m))}
               />
             </div>
 

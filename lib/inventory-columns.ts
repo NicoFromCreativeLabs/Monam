@@ -10,6 +10,7 @@ export type LedgerLabel = "Piso" | "Backbar" | "Warehouse";
 export interface ExportableInventoryItem {
   sku: string;
   product: string;
+  brand?: string | null;
   location: string;
   qty: number;
   par: number;
@@ -40,6 +41,7 @@ export function inventoryExportRow(
   return {
     SKU: item.sku,
     Producto: item.product,
+    Marca: item.brand || undefined,
     Ledger: ledger,
     Ubicacion: item.location,
     Cantidad: item.qty,
@@ -58,10 +60,11 @@ export function inventoryExportRow(
 // The workbook has one sheet per ledger; each shows only the columns that apply
 // to it. The sheet name tells the upload which ledger the rows belong to.
 export const SHEET_COLUMNS: Record<LedgerLabel, string[]> = {
-  Piso: ["SKU", "Producto", "Ubicacion", "Cantidad", "Par", "Precio", "Costo", "Caducidad"],
+  Piso: ["SKU", "Producto", "Marca", "Ubicacion", "Cantidad", "Par", "Precio", "Costo", "Caducidad"],
   Backbar: [
     "SKU",
     "Producto",
+    "Marca",
     "Ubicacion",
     "Cantidad",
     "Par",
@@ -73,7 +76,7 @@ export const SHEET_COLUMNS: Record<LedgerLabel, string[]> = {
     "Envases abiertos",
     "ML abiertos",
   ],
-  Warehouse: ["SKU", "Producto", "Ubicacion", "Cantidad", "Par", "Costo", "Caducidad"],
+  Warehouse: ["SKU", "Producto", "Marca", "Ubicacion", "Cantidad", "Par", "Costo", "Caducidad"],
 };
 
 export interface InventorySheet {
