@@ -6,8 +6,12 @@ import {
   findClientByPhone,
   findOrCreateClientByPhone,
   createPendingDepositCheckout,
+  getAvailableSlots,
   DEPOSIT_AMOUNT_MXN,
 } from "@/lib/booking-core";
+import { studioNow } from "@/lib/booking-time";
+import { parseDate, parseTime } from "@/lib/whatsapp/parse";
+import { candidateTimes } from "@/lib/whatsapp/slots";
 import { STRIPE_ENABLED } from "@/lib/feature-flags";
 import { isDepositRequired } from "@/lib/deposit-settings";
 
@@ -50,42 +54,6 @@ function matchOption<T extends { label: string }>(text: string, options: T[]): T
 
 function listMessage(title: string, options: { label: string }[]) {
   return [title, ...options.map((o, i) => `${i + 1}. ${o.label}`)].join("\n");
-}
-
-// Accepts "hoy", "mañana", "DD/MM", "DD/MM/YYYY", or "YYYY-MM-DD". No
-// natural-language date parsing beyond that — same reasoning as the
-// numbered menus above.
-function parseDate(text: string): string | null {
-  const t = normalize(text);
-  const today = new Date();
-  if (t === "hoy" || t === "today") return today.toISOString().slice(0, 10);
-  if (t === "manana" || t === "tomorrow") {
-    const d = new Date(today);
-    d.setDate(d.getDate() + 1);
-    return d.toISOString().slice(0, 10);
-  }
-  const isoMatch = t.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-  if (isoMatch) return t;
-  const dmyMatch = t.match(/^(\d{1,2})\/(\d{1,2})(?:\/(\d{4}))?$/);
-  if (dmyMatch) {
-    const [, d, m, y] = dmyMatch;
-    const year = y ?? String(today.getFullYear());
-    return `${year}-${m.padStart(2, "0")}-${d.padStart(2, "0")}`;
-  }
-  return null;
-}
-
-function parseTime(text: string): string | null {
-  const t = normalize(text).replace(/\s+/g, "");
-  const match = t.match(/^(\d{1,2})(?::(\d{2}))?(am|pm)?$/);
-  if (!match) return null;
-  const [, hStr, mStr, ampm] = match;
-  let h = Number(hStr);
-  const m = mStr ? Number(mStr) : 0;
-  if (ampm === "pm" && h < 12) h += 12;
-  if (ampm === "am" && h === 12) h = 0;
-  if (h > 23 || m > 59) return null;
-  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
 }
 
 async function getActiveLocations() {
@@ -184,9 +152,15 @@ export async function handleIncomingMessage(phone: string, text: string): Promis
     }
 
     case "AWAITING_DATE": {
-      const date = parseDate(text);
+      const today = studioNow().date;
+      const date = parseDate(text, today);
       if (!date) {
-        return { reply: "No entendí la fecha. Escribe \"hoy\", \"mañana\", o una fecha como 15/10." };
+        return {
+          reply: "No entendí la fecha. Escribe \"hoy\", \"mañana\", un día como \"sábado\", o una fecha como 15/10.",
+        };
+      }
+      if (date < today) {
+        return { reply: "Esa fecha ya pasó. ¿Qué día te gustaría venir? (ej. mañana, o 15/10)" };
       }
       await updateConvo(phone, "AWAITING_TIME", { ...draft, date });
       return { reply: "¿A qué hora? (ej. 10:00 o 2pm)" };
@@ -198,6 +172,14 @@ export async function handleIncomingMessage(phone: string, text: string): Promis
         return { reply: "No entendí la hora. Escribe algo como 10:00 o 2pm." };
       }
       const nextDraft = { ...draft, time };
+      const free = await getAvailableSlots({
+        locationName: draft.locationName!,
+        date: draft.date!,
+        durationTier: draft.durationTier!,
+        protocolName: draft.protocolName ?? null,
+        times: [time],
+      });
+      if (free[time] === false) return unavailableReply(phone, draft, time);
       if (existingClient) {
         await updateConvo(phone, "AWAITING_CONFIRM", nextDraft);
         return { reply: confirmMessage(nextDraft) };
@@ -298,7 +280,7 @@ async function finalizeBooking(
   if (depositRequired && STRIPE_ENABLED) {
     const origin = process.env.NEXT_PUBLIC_SITE_URL ?? "https://monamskinstudio.com";
     const checkout = await createPendingDepositCheckout(
-      { ...bookingInput, clientId: client.id },
+      { ...bookingInput, clientId: client.id, notifyWhatsApp: phone },
       { successUrl: `${origin}/my`, cancelUrl: `${origin}/my/book` },
     );
     if ("error" in checkout) return { reply: `No pudimos generar tu link de pago: ${checkout.error}` };
@@ -317,7 +299,37 @@ async function finalizeBooking(
 
   const result = await insertAppointment({ ...bookingInput, clientId: client.id, depositId });
   if ("error" in result) {
-    return { reply: `${result.error}\nEscribe "cita" para elegir otro horario.` };
+    return unavailableReply(phone, draft, draft.time);
   }
   return { reply: "¡Listo! Tu cita quedó confirmada. Te esperamos 💆" };
+}
+
+// The time asked for is not free. Offers the free times of that day and goes back to
+// asking for the time — no need to start over.
+async function unavailableReply(phone: string, draft: BookingDraft, time: string | undefined): Promise<ConversationResult> {
+  const { locationName, durationTier, date } = draft;
+  if (!locationName || !durationTier || !date) {
+    return { reply: "Ese horario no está disponible. Escribe \"cita\" para elegir otro." };
+  }
+  const times = candidateTimes(date, durationTier);
+  const availability = await getAvailableSlots({
+    locationName,
+    date,
+    durationTier,
+    protocolName: draft.protocolName ?? null,
+    times,
+  });
+  const freeTimes = times.filter((t) => availability[t] !== false);
+
+  if (freeTimes.length === 0) {
+    await updateConvo(phone, "AWAITING_DATE", { ...draft, time: undefined });
+    return {
+      reply: `${time ? `Las ${time} no está disponible y` : "Y"} ese día ya no hay horarios libres. ¿Qué otro día te gustaría venir? (ej. mañana, o 15/10)`,
+    };
+  }
+  await updateConvo(phone, "AWAITING_TIME", { ...draft, time: undefined });
+  const shown = freeTimes.slice(0, 8).join(", ");
+  return {
+    reply: `${time ? `Las ${time} ya no está disponible.` : "Ese horario ya no está disponible."} Horarios libres ese día: ${shown}. Escribe el que prefieras.`,
+  };
 }

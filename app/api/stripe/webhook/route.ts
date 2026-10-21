@@ -4,6 +4,8 @@ import { constructWebhookEvent } from "@/lib/payments/stripe";
 import { confirmDepositAndBook } from "@/lib/booking-core";
 import { confirmPackagePurchase } from "@/lib/packages-core";
 import { prisma } from "@/lib/prisma";
+import { WHATSAPP_BOOKING_ENABLED } from "@/lib/feature-flags";
+import { sendWhatsAppMessage } from "@/lib/whatsapp/client";
 
 // Registers at https://<domain>/api/stripe/webhook in the Stripe Dashboard
 // (Developers → Webhooks), subscribed to checkout.session.completed. Stripe
@@ -75,6 +77,17 @@ export async function POST(request: Request) {
     },
     clientId,
   );
+
+  // A booking that started in the WhatsApp bot: tell the person how it went.
+  if (metadata.notifyPhone && WHATSAPP_BOOKING_ENABLED) {
+    const text =
+      "error" in result
+        ? "Recibimos tu depósito, pero ese horario ya se ocupó. Te contactaremos para reagendar tu cita sin costo."
+        : `¡Listo! Recibimos tu depósito y tu cita quedó confirmada: ${date} a las ${time} en ${locationName}. Te esperamos 💆`;
+    await sendWhatsAppMessage(metadata.notifyPhone, text).catch((err) =>
+      console.error("Could not send the WhatsApp deposit confirmation:", err),
+    );
+  }
 
   if ("error" in result) {
     // Payment succeeded but the slot is gone — not a webhook failure, a

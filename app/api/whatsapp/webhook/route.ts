@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { WHATSAPP_BOOKING_ENABLED } from "@/lib/feature-flags";
 import { sendWhatsAppMessage } from "@/lib/whatsapp/client";
 import { handleIncomingMessage } from "@/lib/whatsapp/conversation";
+import { verifyMetaSignature } from "@/lib/whatsapp/signature";
 
 // Registers at https://<domain>/api/whatsapp/webhook in Meta's App Dashboard
 // (WhatsApp → Configuration → Webhook). Meta calls GET once, at setup time,
@@ -40,11 +41,36 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "WhatsApp booking not configured" }, { status: 503 });
   }
 
-  const payload = (await request.json()) as WhatsAppWebhookPayload;
+  // Meta signs every call with the app secret: with WHATSAPP_APP_SECRET set, a
+  // call that is not signed by Meta is refused, so nobody else can post messages
+  // to the bot. (Without the variable the check is skipped — set it.)
+  const rawBody = await request.text();
+  const appSecret = process.env.WHATSAPP_APP_SECRET;
+  if (appSecret) {
+    if (!verifyMetaSignature(rawBody, request.headers.get("x-hub-signature-256"), appSecret)) {
+      return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
+    }
+  } else {
+    console.warn("WHATSAPP_APP_SECRET is not set: WhatsApp webhook calls are not being verified.");
+  }
+
+  let payload: WhatsAppWebhookPayload;
+  try {
+    payload = JSON.parse(rawBody) as WhatsAppWebhookPayload;
+  } catch {
+    return NextResponse.json({ received: true });
+  }
   const messages = payload.entry?.flatMap((e) => e.changes?.flatMap((c) => c.value?.messages ?? []) ?? []) ?? [];
 
   for (const message of messages) {
-    if (message.type !== "text" || !message.text?.body) continue;
+    if (message.type !== "text" || !message.text?.body) {
+      // Voice notes, photos, stickers…: the bot only reads text.
+      await sendWhatsAppMessage(
+        message.from,
+        "Por ahora solo puedo leer mensajes de texto 🙂 Escribe \"cita\" para agendar tu cita.",
+      ).catch((err) => console.error("WhatsApp reply error for", message.from, err));
+      continue;
+    }
     try {
       const { reply } = await handleIncomingMessage(message.from, message.text.body);
       await sendWhatsAppMessage(message.from, reply);

@@ -256,6 +256,9 @@ export async function insertAppointment(params: {
 // the appointment from nothing but the webhook payload.
 export interface PendingBookingDraft extends CreateAppointmentInput {
   clientId: string;
+  // The WhatsApp number to message once the deposit is paid (bookings that
+  // started in the WhatsApp bot).
+  notifyWhatsApp?: string;
 }
 
 export async function createPendingDepositCheckout(
@@ -297,6 +300,7 @@ export async function createPendingDepositCheckout(
         protocolName: draft.protocolName ?? "",
         addOnIds: (draft.addOnIds ?? []).join(","),
         clientId: draft.clientId,
+        ...(draft.notifyWhatsApp ? { notifyPhone: draft.notifyWhatsApp } : {}),
       },
     });
     await prisma.deposit.update({ where: { id: deposit.id }, data: { externalRef: checkout.sessionId } });
