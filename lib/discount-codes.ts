@@ -20,6 +20,7 @@ export interface DiscountCodeRule {
   validFrom: Date | null;
   validUntil: Date | null;
   claimUntil: Date | null;
+  listed: boolean; // ACCOUNT + CLAIM: shown to every account (otherwise only claimed by QR or code)
   maxUses: number | null; // CHECKOUT: total uses. ACCOUNT + CLAIM: total claims
   onePerClient: boolean;
   isActive: boolean;

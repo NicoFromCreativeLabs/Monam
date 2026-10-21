@@ -37,6 +37,7 @@ export async function getAccountDiscounts(clientId: string, now = new Date()): P
   });
 
   const claimable = codes
+    .filter((c) => c.listed) // private ones are only claimed with their QR or code
     .filter((c) =>
       claimCheck(ruleFromRow(c), {
         now,

@@ -25,6 +25,7 @@ export interface DiscountCodeRow {
   isActive: boolean;
   mode: "CHECKOUT" | "SIGNUP" | "CLAIM";
   claimUntil: string | null;
+  listed: boolean;
   claims: number; // account discounts: how many accounts have it
   uses: number;
   givenMxn: number;
@@ -75,6 +76,7 @@ export function AdminDiscountsView({
   // given to every new account (launch), or claimed in her account (Cyber Monday).
   const [how, setHow] = useState<"CHECKOUT" | "SIGNUP" | "CLAIM">("CHECKOUT");
   const [claimUntil, setClaimUntil] = useState("");
+  const [listed, setListed] = useState(false);
   const [name, setName] = useState("");
   const [code, setCode] = useState("");
   const [kind, setKind] = useState<DiscountCodeKind>("PERCENT");
@@ -112,6 +114,7 @@ export function AdminDiscountsView({
         mode: how === "CHECKOUT" ? "CHECKOUT" : "ACCOUNT",
         accountGrant: how === "CHECKOUT" ? null : how,
         claimUntil: how === "CLAIM" ? claimUntil || null : null,
+        listed: how === "CLAIM" ? listed : false,
         maxUses: maxUses.trim() ? Number(maxUses) : null,
         onePerClient: how === "CHECKOUT" ? onePerClient : true,
       });
@@ -127,6 +130,7 @@ export function AdminDiscountsView({
       setValidFrom("");
       setValidUntil("");
       setClaimUntil("");
+      setListed(false);
       setMaxUses("");
       setOnePerClient(false);
       router.refresh();
@@ -343,6 +347,22 @@ export function AdminDiscountsView({
                   className={inputClass}
                 />
               </div>
+              {how === "CLAIM" && (
+                <label className="flex cursor-pointer items-start gap-2 self-end pb-2 font-body text-sm text-ciruela min-[700px]:col-span-2">
+                  <input
+                    type="checkbox"
+                    checked={listed}
+                    onChange={(e) => setListed(e.target.checked)}
+                    className="mt-0.5 h-4 w-4 accent-[#4a1f3d]"
+                  />
+                  <span>
+                    Mostrarlo en Mis descuentos de todas las cuentas
+                    <span className="block text-xs text-ciruela/60">
+                      Si no lo marcas, es privado: solo lo reclama quien escanee su QR o escriba su código.
+                    </span>
+                  </span>
+                </label>
+              )}
               {how === "CHECKOUT" ? (
                 <label className="flex cursor-pointer items-center gap-2 self-end pb-2 font-body text-sm text-ciruela">
                   <input
@@ -406,7 +426,10 @@ export function AdminDiscountsView({
                         </span>
                       </td>
                       <td className="py-3 font-medium tracking-wide">{c.code}</td>
-                      <td className="py-3 text-xs text-ciruela/60">{MODE_LABEL[c.mode]}</td>
+                      <td className="py-3 text-xs text-ciruela/60">
+                        {MODE_LABEL[c.mode]}
+                        {c.mode === "CLAIM" && <span className="block">{c.listed ? "Visible en todas las cuentas" : "Privado (QR o código)"}</span>}
+                      </td>
                       <td className="py-3 text-ciruela/60">{validityLabel(c)}</td>
                       <td className="py-3 text-right">
                         {c.mode === "CHECKOUT" ? (

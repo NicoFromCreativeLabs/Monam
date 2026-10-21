@@ -33,6 +33,7 @@ export default async function AdminDiscounts() {
       isActive: c.isActive,
       mode: modeKey(c),
       claimUntil: c.claimUntil ? c.claimUntil.toISOString() : null,
+      listed: c.listed,
       claims: claimCounts.find((x) => x.codeId === c.id)?._count ?? 0,
       uses: u?._count ?? 0,
       givenMxn: u?._sum.amountMxn ?? 0,

@@ -21,6 +21,7 @@ const rule = (over: Partial<DiscountCodeRule> = {}): DiscountCodeRule => ({
   mode: "CHECKOUT",
   accountGrant: null,
   claimUntil: null,
+  listed: false,
   addOnId: null,
   productSku: null,
   validFrom: null,

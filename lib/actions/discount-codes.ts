@@ -36,6 +36,9 @@ export interface CreateDiscountCodeInput {
   mode?: DiscountMode;
   accountGrant?: AccountGrant | null;
   claimUntil?: string | null; // YYYY-MM-DD
+  // CLAIM only: show it in every account's "Mis descuentos" (otherwise it is private:
+  // claimed only with its QR or code).
+  listed?: boolean;
   maxUses?: number | null;
   onePerClient: boolean;
 }
@@ -91,6 +94,7 @@ export async function createDiscountCodeAction(input: CreateDiscountCodeInput): 
       mode,
       accountGrant,
       claimUntil,
+      listed: mode === "ACCOUNT" && accountGrant === "CLAIM" ? !!input.listed : false,
       maxUses: input.maxUses ?? null,
       // An account discount is always once per account.
       onePerClient: mode === "ACCOUNT" ? true : input.onePerClient,

@@ -1132,6 +1132,7 @@ model DiscountCode {
   mode            DiscountMode     @default(CHECKOUT)
   accountGrant    AccountGrant? // ACCOUNT only
   claimUntil      DateTime? // ACCOUNT + CLAIM: last day she can claim it (validUntil is the last day to use it)
+  listed          Boolean          @default(false) // ACCOUNT + CLAIM: shown in every account's "Mis descuentos"; false = only claimed with its QR or code
   addOnId         String? // FREE_ADD_ON
   productSku      String? // FREE_PRODUCT
   validFrom       DateTime?

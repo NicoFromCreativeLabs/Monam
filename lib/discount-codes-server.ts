@@ -27,6 +27,7 @@ export function ruleFromRow(row: DiscountCode): DiscountCodeRule {
     validFrom: row.validFrom,
     validUntil: row.validUntil,
     claimUntil: row.claimUntil,
+    listed: row.listed,
     maxUses: row.maxUses,
     onePerClient: row.onePerClient,
     isActive: row.isActive,
