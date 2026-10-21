@@ -119,7 +119,7 @@ export async function deleteDiscountCodeAction(id: string): Promise<{ error: str
 
 // The link the QR carries: scanning it with a phone camera opens a page that says
 // "show this code at reception"; the front desk's scanner reads the code from it.
-export function discountLink(code: string): string {
+function discountLink(code: string): string {
   const base = (process.env.NEXT_PUBLIC_SITE_URL || "https://monam.mx").replace(/\/+$/, "");
   return `${base}/d/${code}`;
 }
