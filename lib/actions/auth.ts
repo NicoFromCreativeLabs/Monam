@@ -20,6 +20,12 @@ export async function getSwitchableRole(): Promise<"OWNER" | "CLINIC_MANAGER" | 
   return null;
 }
 
+// Only a page of the client area (/my…) is ever followed after the login — never
+// another site, never a staff page.
+function safeClientNext(raw: string): string | null {
+  return raw.startsWith("/my") && !raw.startsWith("//") && !raw.includes("\\") && !raw.includes("://") ? raw : null;
+}
+
 export async function signIn(_prevState: ActionState, formData: FormData): Promise<ActionState> {
   const email = String(formData.get("email") ?? "").trim();
   const password = String(formData.get("password") ?? "");
@@ -35,7 +41,7 @@ export async function signIn(_prevState: ActionState, formData: FormData): Promi
   if (appUser) redirect(homeForRole(appUser.role));
 
   const client = await prisma.client.findUnique({ where: { authUserId: data.user.id } });
-  if (client) redirect("/my");
+  if (client) redirect(safeClientNext(String(formData.get("next") ?? "")) ?? "/my");
 
   // Authenticated with Supabase but no matching AppUser/Client row — should
   // never happen via our own sign-up/invite flows. Sign out rather than

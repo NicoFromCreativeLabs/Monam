@@ -58,7 +58,10 @@ export async function updateSession(request: NextRequest) {
 
   if (!user && !isPublicPath(request.nextUrl.pathname)) {
     const url = request.nextUrl.clone();
+    const wanted = request.nextUrl.pathname + request.nextUrl.search;
     url.pathname = "/login";
+    url.search = "";
+    if (request.nextUrl.pathname.startsWith("/my")) url.searchParams.set("next", wanted);
     return NextResponse.redirect(url);
   }
 

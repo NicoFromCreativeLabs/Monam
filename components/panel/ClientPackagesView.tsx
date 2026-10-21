@@ -1,11 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Card } from "@/components/panel/Card";
 import { purchasePackageAction } from "@/lib/actions/packages";
 import type { PackageBalanceView } from "@/lib/packages-core";
-import { claimDiscountAction } from "@/lib/actions/client-discounts";
+import { claimDiscountAction, claimDiscountByCodeAction } from "@/lib/actions/client-discounts";
+import { QrScanner } from "@/components/panel/QrScanner";
 import type { AccountDiscounts } from "@/lib/client-discounts";
 
 export interface PackageCatalogItem {
@@ -32,15 +33,54 @@ export function ClientPackagesView({
   redemptions,
   catalog,
   discounts,
+  claimCode,
 }: {
   activePackage: PackageBalanceView | null;
   redemptions: PackageRedemptionItem[];
   catalog: PackageCatalogItem[];
   discounts: AccountDiscounts;
+  claimCode: string | null; // from a scanned promo QR (/my/packages?reclamar=CODE)
 }) {
   const router = useRouter();
   const [claiming, setClaiming] = useState<string | null>(null);
   const [claimError, setClaimError] = useState<string | null>(null);
+  const [claimOk, setClaimOk] = useState<string | null>(null);
+  const [claimOpen, setClaimOpen] = useState(false);
+  const [scanning, setScanning] = useState(false);
+  const [codeText, setCodeText] = useState("");
+
+  // Add a discount to the account from a code, typed or scanned from a promo QR.
+  async function claimByCode(raw: string) {
+    setClaiming("code");
+    setClaimError(null);
+    setClaimOk(null);
+    try {
+      const result = await claimDiscountByCodeAction(raw);
+      if ("error" in result) {
+        setClaimError(result.error);
+        setClaimOpen(true);
+      } else {
+        setClaimOk(`Listo: "${result.name}" ya está en tu cuenta.`);
+        setCodeText("");
+        setClaimOpen(false);
+        router.refresh();
+      }
+    } catch {
+      setClaimError("No se pudo reclamar. Intenta de nuevo.");
+    } finally {
+      setClaiming(null);
+    }
+  }
+
+  // Arriving from a promo QR: claim it once, then clean the address.
+  const claimedFromLink = useRef(false);
+  useEffect(() => {
+    if (!claimCode || claimedFromLink.current) return;
+    claimedFromLink.current = true;
+    claimByCode(claimCode).finally(() => window.history.replaceState(null, "", "/my/packages"));
+    // Runs once for the link's code.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [claimCode]);
 
   async function claim(codeId: string) {
     setClaiming(codeId);
@@ -73,12 +113,13 @@ export function ClientPackagesView({
     window.location.href = result.checkoutUrl;
   }
 
-  const hasDiscounts = discounts.claimable.length + discounts.mine.length + discounts.used.length > 0;
-
   return (
     <div className="space-y-6">
-      {hasDiscounts && (
+      {(
         <Card title="Mis descuentos">
+          {claimOk && (
+            <p className="mb-3 rounded-lg bg-oliva/10 px-3 py-2 font-body text-xs text-oliva">{claimOk}</p>
+          )}
           {claimError && (
             <p className="mb-3 rounded-lg bg-[#b3392f]/10 px-3 py-2 font-body text-xs text-[#b3392f]">{claimError}</p>
           )}
@@ -124,12 +165,86 @@ export function ClientPackagesView({
               </li>
             ))}
           </ul>
+          {discounts.claimable.length + discounts.mine.length + discounts.used.length === 0 && (
+            <p className="py-2 font-body text-sm text-ciruela/50">
+              Todavía no tienes descuentos. Escanea el QR de una promoción o escribe su código para reclamarla.
+            </p>
+          )}
           {discounts.mine.length > 0 && (
             <p className="mt-3 font-body text-xs text-ciruela/50">
               Tus descuentos en tu cuenta se aplican al pagar en recepción; solo dile a la vendedora que tienes uno.
             </p>
           )}
+
+          <div className="mt-4 border-t border-ciruela/8 pt-4">
+            {claimOpen ? (
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  claimByCode(codeText);
+                }}
+                className="space-y-2"
+              >
+                <div className="flex gap-2">
+                  <input
+                    autoFocus
+                    value={codeText}
+                    onChange={(e) => setCodeText(e.target.value.toUpperCase())}
+                    placeholder="Código del descuento"
+                    className="w-full rounded-lg border border-ciruela/20 bg-hueso px-3 py-2 font-body text-sm text-ciruela placeholder:text-ciruela/40 focus:outline-none focus:ring-1 focus:ring-ciruela/40"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setScanning(true)}
+                    className="shrink-0 rounded-full border border-ciruela px-3 py-1.5 font-body text-xs text-ciruela hover:bg-ciruela hover:text-hueso"
+                  >
+                    Escanear QR
+                  </button>
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    type="submit"
+                    disabled={claiming === "code" || !codeText.trim()}
+                    className="rounded-full bg-ciruela px-4 py-1.5 font-body text-xs text-hueso disabled:opacity-50"
+                  >
+                    {claiming === "code" ? "Reclamando…" : "Reclamar"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setClaimOpen(false);
+                      setClaimError(null);
+                    }}
+                    className="font-body text-xs text-ciruela/70 underline"
+                  >
+                    Cancelar
+                  </button>
+                </div>
+              </form>
+            ) : (
+              <button
+                onClick={() => {
+                  setClaimOpen(true);
+                  setClaimOk(null);
+                }}
+                className="rounded-full border border-ciruela px-4 py-2 font-body text-xs text-ciruela hover:bg-ciruela hover:text-hueso"
+              >
+                Reclamar un descuento (QR o código)
+              </button>
+            )}
+          </div>
         </Card>
+      )}
+
+      {scanning && (
+        <QrScanner
+          onClose={() => setScanning(false)}
+          onDetect={(text) => {
+            setScanning(false);
+            setClaimOpen(true);
+            claimByCode(text);
+          }}
+        />
       )}
 
       <Card title="Mis paquetes">

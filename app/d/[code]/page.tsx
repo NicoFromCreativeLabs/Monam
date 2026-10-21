@@ -41,17 +41,17 @@ export default async function DiscountPage({ params }: { params: Promise<{ code:
               )}
               {row.mode === "ACCOUNT" && (
                 <a
-                  href={row.accountGrant === "SIGNUP" ? "/signup" : "/my/packages"}
+                  href={row.accountGrant === "SIGNUP" ? "/signup" : `/my/packages?reclamar=${row.code}`}
                   className="mt-5 inline-block rounded-full bg-ciruela px-5 py-2.5 font-body text-sm text-hueso"
                 >
-                  {row.accountGrant === "SIGNUP" ? "Crear mi cuenta" : "Ir a mi cuenta"}
+                  {row.accountGrant === "SIGNUP" ? "Crear mi cuenta" : "Reclamar en mi cuenta"}
                 </a>
               )}
               {usable && row.mode === "ACCOUNT" ? (
                 <p className="mt-5 font-body text-sm text-ciruela/70">
                   {row.accountGrant === "SIGNUP"
                     ? "Crea tu cuenta y este descuento se agrega solo para tu primera visita."
-                    : "Reclámalo en tu cuenta (Paquetes → Mis descuentos) y úsalo en tu cita."}
+                    : "Entra a tu cuenta para reclamarlo (queda en Paquetes → Mis descuentos) y úsalo en tu cita."}
                   {row.validUntil ? ` Válido hasta el ${formatDate(row.validUntil)}.` : ""}
                 </p>
               ) : usable ? (

@@ -7,7 +7,12 @@ import { ClientPackagesView } from "@/components/panel/ClientPackagesView";
 // Sessions remaining, expiry, which location redeemed each session (spec
 // §8.1) — all real PackagePurchase/PackageRedemption rows now (Commerce
 // phase), not the mock/client-state placeholder this page used to render.
-export default async function ClientPackages() {
+export default async function ClientPackages({
+  searchParams,
+}: {
+  searchParams: Promise<{ reclamar?: string }>;
+}) {
+  const { reclamar } = await searchParams;
   const { client } = await requireClientOrPreview();
 
   const [activePackage, purchases, catalog, discounts] = await Promise.all([
@@ -37,6 +42,7 @@ export default async function ClientPackages() {
       activePackage={activePackage}
       redemptions={redemptions}
       discounts={discounts}
+      claimCode={reclamar ?? null}
       catalog={catalog.map((p) => ({
         id: p.id,
         name: p.name,

@@ -1,6 +1,7 @@
 "use client";
 
-import { useActionState } from "react";
+import { Suspense, useActionState } from "react";
+import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { signIn, type ActionState } from "@/lib/actions/auth";
 import { PasswordField } from "@/components/panel/PasswordField";
@@ -9,7 +10,8 @@ import { PasswordField } from "@/components/panel/PasswordField";
 // (/admin, /staff, or /my) is decided server-side in the signIn action from
 // the AppUser/Client row, never from anything the client chooses (spec §2:
 // individual named logins, never a role picker).
-export default function LoginPage() {
+function LoginForm() {
+  const next = useSearchParams().get("next") ?? "";
   const [state, formAction, pending] = useActionState<ActionState, FormData>(signIn, undefined);
 
   return (
@@ -21,6 +23,7 @@ export default function LoginPage() {
         </div>
 
         <form action={formAction} className="space-y-4">
+          <input type="hidden" name="next" value={next} />
           <div>
             <label className="mb-1 block font-body text-xs uppercase tracking-[0.14em] text-ciruela/50">
               Correo
@@ -68,5 +71,13 @@ export default function LoginPage() {
         </p>
       </div>
     </main>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense>
+      <LoginForm />
+    </Suspense>
   );
 }
