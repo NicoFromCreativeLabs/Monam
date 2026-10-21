@@ -4,6 +4,8 @@
 
 export type DiscountCodeKind = "PERCENT" | "AMOUNT" | "FREE_ADD_ON" | "FREE_PRODUCT";
 export type DiscountScope = "ALL" | "SERVICES" | "PRODUCTS";
+export type DiscountMode = "CHECKOUT" | "ACCOUNT";
+export type AccountGrant = "SIGNUP" | "CLAIM";
 
 export interface DiscountCodeRule {
   code: string;
@@ -11,11 +13,14 @@ export interface DiscountCodeRule {
   kind: DiscountCodeKind;
   value: number;
   scope: DiscountScope;
+  mode: DiscountMode;
+  accountGrant: AccountGrant | null;
   addOnId: string | null;
   productSku: string | null;
   validFrom: Date | null;
   validUntil: Date | null;
-  maxUses: number | null;
+  claimUntil: Date | null;
+  maxUses: number | null; // CHECKOUT: total uses. ACCOUNT + CLAIM: total claims
   onePerClient: boolean;
   isActive: boolean;
 }
@@ -26,6 +31,9 @@ export interface TicketContext {
   usesSoFar: number; // redemptions of this code so far
   clientUsesSoFar: number; // redemptions of this code by this client
   hasClient: boolean;
+  // ACCOUNT codes: whether this client has the discount in her account, and if
+  // she already used it.
+  claim: { exists: boolean; used: boolean };
   servicePrice: number;
   addOns: { addOnId: string; price: number }[];
   retail: { sku: string; price: number; qty: number }[];
@@ -72,8 +80,17 @@ export function evaluateCode(rule: DiscountCodeRule, ctx: TicketContext): CodeEv
   if (!rule.isActive) return { ok: false, error: "Este código está desactivado." };
   if (rule.validFrom && ctx.now < rule.validFrom) return { ok: false, error: "Este código todavía no es válido." };
   if (rule.validUntil && ctx.now > rule.validUntil) return { ok: false, error: "Este código ya venció." };
-  if (rule.maxUses !== null && ctx.usesSoFar >= rule.maxUses) return { ok: false, error: "Este código ya se agotó." };
-  if (rule.onePerClient) {
+  if (rule.mode === "ACCOUNT") {
+    // Lives in the client's account: she must have it, and it is used once.
+    if (!ctx.hasClient) {
+      return { ok: false, error: "Este descuento está en la cuenta de la clienta: cobra desde su cita para identificarla." };
+    }
+    if (!ctx.claim.exists) return { ok: false, error: "Esta clienta no tiene este descuento en su cuenta." };
+    if (ctx.claim.used) return { ok: false, error: "Esta clienta ya usó este descuento." };
+  } else if (rule.maxUses !== null && ctx.usesSoFar >= rule.maxUses) {
+    return { ok: false, error: "Este código ya se agotó." };
+  }
+  if (rule.mode === "CHECKOUT" && rule.onePerClient) {
     if (!ctx.hasClient) {
       return { ok: false, error: "Este código es de un solo uso por clienta: cobra desde la cita para identificarla." };
     }
@@ -123,6 +140,9 @@ export function validateNewCode(input: {
   validFrom?: Date | null;
   validUntil?: Date | null;
   maxUses?: number | null;
+  mode?: DiscountMode;
+  accountGrant?: AccountGrant | null;
+  claimUntil?: Date | null;
 }): string | null {
   if (!isValidCode(input.code)) return "El código debe tener de 3 a 40 letras, números o guiones.";
   if (input.name.trim().length < 2) return "Ponle un nombre al descuento.";
@@ -134,6 +154,10 @@ export function validateNewCode(input: {
   }
   if (input.kind === "FREE_ADD_ON" && !input.addOnId) return "Elige el add-on de cortesía.";
   if (input.kind === "FREE_PRODUCT" && !input.productSku) return "Elige el producto de cortesía.";
+  if (input.mode === "ACCOUNT" && !input.accountGrant) return "Elige cómo llega el descuento a la cuenta.";
+  if (input.claimUntil && input.validUntil && input.claimUntil > input.validUntil) {
+    return "El periodo para reclamarlo no puede terminar después de la fecha límite de uso.";
+  }
   if (input.validFrom && input.validUntil && input.validUntil < input.validFrom) {
     return "La fecha de fin debe ser posterior a la de inicio.";
   }
@@ -141,4 +165,40 @@ export function validateNewCode(input: {
     return "El máximo de usos debe ser 1 o más.";
   }
   return null;
+}
+
+export const MODE_LABEL: Record<"CHECKOUT" | "SIGNUP" | "CLAIM", string> = {
+  CHECKOUT: "QR en caja · recurrente",
+  SIGNUP: "Cuenta nueva · una vez por cuenta",
+  CLAIM: "Se reclama en la cuenta · una vez por cuenta",
+};
+
+export function modeKey(rule: Pick<DiscountCodeRule, "mode" | "accountGrant">): "CHECKOUT" | "SIGNUP" | "CLAIM" {
+  if (rule.mode === "CHECKOUT") return "CHECKOUT";
+  return rule.accountGrant === "SIGNUP" ? "SIGNUP" : "CLAIM";
+}
+
+// Can this client claim an account discount right now (it shows up in her account
+// as "Reclamar")? Pure; the server checks it again on the claim.
+export function claimCheck(
+  rule: DiscountCodeRule,
+  ctx: { now: Date; claimsSoFar: number; alreadyClaimed: boolean },
+): { ok: true } | { ok: false; error: string } {
+  if (rule.mode !== "ACCOUNT" || rule.accountGrant !== "CLAIM") return { ok: false, error: "Este descuento no se reclama." };
+  if (!rule.isActive) return { ok: false, error: "Este descuento ya no está disponible." };
+  if (ctx.alreadyClaimed) return { ok: false, error: "Ya lo reclamaste." };
+  if (rule.validFrom && ctx.now < rule.validFrom) return { ok: false, error: "Todavía no se puede reclamar." };
+  const lastDay = rule.claimUntil ?? rule.validUntil;
+  if (lastDay && ctx.now > lastDay) return { ok: false, error: "El periodo para reclamarlo terminó." };
+  if (rule.maxUses !== null && ctx.claimsSoFar >= rule.maxUses) return { ok: false, error: "Ya se agotaron." };
+  return { ok: true };
+}
+
+// Is this a launch discount that a brand-new account gets automatically?
+export function grantsOnSignup(rule: DiscountCodeRule, ctx: { now: Date; claimsSoFar: number }): boolean {
+  if (rule.mode !== "ACCOUNT" || rule.accountGrant !== "SIGNUP" || !rule.isActive) return false;
+  if (rule.validFrom && ctx.now < rule.validFrom) return false;
+  if (rule.validUntil && ctx.now > rule.validUntil) return false;
+  if (rule.maxUses !== null && ctx.claimsSoFar >= rule.maxUses) return false;
+  return true;
 }

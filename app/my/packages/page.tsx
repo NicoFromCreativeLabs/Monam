@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { requireClientOrPreview } from "@/lib/auth/dal";
 import { getActivePackageBalance } from "@/lib/packages-core";
+import { getAccountDiscounts } from "@/lib/client-discounts";
 import { ClientPackagesView } from "@/components/panel/ClientPackagesView";
 
 // Sessions remaining, expiry, which location redeemed each session (spec
@@ -9,7 +10,7 @@ import { ClientPackagesView } from "@/components/panel/ClientPackagesView";
 export default async function ClientPackages() {
   const { client } = await requireClientOrPreview();
 
-  const [activePackage, purchases, catalog] = await Promise.all([
+  const [activePackage, purchases, catalog, discounts] = await Promise.all([
     getActivePackageBalance(client.id),
     prisma.packagePurchase.findMany({
       where: { clientId: client.id },
@@ -19,6 +20,7 @@ export default async function ClientPackages() {
       orderBy: { purchasedAt: "desc" },
     }),
     prisma.packageOption.findMany({ where: { isActive: true }, orderBy: { priceMxn: "asc" } }),
+    getAccountDiscounts(client.id),
   ]);
 
   const redemptions = purchases
@@ -34,6 +36,7 @@ export default async function ClientPackages() {
     <ClientPackagesView
       activePackage={activePackage}
       redemptions={redemptions}
+      discounts={discounts}
       catalog={catalog.map((p) => ({
         id: p.id,
         name: p.name,

@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { headers } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
 import { prisma } from "@/lib/prisma";
+import { grantSignupDiscounts } from "@/lib/client-discounts";
 import { getCurrentAppUser, homeForRole } from "@/lib/auth/dal";
 
 export type ActionState = { error?: string; message?: string } | undefined;
@@ -156,6 +157,9 @@ export async function signUpClient(_prevState: ActionState, formData: FormData):
   const client = await prisma.client.create({
     data: { authUserId: data.user.id, name, phone, email },
   });
+
+  // Launch discounts: a new account gets them in her account automatically.
+  await grantSignupDiscounts(client.id).catch((err) => console.error("Could not grant signup discounts:", err));
 
   // Records the acceptance as a real Consent row (spec §5.1/§8.1) instead of
   // just gating the submit button — /my/consent already displays this as if

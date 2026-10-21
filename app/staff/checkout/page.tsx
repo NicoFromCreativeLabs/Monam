@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { getCurrentAppUser } from "@/lib/auth/dal";
 import { requireOnShift } from "@/lib/shifts";
+import { getUsableAccountDiscounts } from "@/lib/client-discounts";
 import {
   StaffCheckoutView,
   type CheckoutCatalogItem,
@@ -67,6 +68,12 @@ export default async function StaffCheckout({
           recommendedBy: appointment.treatmentRecord!.esthetician.name,
         })),
         depositCredit: appointment.deposit?.status === "HELD" ? -appointment.deposit.amountMxn : 0,
+        // Discounts she has in her account (launch, Cyber Monday…): the vendedor can apply them.
+        clientDiscounts: (await getUsableAccountDiscounts(appointment.clientId)).map((d) => ({
+          code: d.code,
+          name: d.name,
+          summary: d.summary,
+        })),
       };
     }
   }

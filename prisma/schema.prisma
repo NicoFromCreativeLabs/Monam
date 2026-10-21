@@ -413,6 +413,7 @@ model Client {
   sales            Sale[]
   deposits         Deposit[]
   packagePurchases PackagePurchase[]
+  discounts        ClientDiscount[]
   incidents        ClinicalIncident[]
   approvalRequests ApprovalRequest[]
 
@@ -1100,6 +1101,21 @@ enum DiscountCodeKind {
   FREE_PRODUCT // gives one unit of the retail product productSku free
 }
 
+// How a code reaches the client. CHECKOUT: anyone, at the front desk, every time
+// (friends & family, staff discount). ACCOUNT: lives in the client's account and
+// is used once per account — either given automatically when the account is
+// created (SIGNUP: launch discount) or claimed by her in the account (CLAIM:
+// Cyber Monday).
+enum DiscountMode {
+  CHECKOUT
+  ACCOUNT
+}
+
+enum AccountGrant {
+  SIGNUP
+  CLAIM
+}
+
 enum DiscountScope {
   ALL // service + add-ons + retail
   SERVICES // service + add-ons
@@ -1113,6 +1129,9 @@ model DiscountCode {
   kind            DiscountCodeKind
   value           Int              @default(0)
   scope           DiscountScope    @default(ALL)
+  mode            DiscountMode     @default(CHECKOUT)
+  accountGrant    AccountGrant? // ACCOUNT only
+  claimUntil      DateTime? // ACCOUNT + CLAIM: last day she can claim it (validUntil is the last day to use it)
   addOnId         String? // FREE_ADD_ON
   productSku      String? // FREE_PRODUCT
   validFrom       DateTime?
@@ -1124,6 +1143,7 @@ model DiscountCode {
   createdAt       DateTime         @default(now())
 
   redemptions DiscountRedemption[]
+  claims      ClientDiscount[]
 
   @@map("discount_codes")
 }
@@ -1144,4 +1164,22 @@ model DiscountRedemption {
   @@index([codeId])
   @@index([clientId])
   @@map("discount_redemptions")
+}
+
+// An account-bound discount in a client's account: given at signup or claimed by
+// her, then used once at checkout (redeemedAt). One per account and code.
+model ClientDiscount {
+  id         String    @id @default(uuid())
+  clientId   String
+  codeId     String
+  claimedAt  DateTime  @default(now())
+  redeemedAt DateTime?
+  saleId     String?   @unique
+
+  client Client       @relation(fields: [clientId], references: [id])
+  code   DiscountCode @relation(fields: [codeId], references: [id])
+
+  @@unique([clientId, codeId])
+  @@index([codeId])
+  @@map("client_discounts")
 }

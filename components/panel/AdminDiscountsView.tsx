@@ -11,7 +11,7 @@ import {
   getDiscountQrAction,
   setDiscountCodeActiveAction,
 } from "@/lib/actions/discount-codes";
-import type { DiscountCodeKind, DiscountScope } from "@/lib/discount-codes";
+import { MODE_LABEL, type DiscountCodeKind, type DiscountScope } from "@/lib/discount-codes";
 
 export interface DiscountCodeRow {
   id: string;
@@ -23,6 +23,9 @@ export interface DiscountCodeRow {
   maxUses: number | null;
   onePerClient: boolean;
   isActive: boolean;
+  mode: "CHECKOUT" | "SIGNUP" | "CLAIM";
+  claimUntil: string | null;
+  claims: number; // account discounts: how many accounts have it
   uses: number;
   givenMxn: number;
 }
@@ -68,6 +71,10 @@ export function AdminDiscountsView({
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
 
+  // How the discount reaches the client: a QR/code at the front desk (recurring),
+  // given to every new account (launch), or claimed in her account (Cyber Monday).
+  const [how, setHow] = useState<"CHECKOUT" | "SIGNUP" | "CLAIM">("CHECKOUT");
+  const [claimUntil, setClaimUntil] = useState("");
   const [name, setName] = useState("");
   const [code, setCode] = useState("");
   const [kind, setKind] = useState<DiscountCodeKind>("PERCENT");
@@ -102,8 +109,11 @@ export function AdminDiscountsView({
         productSku: kind === "FREE_PRODUCT" ? productSku || null : null,
         validFrom: validFrom || null,
         validUntil: validUntil || null,
+        mode: how === "CHECKOUT" ? "CHECKOUT" : "ACCOUNT",
+        accountGrant: how === "CHECKOUT" ? null : how,
+        claimUntil: how === "CLAIM" ? claimUntil || null : null,
         maxUses: maxUses.trim() ? Number(maxUses) : null,
-        onePerClient,
+        onePerClient: how === "CHECKOUT" ? onePerClient : true,
       });
       if ("error" in result) {
         setError(result.error);
@@ -116,6 +126,7 @@ export function AdminDiscountsView({
       setProductSku("");
       setValidFrom("");
       setValidUntil("");
+      setClaimUntil("");
       setMaxUses("");
       setOnePerClient(false);
       router.refresh();
@@ -198,6 +209,31 @@ export function AdminDiscountsView({
       <div className="flex-1 space-y-6 px-4 py-6 min-[860px]:px-8">
         <Card title="Nuevo descuento">
           <form onSubmit={create} className="space-y-4">
+            <div>
+              <label className={labelClass}>Cómo se usa</label>
+              <div className="grid grid-cols-1 gap-2 min-[700px]:grid-cols-3">
+                {(
+                  [
+                    ["CHECKOUT", "QR en caja", "Cualquiera lo usa al pagar, las veces que quiera: friends & family, empleados."],
+                    ["SIGNUP", "Cuenta nueva", "Se agrega solo a cada cuenta nueva y se usa una vez: descuento de lanzamiento."],
+                    ["CLAIM", "Se reclama en la cuenta", "Cada clienta lo reclama en su cuenta y lo usa una vez: Cyber Monday."],
+                  ] as const
+                ).map(([key, title, help]) => (
+                  <button
+                    key={key}
+                    type="button"
+                    onClick={() => setHow(key)}
+                    aria-pressed={how === key}
+                    className={`rounded-lg border px-3 py-3 text-left font-body transition-colors ${
+                      how === key ? "border-ciruela bg-ciruela text-hueso" : "border-ciruela/20 text-ciruela hover:border-ciruela/50"
+                    }`}
+                  >
+                    <span className="block text-sm">{title}</span>
+                    <span className={`mt-1 block text-xs ${how === key ? "text-hueso/80" : "text-ciruela/60"}`}>{help}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
             <div className="grid grid-cols-1 gap-3 min-[700px]:grid-cols-2">
               <div>
                 <label className={labelClass}>Nombre</label>
@@ -285,11 +321,19 @@ export function AdminDiscountsView({
                 <input type="date" value={validFrom} onChange={(e) => setValidFrom(e.target.value)} className={inputClass} />
               </div>
               <div>
-                <label className={labelClass}>Válido hasta (opcional)</label>
+                <label className={labelClass}>{how === "CHECKOUT" ? "Válido hasta (opcional)" : "Último día para usarlo (opcional)"}</label>
                 <input type="date" value={validUntil} onChange={(e) => setValidUntil(e.target.value)} className={inputClass} />
               </div>
+              {how === "CLAIM" && (
+                <div>
+                  <label className={labelClass}>Último día para reclamarlo (opcional)</label>
+                  <input type="date" value={claimUntil} onChange={(e) => setClaimUntil(e.target.value)} className={inputClass} />
+                </div>
+              )}
               <div>
-                <label className={labelClass}>Máximo de usos (opcional)</label>
+                <label className={labelClass}>
+                  {how === "CHECKOUT" ? "Máximo de usos (opcional)" : "Máximo de cuentas que lo reciben (opcional)"}
+                </label>
                 <input
                   type="number"
                   min={1}
@@ -299,15 +343,21 @@ export function AdminDiscountsView({
                   className={inputClass}
                 />
               </div>
-              <label className="flex cursor-pointer items-center gap-2 self-end pb-2 font-body text-sm text-ciruela">
-                <input
-                  type="checkbox"
-                  checked={onePerClient}
-                  onChange={(e) => setOnePerClient(e.target.checked)}
-                  className="h-4 w-4 accent-[#4a1f3d]"
-                />
-                Un solo uso por clienta
-              </label>
+              {how === "CHECKOUT" ? (
+                <label className="flex cursor-pointer items-center gap-2 self-end pb-2 font-body text-sm text-ciruela">
+                  <input
+                    type="checkbox"
+                    checked={onePerClient}
+                    onChange={(e) => setOnePerClient(e.target.checked)}
+                    className="h-4 w-4 accent-[#4a1f3d]"
+                  />
+                  Un solo uso por clienta
+                </label>
+              ) : (
+                <p className="self-end pb-2 font-body text-xs text-ciruela/60">
+                  Cada cuenta lo usa una sola vez. La vendedora lo aplica desde la cuenta de la clienta al cobrar.
+                </p>
+              )}
             </div>
             {error && <p className="font-body text-xs text-[#b3392f]">{error}</p>}
             <button
@@ -318,8 +368,9 @@ export function AdminDiscountsView({
               {isPending ? "Creando…" : "Crear descuento y QR"}
             </button>
             <p className="font-body text-xs text-ciruela/50">
-              Un código válido ya viene aprobado por ti: la vendedora lo aplica al cobrar sin pedir aprobación, aunque
-              pase del límite de descuentos manuales.
+              Un descuento válido ya viene aprobado por ti: la vendedora lo aplica al cobrar sin pedir aprobación, aunque
+              pase del límite de descuentos manuales. El QR de los descuentos en la cuenta lleva a una página que le
+              dice a la clienta cómo conseguirlo.
             </p>
           </form>
         </Card>
@@ -332,11 +383,12 @@ export function AdminDiscountsView({
             </p>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[760px] whitespace-nowrap font-body text-sm text-ciruela">
+              <table className="w-full min-w-[900px] whitespace-nowrap font-body text-sm text-ciruela">
                 <thead>
                   <tr className="text-left text-xs uppercase tracking-wide text-ciruela/40">
                     <th className="pb-2">Descuento</th>
                     <th className="pb-2">Código</th>
+                    <th className="pb-2">Cómo se usa</th>
                     <th className="pb-2">Vigencia</th>
                     <th className="pb-2 text-right">Usos</th>
                     <th className="pb-2 pl-4">Estado</th>
@@ -354,10 +406,21 @@ export function AdminDiscountsView({
                         </span>
                       </td>
                       <td className="py-3 font-medium tracking-wide">{c.code}</td>
+                      <td className="py-3 text-xs text-ciruela/60">{MODE_LABEL[c.mode]}</td>
                       <td className="py-3 text-ciruela/60">{validityLabel(c)}</td>
                       <td className="py-3 text-right">
-                        {c.uses}
-                        {c.maxUses !== null ? ` / ${c.maxUses}` : ""}
+                        {c.mode === "CHECKOUT" ? (
+                          <>
+                            {c.uses}
+                            {c.maxUses !== null ? ` / ${c.maxUses}` : ""}
+                          </>
+                        ) : (
+                          <>
+                            {c.claims} {c.claims === 1 ? "cuenta" : "cuentas"}
+                            {c.maxUses !== null ? ` / ${c.maxUses}` : ""}
+                            <span className="block text-xs text-ciruela/50">{c.uses} usados</span>
+                          </>
+                        )}
                         {c.givenMxn > 0 && <span className="block text-xs text-ciruela/50">−${c.givenMxn.toLocaleString("es-MX")} MXN</span>}
                       </td>
                       <td className="py-3 pl-4">

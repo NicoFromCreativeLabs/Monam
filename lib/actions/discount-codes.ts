@@ -8,7 +8,9 @@ import {
   normalizeCode,
   suggestCode,
   validateNewCode,
+  type AccountGrant,
   type DiscountCodeKind,
+  type DiscountMode,
   type DiscountScope,
 } from "@/lib/discount-codes";
 
@@ -28,6 +30,12 @@ export interface CreateDiscountCodeInput {
   productSku?: string | null;
   validFrom?: string | null; // YYYY-MM-DD
   validUntil?: string | null; // YYYY-MM-DD, valid through the end of that day
+  // CHECKOUT: a QR/code the vendedor applies at the front desk, every time.
+  // ACCOUNT: lives in the client's account, once per account — given at signup
+  // (SIGNUP) or claimed by her (CLAIM, until claimUntil).
+  mode?: DiscountMode;
+  accountGrant?: AccountGrant | null;
+  claimUntil?: string | null; // YYYY-MM-DD
   maxUses?: number | null;
   onePerClient: boolean;
 }
@@ -44,6 +52,9 @@ export async function createDiscountCodeAction(input: CreateDiscountCodeInput): 
   const code = normalizeCode(input.code?.trim() ? input.code : suggestCode());
   const validFrom = input.validFrom ? startOfDay(input.validFrom) : null;
   const validUntil = input.validUntil ? endOfDay(input.validUntil) : null;
+  const mode: DiscountMode = input.mode ?? "CHECKOUT";
+  const accountGrant = mode === "ACCOUNT" ? (input.accountGrant ?? null) : null;
+  const claimUntil = mode === "ACCOUNT" && accountGrant === "CLAIM" && input.claimUntil ? endOfDay(input.claimUntil) : null;
   const isFree = input.kind === "FREE_ADD_ON" || input.kind === "FREE_PRODUCT";
 
   const problem = validateNewCode({
@@ -56,6 +67,9 @@ export async function createDiscountCodeAction(input: CreateDiscountCodeInput): 
     validFrom,
     validUntil,
     maxUses: input.maxUses ?? null,
+    mode,
+    accountGrant,
+    claimUntil,
   });
   if (problem) return { error: problem };
 
@@ -74,8 +88,12 @@ export async function createDiscountCodeAction(input: CreateDiscountCodeInput): 
       productSku: input.kind === "FREE_PRODUCT" ? input.productSku : null,
       validFrom,
       validUntil,
+      mode,
+      accountGrant,
+      claimUntil,
       maxUses: input.maxUses ?? null,
-      onePerClient: input.onePerClient,
+      // An account discount is always once per account.
+      onePerClient: mode === "ACCOUNT" ? true : input.onePerClient,
       createdByUserId: user.id,
     },
   });

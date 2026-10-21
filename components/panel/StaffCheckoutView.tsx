@@ -33,6 +33,7 @@ export interface CheckoutSession {
   addOns: { name: string; price: number }[]; // picked when booking, charged with the facial
   retailItems: CheckoutRetailItem[];
   depositCredit: number;
+  clientDiscounts?: { code: string; name: string; summary: string }[]; // in her account, ready to apply
 }
 
 export interface CheckoutCatalogItem {
@@ -436,6 +437,7 @@ export function StaffCheckoutView({
                 appointmentId={session?.appointmentId ?? null}
                 locationName={session?.locationName ?? locationName}
                 retailItems={addedItems.map((a) => ({ sku: a.sku, qty: a.qty }))}
+                clientDiscounts={session?.clientDiscounts ?? []}
               />
             )}
             {subtotal > 0 && !codeDiscount && (

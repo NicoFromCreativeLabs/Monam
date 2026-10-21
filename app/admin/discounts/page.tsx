@@ -1,15 +1,16 @@
 import { prisma } from "@/lib/prisma";
 import { requireStaffRole } from "@/lib/auth/dal";
-import { discountSummary } from "@/lib/discount-codes";
+import { discountSummary, modeKey } from "@/lib/discount-codes";
 import { AdminDiscountsView, type DiscountCodeRow } from "@/components/panel/AdminDiscountsView";
 
 // Descuentos: create discount codes with a QR the client shows at the front desk.
 export default async function AdminDiscounts() {
   await requireStaffRole(["OWNER", "CLINIC_MANAGER"]);
 
-  const [codes, usage, addOns, products] = await Promise.all([
+  const [codes, usage, claimCounts, addOns, products] = await Promise.all([
     prisma.discountCode.findMany({ orderBy: { createdAt: "desc" } }),
     prisma.discountRedemption.groupBy({ by: ["codeId"], _count: true, _sum: { amountMxn: true } }),
+    prisma.clientDiscount.groupBy({ by: ["codeId"], _count: true }),
     prisma.addOn.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true } }),
     prisma.product.findMany({
       where: { ledger: "RETAIL", isActive: true },
@@ -30,6 +31,9 @@ export default async function AdminDiscounts() {
       maxUses: c.maxUses,
       onePerClient: c.onePerClient,
       isActive: c.isActive,
+      mode: modeKey(c),
+      claimUntil: c.claimUntil ? c.claimUntil.toISOString() : null,
+      claims: claimCounts.find((x) => x.codeId === c.id)?._count ?? 0,
       uses: u?._count ?? 0,
       givenMxn: u?._sum.amountMxn ?? 0,
     };

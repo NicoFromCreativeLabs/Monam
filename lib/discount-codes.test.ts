@@ -5,6 +5,9 @@ import {
   normalizeCode,
   suggestCode,
   validateNewCode,
+  claimCheck,
+  grantsOnSignup,
+  modeKey,
   type DiscountCodeRule,
   type TicketContext,
 } from "./discount-codes";
@@ -15,6 +18,9 @@ const rule = (over: Partial<DiscountCodeRule> = {}): DiscountCodeRule => ({
   kind: "PERCENT",
   value: 15,
   scope: "ALL",
+  mode: "CHECKOUT",
+  accountGrant: null,
+  claimUntil: null,
   addOnId: null,
   productSku: null,
   validFrom: null,
@@ -30,6 +36,7 @@ const ticket = (over: Partial<TicketContext> = {}): TicketContext => ({
   usesSoFar: 0,
   clientUsesSoFar: 0,
   hasClient: true,
+  claim: { exists: false, used: false },
   servicePrice: 1000,
   addOns: [{ addOnId: "cupping", price: 200 }],
   retail: [{ sku: "AN-HT-150", price: 450, qty: 2 }],
@@ -112,5 +119,65 @@ describe("validateNewCode", () => {
     expect(
       validateNewCode({ ...base, validFrom: new Date("2026-11-02"), validUntil: new Date("2026-11-01") }),
     ).not.toBeNull();
+  });
+});
+
+describe("account-bound discounts", () => {
+  const account = (over: Partial<DiscountCodeRule> = {}) => rule({ mode: "ACCOUNT", accountGrant: "CLAIM", ...over });
+  const claimed = { claim: { exists: true, used: false } };
+
+  it("works once she has it in her account", () => {
+    expect(evaluateCode(account(), ticket(claimed))).toMatchObject({ ok: true, amountMxn: 315 });
+  });
+  it("needs the client to be known and to have it", () => {
+    expect(evaluateCode(account(), ticket({ ...claimed, hasClient: false }))).toMatchObject({ ok: false });
+    expect(evaluateCode(account(), ticket())).toMatchObject({ ok: false });
+  });
+  it("cannot be used twice by the same account", () => {
+    expect(evaluateCode(account(), ticket({ claim: { exists: true, used: true } }))).toMatchObject({ ok: false });
+  });
+  it("is not blocked by the checkout use limit (that counts claims instead)", () => {
+    expect(evaluateCode(account({ maxUses: 1 }), ticket({ ...claimed, usesSoFar: 5 }))).toMatchObject({ ok: true });
+  });
+  it("still respects its dates and the active flag", () => {
+    expect(evaluateCode(account({ validUntil: new Date("2026-10-20T00:00:00Z") }), ticket(claimed))).toMatchObject({ ok: false });
+    expect(evaluateCode(account({ isActive: false }), ticket(claimed))).toMatchObject({ ok: false });
+  });
+  it("a checkout code works for anyone, with no account involved", () => {
+    expect(evaluateCode(rule(), ticket({ hasClient: false }))).toMatchObject({ ok: true });
+  });
+});
+
+describe("claimCheck", () => {
+  const now = new Date("2026-11-30T12:00:00Z");
+  const cyber = rule({ mode: "ACCOUNT", accountGrant: "CLAIM", validFrom: new Date("2026-11-29T00:00:00Z"), claimUntil: new Date("2026-12-01T00:00:00Z"), validUntil: new Date("2026-12-31T00:00:00Z"), maxUses: 100 });
+  it("can be claimed inside the claim window", () => {
+    expect(claimCheck(cyber, { now, claimsSoFar: 3, alreadyClaimed: false })).toEqual({ ok: true });
+  });
+  it("cannot be claimed twice, after the window, or once the limit is reached", () => {
+    expect(claimCheck(cyber, { now, claimsSoFar: 3, alreadyClaimed: true })).toMatchObject({ ok: false });
+    expect(claimCheck(cyber, { now: new Date("2026-12-02T00:00:00Z"), claimsSoFar: 3, alreadyClaimed: false })).toMatchObject({ ok: false });
+    expect(claimCheck(cyber, { now, claimsSoFar: 100, alreadyClaimed: false })).toMatchObject({ ok: false });
+  });
+  it("is not claimable if it is a signup or checkout discount", () => {
+    expect(claimCheck(rule(), { now, claimsSoFar: 0, alreadyClaimed: false })).toMatchObject({ ok: false });
+    expect(claimCheck(rule({ mode: "ACCOUNT", accountGrant: "SIGNUP" }), { now, claimsSoFar: 0, alreadyClaimed: false })).toMatchObject({ ok: false });
+  });
+});
+
+describe("grantsOnSignup / modeKey", () => {
+  const launch = rule({ mode: "ACCOUNT", accountGrant: "SIGNUP" });
+  it("gives a running launch discount to a new account", () => {
+    expect(grantsOnSignup(launch, { now: new Date("2026-10-21T00:00:00Z"), claimsSoFar: 0 })).toBe(true);
+  });
+  it("does not once it ended, ran out or was turned off", () => {
+    expect(grantsOnSignup({ ...launch, validUntil: new Date("2026-10-01T00:00:00Z") }, { now: new Date("2026-10-21T00:00:00Z"), claimsSoFar: 0 })).toBe(false);
+    expect(grantsOnSignup({ ...launch, maxUses: 10 }, { now: new Date("2026-10-21T00:00:00Z"), claimsSoFar: 10 })).toBe(false);
+    expect(grantsOnSignup({ ...launch, isActive: false }, { now: new Date("2026-10-21T00:00:00Z"), claimsSoFar: 0 })).toBe(false);
+  });
+  it("names the three kinds", () => {
+    expect(modeKey(rule())).toBe("CHECKOUT");
+    expect(modeKey(launch)).toBe("SIGNUP");
+    expect(modeKey(rule({ mode: "ACCOUNT", accountGrant: "CLAIM" }))).toBe("CLAIM");
   });
 });

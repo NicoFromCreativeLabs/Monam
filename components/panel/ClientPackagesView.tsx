@@ -1,9 +1,12 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { Card } from "@/components/panel/Card";
 import { purchasePackageAction } from "@/lib/actions/packages";
 import type { PackageBalanceView } from "@/lib/packages-core";
+import { claimDiscountAction } from "@/lib/actions/client-discounts";
+import type { AccountDiscounts } from "@/lib/client-discounts";
 
 export interface PackageCatalogItem {
   id: string;
@@ -21,15 +24,38 @@ export interface PackageRedemptionItem {
   locationName: string;
 }
 
+const formatDay = (iso: string) =>
+  new Date(iso).toLocaleDateString("es-MX", { day: "numeric", month: "long", year: "numeric", timeZone: "America/Mexico_City" });
+
 export function ClientPackagesView({
   activePackage,
   redemptions,
   catalog,
+  discounts,
 }: {
   activePackage: PackageBalanceView | null;
   redemptions: PackageRedemptionItem[];
   catalog: PackageCatalogItem[];
+  discounts: AccountDiscounts;
 }) {
+  const router = useRouter();
+  const [claiming, setClaiming] = useState<string | null>(null);
+  const [claimError, setClaimError] = useState<string | null>(null);
+
+  async function claim(codeId: string) {
+    setClaiming(codeId);
+    setClaimError(null);
+    try {
+      const result = await claimDiscountAction(codeId);
+      if ("error" in result) setClaimError(result.error);
+      else router.refresh();
+    } catch {
+      setClaimError("No se pudo reclamar. Intenta de nuevo.");
+    } finally {
+      setClaiming(null);
+    }
+  }
+
   const [pendingPurchase, setPendingPurchase] = useState<PackageCatalogItem | null>(null);
   const [purchasing, setPurchasing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -47,8 +73,65 @@ export function ClientPackagesView({
     window.location.href = result.checkoutUrl;
   }
 
+  const hasDiscounts = discounts.claimable.length + discounts.mine.length + discounts.used.length > 0;
+
   return (
     <div className="space-y-6">
+      {hasDiscounts && (
+        <Card title="Mis descuentos">
+          {claimError && (
+            <p className="mb-3 rounded-lg bg-[#b3392f]/10 px-3 py-2 font-body text-xs text-[#b3392f]">{claimError}</p>
+          )}
+          <ul className="divide-y divide-ciruela/8">
+            {discounts.claimable.map((d) => (
+              <li key={d.codeId} className="flex items-center justify-between gap-3 py-3">
+                <div>
+                  <p className="font-body text-sm text-ciruela">{d.name}</p>
+                  <p className="font-body text-xs text-ciruela/60">
+                    {d.summary}
+                    {d.claimUntil ? ` · reclámalo antes del ${formatDay(d.claimUntil)}` : ""}
+                  </p>
+                </div>
+                <button
+                  onClick={() => claim(d.codeId)}
+                  disabled={claiming === d.codeId}
+                  className="shrink-0 rounded-full bg-ciruela px-3 py-1.5 font-body text-xs text-hueso disabled:opacity-50"
+                >
+                  {claiming === d.codeId ? "Reclamando…" : "Reclamar"}
+                </button>
+              </li>
+            ))}
+            {discounts.mine.map((d) => (
+              <li key={d.codeId} className="flex items-center justify-between gap-3 py-3">
+                <div>
+                  <p className="font-body text-sm text-ciruela">{d.name}</p>
+                  <p className="font-body text-xs text-ciruela/60">
+                    {d.summary}
+                    {d.usableUntil ? ` · úsalo antes del ${formatDay(d.usableUntil)}` : ""}
+                  </p>
+                </div>
+                <span className="shrink-0 rounded-full bg-oliva/15 px-3 py-1 font-body text-xs text-oliva">
+                  En tu cuenta
+                </span>
+              </li>
+            ))}
+            {discounts.used.map((d) => (
+              <li key={d.codeId} className="flex items-center justify-between gap-3 py-3 opacity-60">
+                <div>
+                  <p className="font-body text-sm text-ciruela">{d.name}</p>
+                  <p className="font-body text-xs text-ciruela/60">Usado el {formatDay(d.usedAt)}</p>
+                </div>
+              </li>
+            ))}
+          </ul>
+          {discounts.mine.length > 0 && (
+            <p className="mt-3 font-body text-xs text-ciruela/50">
+              Tus descuentos en tu cuenta se aplican al pagar en recepción; solo dile a la vendedora que tienes uno.
+            </p>
+          )}
+        </Card>
+      )}
+
       <Card title="Mis paquetes">
         {activePackage ? (
           <>

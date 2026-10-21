@@ -400,6 +400,13 @@ export async function createSaleAction(input: CreateSaleInput): Promise<CreateSa
           redeemedByUserId: staff.id,
         },
       });
+      // An account discount is spent: it cannot be used again by that account.
+      if (appliedCode.claimId) {
+        await tx.clientDiscount.update({
+          where: { id: appliedCode.claimId },
+          data: { redeemedAt: new Date(), saleId: created.id },
+        });
+      }
     }
 
     // Keep the paper trail for the discount: a manager-approved request is

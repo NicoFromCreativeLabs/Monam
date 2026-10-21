@@ -24,7 +24,9 @@ export function CheckoutDiscountCode({
   appointmentId,
   locationName,
   retailItems,
+  clientDiscounts = [],
 }: {
+  clientDiscounts?: { code: string; name: string; summary: string }[];
   applied: AppliedDiscountCode | null;
   onChange: (code: AppliedDiscountCode | null) => void;
   appointmentId: string | null;
@@ -105,6 +107,28 @@ export function CheckoutDiscountCode({
 
   return (
     <>
+      {clientDiscounts.length > 0 && (
+        <div className="mt-3 rounded-lg border border-oliva/30 bg-oliva/5 p-3">
+          <p className="font-body text-xs uppercase tracking-[0.14em] text-oliva">Descuentos en la cuenta de la clienta</p>
+          <ul className="mt-2 space-y-2">
+            {clientDiscounts.map((d) => (
+              <li key={d.code} className="flex items-center justify-between gap-2 font-body text-xs text-ciruela">
+                <span>
+                  {d.name} · {d.summary}
+                </span>
+                <button
+                  onClick={() => apply(d.code)}
+                  disabled={busy}
+                  className="shrink-0 rounded-full bg-ciruela px-3 py-1 text-hueso disabled:opacity-50"
+                >
+                  Aplicar
+                </button>
+              </li>
+            ))}
+          </ul>
+          {error && !open && <p className="mt-2 font-body text-xs text-[#b3392f]">{error}</p>}
+        </div>
+      )}
       {!open ? (
         <button onClick={() => setOpen(true)} className="mt-3 block font-body text-xs text-ciruela/70 underline hover:text-ciruela">
           Tengo un código de descuento / QR

@@ -36,8 +36,25 @@ export default async function DiscountPage({ params }: { params: Promise<{ code:
               <p className="font-body text-xs uppercase tracking-[0.14em] text-ciruela/50">Tu descuento</p>
               <p className="mt-2 font-display text-2xl">{row.name}</p>
               <p className="mt-1 font-body text-sm text-ciruela/70">{discountSummary(row)}</p>
-              <p className="mt-5 rounded-lg bg-ciruela/5 px-4 py-3 font-display text-xl tracking-[0.15em]">{row.code}</p>
-              {usable ? (
+              {row.mode === "CHECKOUT" && (
+                <p className="mt-5 rounded-lg bg-ciruela/5 px-4 py-3 font-display text-xl tracking-[0.15em]">{row.code}</p>
+              )}
+              {row.mode === "ACCOUNT" && (
+                <a
+                  href={row.accountGrant === "SIGNUP" ? "/signup" : "/my/packages"}
+                  className="mt-5 inline-block rounded-full bg-ciruela px-5 py-2.5 font-body text-sm text-hueso"
+                >
+                  {row.accountGrant === "SIGNUP" ? "Crear mi cuenta" : "Ir a mi cuenta"}
+                </a>
+              )}
+              {usable && row.mode === "ACCOUNT" ? (
+                <p className="mt-5 font-body text-sm text-ciruela/70">
+                  {row.accountGrant === "SIGNUP"
+                    ? "Crea tu cuenta y este descuento se agrega solo para tu primera visita."
+                    : "Reclámalo en tu cuenta (Paquetes → Mis descuentos) y úsalo en tu cita."}
+                  {row.validUntil ? ` Válido hasta el ${formatDate(row.validUntil)}.` : ""}
+                </p>
+              ) : usable ? (
                 <p className="mt-5 font-body text-sm text-ciruela/70">
                   Muestra este código en recepción al pagar para aplicarlo.
                   {row.validUntil ? ` Válido hasta el ${formatDate(row.validUntil)}.` : ""}
