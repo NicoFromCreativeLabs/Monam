@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { previewDiscountCodeAction, type RetailLineInput } from "@/lib/actions/commerce";
 import { normalizeCode } from "@/lib/discount-codes";
 import { QrScanner } from "@/components/panel/QrScanner";
+import { QrPhotoButton } from "@/components/panel/QrPhotoButton";
 
 export interface AppliedDiscountCode {
   code: string;
@@ -156,6 +157,7 @@ export function CheckoutDiscountCode({
             >
               Escanear
             </button>
+            <QrPhotoButton onDetect={(scanned) => apply(scanned)} onError={setError} label="Foto" />
           </div>
           {error && <p className="font-body text-xs text-[#b3392f]">{error}</p>}
           <div className="flex gap-2">

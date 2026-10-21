@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import jsQR from "jsqr";
+import { QrPhotoButton } from "@/components/panel/QrPhotoButton";
 
 // Reads a QR code with the device camera (phone or the front desk's computer).
 // Calls onDetect once with the text of the first QR it sees. If the camera is
@@ -10,6 +11,8 @@ export function QrScanner({ onDetect, onClose }: { onDetect: (text: string) => v
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [error, setError] = useState<string | null>(null);
+  // A picture that has no readable QR: say so without closing the live camera.
+  const [photoError, setPhotoError] = useState<string | null>(null);
 
   useEffect(() => {
     let stopped = false;
@@ -29,7 +32,7 @@ export function QrScanner({ onDetect, onClose }: { onDetect: (text: string) => v
         await video.play();
         scan();
       } catch {
-        setError("No se pudo abrir la cámara. Permite el acceso o escribe el código.");
+        setError("No se pudo abrir la cámara. Permite el acceso, sube una foto del QR o escribe el código.");
       }
     }
 
@@ -81,9 +84,11 @@ export function QrScanner({ onDetect, onClose }: { onDetect: (text: string) => v
           <video ref={videoRef} muted playsInline className="aspect-square w-full rounded-lg bg-black object-cover" />
         )}
         <canvas ref={canvasRef} className="hidden" />
-        <p className="mt-2 text-center font-body text-xs text-ciruela/60">
-          Apunta la cámara al QR que muestra la clienta.
-        </p>
+        <div className="mt-3 flex items-center justify-between gap-2">
+          <p className="font-body text-xs text-ciruela/60">Apunta la cámara al QR, o sube una foto.</p>
+          <QrPhotoButton onDetect={onDetect} onError={setPhotoError} />
+        </div>
+        {photoError && <p className="mt-2 font-body text-xs text-[#b3392f]">{photoError}</p>}
       </div>
     </div>
   );

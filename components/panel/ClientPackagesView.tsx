@@ -7,6 +7,7 @@ import { purchasePackageAction } from "@/lib/actions/packages";
 import type { PackageBalanceView } from "@/lib/packages-core";
 import { claimDiscountAction, claimDiscountByCodeAction } from "@/lib/actions/client-discounts";
 import { QrScanner } from "@/components/panel/QrScanner";
+import { QrPhotoButton } from "@/components/panel/QrPhotoButton";
 import type { AccountDiscounts } from "@/lib/client-discounts";
 
 export interface PackageCatalogItem {
@@ -200,7 +201,9 @@ export function ClientPackagesView({
                   >
                     Escanear QR
                   </button>
+                  <QrPhotoButton onDetect={(text) => claimByCode(text)} onError={setClaimError} />
                 </div>
+                {claimError && <p className="font-body text-xs text-[#b3392f]">{claimError}</p>}
                 <div className="flex gap-2">
                   <button
                     type="submit"
