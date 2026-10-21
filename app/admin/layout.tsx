@@ -24,7 +24,10 @@ const SECTIONS: NavSection[] = [
   },
   {
     heading: "Ventas",
-    items: [{ href: "/admin/sales", label: "Caja y cobros" }],
+    items: [
+      { href: "/admin/sales", label: "Caja y cobros" },
+      { href: "/admin/discounts", label: "Descuentos" },
+    ],
   },
   {
     heading: "Análisis",

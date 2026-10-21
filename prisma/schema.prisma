@@ -816,6 +816,7 @@ model Sale {
   cfdiRequest         CfdiRequest?
   commissionEntries   CommissionEntry[]
   approvalRequests    ApprovalRequest[]
+  discountRedemption  DiscountRedemption?
 
   @@index([locationId, createdAt])
   @@index([clientId])
@@ -1084,4 +1085,63 @@ model WhatsAppConversation {
   updatedAt DateTime            @updatedAt
 
   @@map("whatsapp_conversations")
+}
+
+// ---------------------------------------------------------------------------
+// Discount codes (Admin → Descuentos): a code with a QR the client shows at the
+// front desk. The vendedor scans or types it in Cobro / POS and the discount is
+// applied to the ticket; a valid code is pre-approved by whoever created it.
+// ---------------------------------------------------------------------------
+
+enum DiscountCodeKind {
+  PERCENT // value = % off
+  AMOUNT // value = MXN off
+  FREE_ADD_ON // gives the add-on addOnId free
+  FREE_PRODUCT // gives one unit of the retail product productSku free
+}
+
+enum DiscountScope {
+  ALL // service + add-ons + retail
+  SERVICES // service + add-ons
+  PRODUCTS // retail only
+}
+
+model DiscountCode {
+  id              String           @id @default(uuid())
+  code            String           @unique // uppercase, what the QR carries
+  name            String
+  kind            DiscountCodeKind
+  value           Int              @default(0)
+  scope           DiscountScope    @default(ALL)
+  addOnId         String? // FREE_ADD_ON
+  productSku      String? // FREE_PRODUCT
+  validFrom       DateTime?
+  validUntil      DateTime?
+  maxUses         Int? // total redemptions allowed; null = unlimited
+  onePerClient    Boolean          @default(false)
+  isActive        Boolean          @default(true)
+  createdByUserId String?
+  createdAt       DateTime         @default(now())
+
+  redemptions DiscountRedemption[]
+
+  @@map("discount_codes")
+}
+
+// One per sale that used a code — the paper trail and what the limits count.
+model DiscountRedemption {
+  id               String   @id @default(uuid())
+  codeId           String
+  saleId           String   @unique
+  clientId         String?
+  amountMxn        Int
+  redeemedByUserId String
+  createdAt        DateTime @default(now())
+
+  code DiscountCode @relation(fields: [codeId], references: [id])
+  sale Sale         @relation(fields: [saleId], references: [id])
+
+  @@index([codeId])
+  @@index([clientId])
+  @@map("discount_redemptions")
 }

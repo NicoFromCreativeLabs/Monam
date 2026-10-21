@@ -15,6 +15,7 @@ import {
   type DiscountInput,
 } from "@/lib/actions/commerce";
 import { CheckoutDiscount } from "@/components/panel/CheckoutDiscount";
+import { CheckoutDiscountCode, type AppliedDiscountCode } from "@/components/panel/CheckoutDiscountCode";
 
 export interface CheckoutRetailItem {
   sku: string;
@@ -77,6 +78,8 @@ export function StaffCheckoutView({
   const suggestions: CheckoutRetailItem[] = session?.retailItems ?? [];
   const [addedItems, setAddedItems] = useState<AddedItem[]>([]);
   const [discount, setDiscount] = useState<DiscountInput | null>(null);
+  // A discount code (scanned or typed): worked out on the server for this ticket.
+  const [codeDiscount, setCodeDiscount] = useState<AppliedDiscountCode | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [search, setSearch] = useState("");
   const [charged, setCharged] = useState(false);
@@ -121,7 +124,9 @@ export function StaffCheckoutView({
   const depositCredit = session?.depositCredit ?? 0;
   const retailTotal = addedItems.reduce((sum, i) => sum + i.price * i.qty, 0);
   const subtotal = servicePrice + addOnsTotal + retailTotal;
-  const discountMxn = discount
+  const discountMxn = codeDiscount
+    ? Math.min(codeDiscount.discountMxn, subtotal)
+    : discount
     ? Math.min(
         subtotal,
         discount.kind === "PERCENT" ? Math.round((subtotal * discount.value) / 100) : Math.round(discount.value),
@@ -142,6 +147,7 @@ export function StaffCheckoutView({
       locationName: session?.locationName ?? locationName,
       retailItems,
       discount,
+      discountCode: codeDiscount?.code ?? null,
       reAddedAfterRemovalSkus: [],
     };
     startTransition(async () => {
@@ -423,7 +429,16 @@ export function StaffCheckoutView({
               + Agregar producto
             </button>
 
-            {subtotal > 0 && (
+            {subtotal > 0 && !discount && (
+              <CheckoutDiscountCode
+                applied={codeDiscount}
+                onChange={setCodeDiscount}
+                appointmentId={session?.appointmentId ?? null}
+                locationName={session?.locationName ?? locationName}
+                retailItems={addedItems.map((a) => ({ sku: a.sku, qty: a.qty }))}
+              />
+            )}
+            {subtotal > 0 && !codeDiscount && (
               <CheckoutDiscount
                 subtotal={subtotal}
                 thresholdPct={discountThresholdPct}

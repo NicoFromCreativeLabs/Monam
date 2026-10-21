@@ -14,6 +14,7 @@ import {
 } from "@/lib/payments/stripe";
 import type { Role } from "@/lib/generated/prisma/client";
 import { earnsCommission } from "@/lib/commission-policy";
+import { evaluateCodeForTicket, type AppliedCode } from "@/lib/discount-codes-server";
 
 const FRONT_DESK_ROLES: Role[] = ["FRONT_DESK", "OWNER", "CLINIC_MANAGER"];
 const MANAGER_ROLES: Role[] = ["OWNER", "CLINIC_MANAGER"];
@@ -78,6 +79,9 @@ export interface DiscountInput {
 export interface CreateSaleInput {
   appointmentId?: string | null;
   discount?: DiscountInput | null;
+  // A discount code (typed or scanned from its QR). Pre-approved by whoever created it,
+  // so it skips the approval threshold; it cannot be combined with a manual discount.
+  discountCode?: string | null;
   locationName: string;
   retailItems: RetailLineInput[];
   reAddedAfterRemovalSkus: string[]; // re-added after the recommendation was removed — commission goes to whoever closes the sale, not the original tagger
@@ -99,7 +103,7 @@ function quoteError(error: string): { error: string } {
 }
 
 async function quoteSale(
-  input: Pick<CreateSaleInput, "appointmentId" | "locationName" | "retailItems" | "discount">,
+  input: Pick<CreateSaleInput, "appointmentId" | "locationName" | "retailItems" | "discount" | "discountCode">,
 ) {
   const location = await prisma.location.findFirst({ where: { name: input.locationName } });
   if (!location) return quoteError("Sucursal no encontrada.");
@@ -150,11 +154,26 @@ async function quoteSale(
     discountMxn = d.kind === "PERCENT" ? Math.round((subtotal * d.value) / 100) : Math.round(d.value);
     if (discountMxn > subtotal) return quoteError("El descuento no puede ser mayor al total.");
   }
+  let appliedCode: AppliedCode | null = null;
+  if (input.discountCode?.trim()) {
+    if (input.discount) return quoteError("Usa un código o un descuento manual, no los dos.");
+    const evaluated = await evaluateCodeForTicket(input.discountCode, {
+      clientId: appointment?.clientId ?? null,
+      servicePrice,
+      addOns: (appointment?.addOns ?? []).map((a) => ({ addOnId: a.addOnId, price: a.priceMxn })),
+      retail: input.retailItems
+        .filter((r) => r.qty > 0)
+        .map((r) => ({ sku: r.sku, price: itemBySku.get(r.sku)?.priceMxn ?? 0, qty: r.qty })),
+    });
+    if ("error" in evaluated) return quoteError(evaluated.error);
+    appliedCode = evaluated;
+    discountMxn = Math.min(evaluated.amountMxn, subtotal);
+  }
   const discountPct = subtotal > 0 ? (discountMxn / subtotal) * 100 : 0;
   const totalMxn = Math.max(0, subtotal - discountMxn + depositCreditMxn);
 
   return {
-    location, appointment, itemBySku, servicePrice, subtotal, depositCreditMxn, totalMxn, discountMxn, discountPct,
+    location, appointment, itemBySku, servicePrice, subtotal, depositCreditMxn, totalMxn, discountMxn, discountPct, appliedCode,
   } as const;
 }
 
@@ -191,7 +210,7 @@ export async function createSaleAction(input: CreateSaleInput): Promise<CreateSa
 
   const quote = await quoteSale(input);
   if ("error" in quote) return quote;
-  const { location, appointment, itemBySku, servicePrice, subtotal, depositCreditMxn, totalMxn, discountMxn, discountPct } =
+  const { location, appointment, itemBySku, servicePrice, subtotal, depositCreditMxn, totalMxn, discountMxn, discountPct, appliedCode } =
     quote;
 
   if (input.discount) {
@@ -370,6 +389,19 @@ export async function createSaleAction(input: CreateSaleInput): Promise<CreateSa
       await tx.sale.update({ where: { id: created.id }, data: { cashRegisterSessionId: openSession.id } });
     }
 
+    // A discount code: one redemption per sale, which is what its limits count.
+    if (appliedCode) {
+      await tx.discountRedemption.create({
+        data: {
+          codeId: appliedCode.codeId,
+          saleId: created.id,
+          clientId: appointment?.clientId ?? null,
+          amountMxn: discountMxn,
+          redeemedByUserId: staff.id,
+        },
+      });
+    }
+
     // Keep the paper trail for the discount: a manager-approved request is
     // tied to this sale; a direct one (within the threshold, or by a manager)
     // is recorded as an approved request of its own.
@@ -533,6 +565,37 @@ async function loadAppointmentForCheckout(appointmentId: string) {
       treatmentRecord: { include: { retailTags: { include: { treatmentRecord: true } } } },
     },
   });
+}
+
+// The vendedor types or scans a discount code: what it would take off this
+// ticket, worked out on the server (never from the browser's numbers).
+export type DiscountCodePreview =
+  | { ok: true; code: string; name: string; summary: string; discountMxn: number }
+  | { ok: false; error: string };
+
+export async function previewDiscountCodeAction(input: {
+  code: string;
+  appointmentId?: string | null;
+  locationName: string;
+  retailItems: RetailLineInput[];
+}): Promise<DiscountCodePreview> {
+  await requireStaffRole(FRONT_DESK_ROLES);
+  const quote = await quoteSale({
+    appointmentId: input.appointmentId ?? null,
+    locationName: input.locationName,
+    retailItems: input.retailItems,
+    discount: null,
+    discountCode: input.code,
+  });
+  if ("error" in quote) return { ok: false, error: quote.error };
+  if (!quote.appliedCode) return { ok: false, error: "Escribe o escanea el código." };
+  return {
+    ok: true,
+    code: quote.appliedCode.code,
+    name: quote.appliedCode.name,
+    summary: quote.appliedCode.summary,
+    discountMxn: quote.discountMxn,
+  };
 }
 
 // ---------------------------------------------------------------------------
