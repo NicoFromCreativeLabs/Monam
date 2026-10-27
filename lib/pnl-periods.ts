@@ -1,4 +1,4 @@
-import type { PnlBreakdown } from "@/lib/pnl-math";
+import { CARGAS_SOCIALES_RATIO, type PnlBreakdown } from "@/lib/pnl-math";
 
 // Pure helpers for the P&L's editable "Real" column and month close — no
 // database access, shared by the server actions, the reporting snapshot and
@@ -49,6 +49,13 @@ export function applyOverrides(base: PnlBreakdown, overrides: Record<string, num
   for (const f of PNL_FIELDS) {
     const v = overrides[f];
     if (typeof v === "number" && Number.isFinite(v)) out[f] = v;
+  }
+  // cargasSociales is derived from nominaBase, not recorded on its own — a
+  // hand-typed nominaBase with no explicit cargasSociales override must
+  // recompute it, or the displayed value silently stays stale at 30% of the
+  // old nominaBase.
+  if (typeof overrides.nominaBase === "number" && typeof overrides.cargasSociales !== "number") {
+    out.cargasSociales = Math.round(out.nominaBase * CARGAS_SOCIALES_RATIO);
   }
   return out;
 }

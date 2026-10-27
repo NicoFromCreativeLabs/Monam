@@ -1,12 +1,10 @@
 import "server-only";
 import { prisma } from "@/lib/prisma";
-import type { PnlBreakdown } from "@/lib/pnl-math";
-import type { DateRange } from "@/lib/period-range";
+import { CARGAS_SOCIALES_RATIO, type PnlBreakdown } from "@/lib/pnl-math";
+import { monthsInRange, type DateRange } from "@/lib/period-range";
 
 export type { PnlBreakdown } from "@/lib/pnl-math";
 export { PERIOD_OPTIONS, periodRange, compareRange, type Period, type CompareTo, type DateRange } from "@/lib/period-range";
-
-const CARGAS_SOCIALES_RATIO = 0.3; // Cargas sociales as a share of Nómina base (IMSS/INFONAVIT/etc.)
 
 // Every real source feeding the P&L, parameterized by location + date
 // range — the single source both /admin/analytics/pnl and Panel's
@@ -129,15 +127,20 @@ export async function getPnlBreakdown(locationIds: string[], range: DateRange): 
 
   const merma = inventoryTxns.reduce((s, t) => s + Math.abs(t.qtyDelta) * (t.inventoryItem.costMxn ?? 0), 0) * -1;
 
-  const nominaBase = -activeStaff.reduce((s, u) => s + (u.salaryMxn ?? 0), 0);
+  // Payroll, cargas sociales, rent and maintenance are recorded as flat
+  // monthly amounts (on AppUser/Location), not as dated transactions, so
+  // they're prorated by how many calendar months the range covers instead of
+  // being added in once regardless of range length.
+  const months = monthsInRange(range);
+  const nominaBase = -Math.round(activeStaff.reduce((s, u) => s + (u.salaryMxn ?? 0), 0) * months);
   const cargasSociales = Math.round(nominaBase * CARGAS_SOCIALES_RATIO);
   const comisionesServicio = -commissions
     .filter((c) => c.basis === "SERVICE" || c.basis === "ADD_ON")
     .reduce((s, c) => s + c.commissionMxn, 0);
   const comisionesRetail = -commissions.filter((c) => c.basis === "RETAIL").reduce((s, c) => s + c.commissionMxn, 0);
 
-  const renta = -locations.reduce((s, l) => s + l.rentCostMxn, 0);
-  const mantenimiento = -locations.reduce((s, l) => s + l.maintenanceCostMxn, 0);
+  const renta = -Math.round(locations.reduce((s, l) => s + l.rentCostMxn, 0) * months);
+  const mantenimiento = -Math.round(locations.reduce((s, l) => s + l.maintenanceCostMxn, 0) * months);
 
   return {
     serviciosTargeted, serviciosSignature, addOns, retail, descuentos, reembolsos,

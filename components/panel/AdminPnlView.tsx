@@ -12,7 +12,7 @@ import { useCompare } from "@/components/panel/CompareContext";
 import { downloadCsv } from "@/lib/csv";
 import { COMPARE_TO_LABEL } from "@/lib/analytics";
 import { getReportingSnapshotAction, type ReportingSnapshot } from "@/lib/actions/reporting";
-import { ventasBrutas, ingresoNetoFromBreakdown, utilidadBruta, ebitda, type PnlBreakdown } from "@/lib/pnl-math";
+import { ventasBrutas, ingresoNetoFromBreakdown, utilidadBruta, ebitda, pctOfIngresoNeto, type PnlBreakdown } from "@/lib/pnl-math";
 import { clearPnlLineAction, closePnlMonthAction, savePnlLinesAction } from "@/lib/actions/pnl";
 import { monthHasEnded, parseMoneyInput, storedFromTyped, typedFromStored, type PnlField } from "@/lib/pnl-periods";
 
@@ -141,8 +141,12 @@ function buildRows(snapshot: ReportingSnapshot, compareTo: string): DisplayRow[]
   const ingresoNeto = rows.find((r) => r.label === "Ingreso neto")?.real ?? 0;
   return rows.map((row) => {
     if (row.real === null) return row;
-    const pctLabel = ingresoNeto ? `${Math.round((row.real / ingresoNeto) * 100)}%` : row.real === 0 ? "0%" : "—";
-    return { ...row, pctLabel };
+    if (row.real === 0) return { ...row, pctLabel: "0%" };
+    // Same guard as the Admin Panel's "Contribución" KPI (lib/pnl-math.ts,
+    // pctOfIngresoNeto) — a near-zero ingreso neto turns any real fixed
+    // cost into an absurd percentage (seen: EBITDA -974,627%).
+    const pct = pctOfIngresoNeto(row.real, ingresoNeto);
+    return { ...row, pctLabel: pct !== null ? `${pct}%` : "—" };
   });
 }
 
@@ -179,6 +183,7 @@ export function AdminPnlView({ initialSnapshot }: { initialSnapshot: ReportingSn
   const [message, setMessage] = useState<string | null>(null);
   const [confirmClose, setConfirmClose] = useState(false);
   const [closing, setClosing] = useState(false);
+  const [resettingField, setResettingField] = useState<PnlField | null>(null);
   const editing = editMode && canEdit;
 
   function reload() {
@@ -221,6 +226,7 @@ export function AdminPnlView({ initialSnapshot }: { initialSnapshot: ReportingSn
   async function resetLine(field: PnlField) {
     if (!singleLocation || !state.monthKey) return;
     setMessage(null);
+    setResettingField(field);
     const result = await clearPnlLineAction({ locationName: singleLocation, monthKey: state.monthKey, field });
     if (result.error) setMessage(result.error);
     setDrafts((d) => {
@@ -229,6 +235,7 @@ export function AdminPnlView({ initialSnapshot }: { initialSnapshot: ReportingSn
       return rest;
     });
     reload();
+    setResettingField(null);
   }
 
   async function closeMonth() {
@@ -380,9 +387,12 @@ export function AdminPnlView({ initialSnapshot }: { initialSnapshot: ReportingSn
                           {state.overriddenFields.includes(row.field) && (
                             <button
                               onClick={() => resetLine(row.field!)}
+                              disabled={resettingField === row.field}
                               title="Editado a mano — volver al valor calculado"
                               aria-label={`Restablecer ${row.label}`}
-                              className="font-body text-xs text-crepe"
+                              className={`font-body text-xs text-crepe transition-transform disabled:cursor-wait disabled:opacity-50 ${
+                                resettingField === row.field ? "animate-spin" : "active:scale-90"
+                              }`}
                             >
                               ↺
                             </button>

@@ -12,7 +12,7 @@ import { useCompare } from "@/components/panel/CompareContext";
 import { PANEL_KPIS, PANEL_TODAY_VS_LASTWEEK } from "@/lib/mock-data";
 import { getReportingSnapshotAction, type ReportingSnapshot } from "@/lib/actions/reporting";
 import { decideApprovalAction } from "@/lib/actions/commerce";
-import { ingresoNetoFromBreakdown, ebitda } from "@/lib/pnl-math";
+import { ingresoNetoFromBreakdown, ebitda, pctOfIngresoNeto } from "@/lib/pnl-math";
 import { COMPARE_TO_LABEL } from "@/lib/analytics";
 
 export interface PanelApproval {
@@ -37,8 +37,8 @@ export interface PanelAppointment {
   status: string;
 }
 
-function formatDelta(displayed: number, baseline: number | null, compareLabel: string, unit: "%" | "pts" | "$"): { label: string; tone: "positive" | "negative" | "neutral" } {
-  if (baseline === null) return { label: "Sin datos previos", tone: "neutral" };
+function formatDelta(displayed: number | null, baseline: number | null, compareLabel: string, unit: "%" | "pts" | "$"): { label: string; tone: "positive" | "negative" | "neutral" } {
+  if (displayed === null || baseline === null) return { label: "Sin datos previos", tone: "neutral" };
   const diff = displayed - baseline;
   if (diff === 0) return { label: `Sin cambio vs. ${compareLabel}`, tone: "neutral" };
   const arrow = diff > 0 ? "▲" : "▼";
@@ -58,13 +58,11 @@ function semaphoreFor(progressPct: number | null): "green" | "yellow" | "red" {
 export function AdminPanelView({
   initialSnapshot,
   pendingApprovals: initialApprovals,
-  lowStockCount,
   alerts,
   todayAppointments,
 }: {
   initialSnapshot: ReportingSnapshot;
   pendingApprovals: PanelApproval[];
-  lowStockCount: number;
   alerts: PanelAlert[];
   todayAppointments: PanelAppointment[];
 }) {
@@ -96,12 +94,9 @@ export function AdminPanelView({
   const ingresoProgress = ingresoTarget ? Math.round((ingresoNeto / ingresoTarget) * 100) : null;
 
   const ebitdaMxn = ebitda(snapshot.pnl);
-  const ebitdaPct = ingresoNeto ? Math.round((ebitdaMxn / ingresoNeto) * 100) : 0;
+  const ebitdaPct = pctOfIngresoNeto(ebitdaMxn, ingresoNeto);
   const ebitdaBaseline = snapshot.pnlBaseline
-    ? (() => {
-        const baseIngreso = ingresoNetoFromBreakdown(snapshot.pnlBaseline!);
-        return baseIngreso ? Math.round((ebitda(snapshot.pnlBaseline!) / baseIngreso) * 100) : null;
-      })()
+    ? pctOfIngresoNeto(ebitda(snapshot.pnlBaseline), ingresoNetoFromBreakdown(snapshot.pnlBaseline))
     : null;
   const ebitdaTarget = snapshot.kpiTargets["EBITDA del local"]?.value ?? null;
 
@@ -178,21 +173,30 @@ export function AdminPanelView({
     (() => {
       const k = kpiMeta["contribucion"];
       const delta = formatDelta(ebitdaPct, ebitdaBaseline, compareLabel, "pts");
+      // Near-zero ingreso neto makes "% of revenue" meaningless (a small
+      // real fixed cost over a few pesos of revenue reads as thousands of
+      // percent) — pctOfIngresoNeto returns null rather than that, same as
+      // the rate KPIs (Ocupación, etc.) already read "Sin datos" instead of
+      // a nonsense number.
+      const progressPct = ebitdaTarget && ebitdaPct !== null ? Math.round((ebitdaPct / ebitdaTarget) * 100) : 0;
       return {
         ...k,
-        value: `${ebitdaPct}%`,
+        value: ebitdaPct !== null ? `${ebitdaPct}%` : "Sin datos",
         sub: `$${ebitdaMxn.toLocaleString()} MXN sobre equilibrio`,
         deltaLabel: delta.label,
         deltaTone: delta.tone,
         target: ebitdaTarget ? `Objetivo ${ebitdaTarget}%` : "",
-        progressPct: ebitdaTarget ? Math.round((ebitdaPct / ebitdaTarget) * 100) : 0,
-        semaphore: semaphoreFor(ebitdaTarget ? Math.round((ebitdaPct / ebitdaTarget) * 100) : null),
+        progressPct,
+        semaphore: semaphoreFor(ebitdaTarget && ebitdaPct !== null ? progressPct : null),
         sparkline: undefined,
       };
     })(),
     (() => {
       const k = kpiMeta["alertas"];
-      const total = pendingApprovals.length + lowStockCount + alerts.length;
+      // Matches exactly what the "Alertas" card below lists — pending
+      // approvals have their own card, so this total is approvals + alerts
+      // (which already folds in low stock; see app/admin/page.tsx).
+      const total = pendingApprovals.length + alerts.length;
       return { ...k, value: `${total} abiertas`, sparkline: undefined };
     })(),
   ];

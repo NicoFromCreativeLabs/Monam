@@ -1,5 +1,7 @@
 import { describe, it, expect } from "vitest";
-import { ventasBrutas, ingresoNetoFromBreakdown, utilidadBruta, ebitda, formatRealDelta, type PnlBreakdown } from "./pnl-math";
+import { ventasBrutas, ingresoNetoFromBreakdown, utilidadBruta, ebitda, formatRealDelta, pctOfIngresoNeto, CARGAS_SOCIALES_RATIO, type PnlBreakdown } from "./pnl-math";
+import { monthsInRange } from "./period-range";
+import { applyOverrides } from "./pnl-periods";
 
 function breakdown(overrides: Partial<PnlBreakdown> = {}): PnlBreakdown {
   return {
@@ -93,6 +95,54 @@ describe("ebitda", () => {
     expect(ingresoNetoFromBreakdown(b)).toBe(expectedIngresoNeto);
     expect(utilidadBruta(b)).toBe(expectedUtilidadBruta);
     expect(ebitda(b)).toBe(expectedEbitda);
+  });
+});
+
+describe("pctOfIngresoNeto", () => {
+  it("returns null instead of an absurd percentage when ingreso neto is near zero", () => {
+    // The actual bug this guards: real fixed costs (rent, payroll) over a
+    // few pesos of leftover test-override revenue previously read as
+    // -974,627% on both the Admin Panel KPI and the P&L table's own column.
+    expect(pctOfIngresoNeto(-107209, 11)).toBeNull();
+    expect(pctOfIngresoNeto(-107209, 0)).toBeNull();
+  });
+
+  it("computes a normal percentage once ingreso neto clears the floor", () => {
+    expect(pctOfIngresoNeto(5000, 20000)).toBe(25);
+    expect(pctOfIngresoNeto(-15000, 20000)).toBe(-75);
+  });
+});
+
+describe("monthsInRange", () => {
+  it("returns about 1 for a full month", () => {
+    expect(monthsInRange({ start: new Date(2026, 0, 1), end: new Date(2026, 1, 1) })).toBeCloseTo(1.02, 1);
+  });
+
+  it("returns about 3 for a quarter, not 1 — the bug that understated fixed costs", () => {
+    const months = monthsInRange({ start: new Date(2026, 0, 1), end: new Date(2026, 3, 1) });
+    expect(months).toBeGreaterThan(2.8);
+    expect(months).toBeLessThan(3.2);
+  });
+
+  it("returns a fraction for a month-to-date range", () => {
+    const months = monthsInRange({ start: new Date(2026, 0, 1), end: new Date(2026, 0, 11) });
+    expect(months).toBeGreaterThan(0.3);
+    expect(months).toBeLessThan(0.4);
+  });
+});
+
+describe("applyOverrides cargasSociales derivation", () => {
+  it("recomputes cargasSociales from an overridden nominaBase when not itself overridden", () => {
+    const base = breakdown({ nominaBase: -68000, cargasSociales: -20400 });
+    const out = applyOverrides(base, { nominaBase: -40000 });
+    expect(out.nominaBase).toBe(-40000);
+    expect(out.cargasSociales).toBe(Math.round(-40000 * CARGAS_SOCIALES_RATIO));
+  });
+
+  it("keeps an explicit cargasSociales override instead of recomputing it", () => {
+    const base = breakdown({ nominaBase: -68000, cargasSociales: -20400 });
+    const out = applyOverrides(base, { nominaBase: -40000, cargasSociales: -5000 });
+    expect(out.cargasSociales).toBe(-5000);
   });
 });
 

@@ -34,6 +34,18 @@ export function periodRange(period: Period, now = new Date()): DateRange {
   return { start: startOfMonth(now), end: now };
 }
 
+// How many calendar months a range covers, as a fraction — used to prorate
+// fixed costs (payroll, rent, maintenance) that are recorded as a flat
+// monthly amount, not as dated transactions. A single month-to-date range
+// returns a fraction less than 1; a quarter returns ~3; a year returns ~12 —
+// without this, fixed costs were added in once per query regardless of range
+// length, understating costs (and inflating EBITDA) for anything longer than
+// one month.
+export function monthsInRange(range: DateRange): number {
+  const days = (range.end.getTime() - range.start.getTime()) / 86400000;
+  return days / 30.4375;
+}
+
 // The equivalent-length range immediately before the Periodo's own range
 // (for "Mes anterior" as a comparison, not as the Periodo itself) or the
 // same range shifted back one year (for "Mismo mes año anterior").

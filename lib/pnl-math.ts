@@ -63,6 +63,28 @@ export function formatRealDelta(
   return { label: `${arrow} ${abs}% vs. ${compareLabel}`, tone };
 }
 
+// Below this, "% of ingreso neto" is meaningless — a near-zero denominator
+// turns any nonzero numerator into an absurd percentage (e.g. a real
+// -$107,209 MXN EBITDA — rent, payroll, etc. are never zero — divided by
+// $11 of leftover test-override revenue reads as -974,627%). No single
+// floor is "correct"; this one clears a single Targeted service ($850 MXN)
+// without hiding a genuinely small but real month. Shared by the Admin
+// Panel's "Contribución" KPI and the P&L table's own "% Ing." column —
+// previously each screen reimplemented this with no guard at all.
+const MIN_INGRESO_NETO_FOR_PCT = 1000;
+
+// Cargas sociales as a share of Nómina base (IMSS/INFONAVIT/etc.) — the one
+// fixed cost derived from another rather than recorded directly, so both
+// lib/reporting.ts's computed value and lib/pnl-periods.ts's override
+// recompute use this instead of letting a hand-typed nominaBase silently
+// leave cargasSociales stale.
+export const CARGAS_SOCIALES_RATIO = 0.3;
+
+export function pctOfIngresoNeto(amount: number, ingresoNeto: number): number | null {
+  if (Math.abs(ingresoNeto) < MIN_INGRESO_NETO_FOR_PCT) return null;
+  return Math.round((amount / ingresoNeto) * 100);
+}
+
 export function ebitda(b: PnlBreakdown) {
   return (
     utilidadBruta(b) +
