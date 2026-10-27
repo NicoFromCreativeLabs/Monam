@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { getOpenAlerts } from "@/lib/alerts";
 import {
   AdminControlView,
   type ApprovalRow,
@@ -33,8 +34,13 @@ function formatDate(d: Date) {
 // (lib/actions/clients.ts, ARCO deletion), so it starts empty and fills in
 // as privacy-relevant actions happen; broader write-side instrumentation
 // (every mutation, not just ARCO) is follow-up work, not this pass.
-export default async function AdminControl() {
-  const [approvals, anomalies, incidents, auditLog] = await Promise.all([
+export default async function AdminControl({
+  searchParams,
+}: {
+  searchParams: Promise<{ tab?: string }>;
+}) {
+  const { tab } = await searchParams;
+  const [approvals, anomalies, incidents, auditLog, alerts] = await Promise.all([
     prisma.approvalRequest.findMany({
       include: { requestedBy: true, client: true },
       orderBy: { createdAt: "desc" },
@@ -45,6 +51,9 @@ export default async function AdminControl() {
       orderBy: { occurredAt: "desc" },
     }),
     prisma.auditLog.findMany({ include: { actor: true }, orderBy: { createdAt: "desc" }, take: 100 }),
+    // Same set the Panel's "Alertas" KPI counts (lib/alerts.ts) — the KPI
+    // links here, so this page has to actually show it.
+    getOpenAlerts(),
   ]);
 
   const approvalRows: ApprovalRow[] = approvals.map((a) => ({
@@ -82,12 +91,16 @@ export default async function AdminControl() {
     timestamp: l.createdAt.toISOString().slice(0, 16).replace("T", " "),
   }));
 
+  const initialTab = tab === "alertas" ? "Alertas" : undefined;
+
   return (
     <AdminControlView
       approvals={approvalRows}
       anomalies={anomalyRows}
       incidents={incidentRows}
       auditLog={auditLogRows}
+      alerts={alerts}
+      initialTab={initialTab}
     />
   );
 }

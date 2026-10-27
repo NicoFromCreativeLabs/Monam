@@ -3,6 +3,7 @@ import { AdminPanelView } from "@/components/panel/AdminPanelView";
 import { getReportingSnapshotAction } from "@/lib/actions/reporting";
 import { getTodayAppointments } from "@/lib/appointments";
 import { flagForgottenShifts } from "@/lib/shift-alerts";
+import { getOpenAlerts } from "@/lib/alerts";
 
 // Panel (Hoy) — rebuilt per client review, Sep 2026. Three visually
 // distinct bands — Pulso (KPIs), Requiere acción (tasks), Hoy (today's
@@ -17,18 +18,16 @@ export default async function AdminPanelPage() {
   await flagForgottenShifts();
   const locations = await prisma.location.findMany({ orderBy: { createdAt: "asc" } });
 
-  const [snapshot, pendingApprovals, inventoryItems, alerts, romaNorte] = await Promise.all([
+  const [snapshot, pendingApprovals, alerts, romaNorte] = await Promise.all([
     getReportingSnapshotAction(locations.map((l) => l.name), "Mes en curso", "Mes anterior"),
     prisma.approvalRequest.findMany({
       where: { status: "PENDING" },
       include: { requestedBy: true, client: true },
       orderBy: { createdAt: "desc" },
     }),
-    prisma.inventoryItem.findMany({ select: { qty: true, par: true } }),
-    prisma.alert.findMany({ where: { readAt: null }, orderBy: { createdAt: "desc" }, take: 20 }),
+    getOpenAlerts(),
     prisma.location.findFirst({ where: { name: "Roma Norte" } }),
   ]);
-  const lowStockCount = inventoryItems.filter((i) => i.qty < i.par).length;
 
   const todayAppointments = romaNorte ? await getTodayAppointments(romaNorte.id) : [];
 
@@ -43,8 +42,7 @@ export default async function AdminPanelPage() {
         requestedBy: a.requestedBy.name,
         reason: a.reason ?? "",
       }))}
-      lowStockCount={lowStockCount}
-      alerts={alerts.map((a) => ({ id: a.id, text: a.text }))}
+      alerts={alerts}
       todayAppointments={todayAppointments.map((a) => ({
         id: a.id,
         time: a.time,

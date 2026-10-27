@@ -989,7 +989,7 @@ export const PANEL_KPIS: KpiDef[] = [
     progressPct: 40,
     semaphore: "red",
     sparkline: [3, 4, 2, 5, 4, 5, 6, 6],
-    href: "/admin/control",
+    href: "/admin/control?tab=alertas",
   },
 ];
 

@@ -38,6 +38,10 @@ export interface AuditLogRow {
   entity: string;
   timestamp: string;
 }
+export interface AlertRow {
+  id: string;
+  text: string;
+}
 
 const APPROVAL_TONE: Record<string, "warning" | "positive" | "neutral"> = {
   Pendiente: "warning",
@@ -45,7 +49,7 @@ const APPROVAL_TONE: Record<string, "warning" | "positive" | "neutral"> = {
   Rechazado: "neutral",
 };
 
-const TABS = ["Aprobaciones", "Anomalías", "Historial", "Incidentes clínicos"] as const;
+const TABS = ["Alertas", "Aprobaciones", "Anomalías", "Historial", "Incidentes clínicos"] as const;
 type Tab = (typeof TABS)[number];
 
 export function AdminControlView({
@@ -53,13 +57,17 @@ export function AdminControlView({
   anomalies,
   incidents,
   auditLog,
+  alerts,
+  initialTab,
 }: {
   approvals: ApprovalRow[];
   anomalies: AnomalyRow[];
   incidents: IncidentRow[];
   auditLog: AuditLogRow[];
+  alerts: AlertRow[];
+  initialTab?: Tab;
 }) {
-  const [tab, setTab] = useState<Tab>("Aprobaciones");
+  const [tab, setTab] = useState<Tab>(initialTab ?? "Aprobaciones");
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
 
@@ -94,6 +102,25 @@ export function AdminControlView({
             </button>
           ))}
         </div>
+
+        {tab === "Alertas" && (
+          <Card title="Alertas (stock · seguridad)">
+            {alerts.length === 0 ? (
+              <p className="py-6 text-center font-body text-sm text-ciruela/50">
+                Sin alertas abiertas.
+              </p>
+            ) : (
+              <ul className="divide-y divide-ciruela/8">
+                {alerts.map((a) => (
+                  <li key={a.id} className="flex items-start gap-2 py-3 font-body text-sm text-ciruela">
+                    <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-[#b3392f]" />
+                    {a.text}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </Card>
+        )}
 
         {tab === "Aprobaciones" && (
           <Card title="Cola de aprobaciones">
