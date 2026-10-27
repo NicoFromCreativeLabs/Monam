@@ -10,6 +10,7 @@ import {
   cancelOnlineChargeAction,
   checkOnlineChargeAction,
   createSaleAction,
+  getCheckoutClientAction,
   startOnlineChargeAction,
   type CreateSaleInput,
   type DiscountInput,
@@ -43,7 +44,14 @@ export interface CheckoutCatalogItem {
   qty: number;
 }
 
+export interface CheckoutClientListing {
+  id: string;
+  name: string;
+  phone: string;
+}
+
 type AddedItem = { sku: string; product: string; price: number; qty: number };
+type AttachedClient = { id: string; name: string; discounts: { code: string; name: string; summary: string }[] };
 
 // Two genuinely different flows share this screen, per how the studio
 // actually works: (1) a specific client's ticket, reached ONLY from the
@@ -60,12 +68,14 @@ export function StaffCheckoutView({
   locationName,
   discountThresholdPct,
   canApproveDiscounts,
+  clients,
 }: {
   session: CheckoutSession | null;
   catalog: CheckoutCatalogItem[];
   locationName: string;
   discountThresholdPct: number; // Front Desk can discount up to this % without approval
   canApproveDiscounts: boolean; // Owner / Clinic Manager: any discount, directly
+  clients: CheckoutClientListing[]; // for the retail-only "Agregar clienta" modal
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -100,6 +110,45 @@ export function StaffCheckoutView({
   const [onlineRecordError, setOnlineRecordError] = useState<string | null>(null);
   const [retryNonce, setRetryNonce] = useState(0);
   const [linkCopied, setLinkCopied] = useState(false);
+  // Retail-only counter sale, no appointment: an optional client attach so
+  // her account discounts show up and the purchase is recorded against her
+  // (Sale.clientId) instead of staying untraceable. Opens automatically the
+  // first time this screen renders with no session — "opcional", so it's
+  // just as valid to skip it and keep a clientless walk-in sale.
+  const [attachedClient, setAttachedClient] = useState<AttachedClient | null>(null);
+  const [attachModalOpen, setAttachModalOpen] = useState(isRetailOnly);
+  const [attachSearch, setAttachSearch] = useState("");
+  const [attachBusy, setAttachBusy] = useState(false);
+  const [attachError, setAttachError] = useState<string | null>(null);
+
+  function closeAttachModal() {
+    setAttachModalOpen(false);
+    setAttachSearch("");
+    setAttachError(null);
+  }
+
+  function attachClient(clientId: string) {
+    setAttachBusy(true);
+    setAttachError(null);
+    startTransition(async () => {
+      const result = await getCheckoutClientAction(clientId);
+      setAttachBusy(false);
+      if ("error" in result) {
+        setAttachError(result.error);
+        return;
+      }
+      setAttachedClient(result);
+      closeAttachModal();
+    });
+  }
+
+  function detachClient() {
+    setAttachedClient(null);
+  }
+
+  const filteredClients = clients.filter(
+    (c) => c.name.toLowerCase().includes(attachSearch.toLowerCase()) || c.phone.includes(attachSearch),
+  );
   const addToSale = (item: { sku: string; product: string; price: number }) => {
     setAddedItems((prev) => (prev.some((a) => a.sku === item.sku) ? prev : [...prev, { ...item, qty: 1 }]));
   };
@@ -137,6 +186,7 @@ export function StaffCheckoutView({
 
   const [chargedSummary, setChargedSummary] = useState<{
     clientName: string | null;
+    hadSession: boolean; // an appointment checkout, not a (possibly client-attached) counter sale
     total: number;
   } | null>(null);
 
@@ -145,6 +195,7 @@ export function StaffCheckoutView({
     const retailItems = addedItems.map((a) => ({ sku: a.sku, qty: a.qty }));
     const base = {
       appointmentId: session?.appointmentId ?? null,
+      clientId: session?.clientId ?? attachedClient?.id ?? null,
       locationName: session?.locationName ?? locationName,
       retailItems,
       discount,
@@ -170,7 +221,11 @@ export function StaffCheckoutView({
         setCheckoutError(result.error);
         return;
       }
-      setChargedSummary({ clientName: session?.clientName ?? null, total: result.totalMxn });
+      setChargedSummary({
+        clientName: session?.clientName ?? attachedClient?.name ?? null,
+        hadSession: !!session,
+        total: result.totalMxn,
+      });
       setCharged(true);
       router.refresh();
     });
@@ -206,7 +261,11 @@ export function StaffCheckoutView({
           setOnlineRecordError(result.error);
           return;
         }
-        setChargedSummary({ clientName: session?.clientName ?? null, total: result.totalMxn });
+        setChargedSummary({
+          clientName: session?.clientName ?? attachedClient?.name ?? null,
+          hadSession: !!session,
+          total: result.totalMxn,
+        });
         setOnlineCharge(null);
         setCharged(true);
         router.refresh();
@@ -248,6 +307,8 @@ export function StaffCheckoutView({
     setAddedItems([]);
     setChargedSummary(null);
     setCharged(false);
+    setAttachedClient(null);
+    setAttachModalOpen(true);
   }
 
   const filteredCatalog = catalog.filter((item) =>
@@ -267,14 +328,15 @@ export function StaffCheckoutView({
                   : `Venta de mostrador cobrada — $${chargedSummary.total} MXN.`}
               </p>
               <div className="mt-5 flex gap-3">
-                {chargedSummary.clientName ? (
+                {chargedSummary.hadSession && (
                   <Link
                     href="/staff"
                     className="rounded-full bg-ciruela px-4 py-2 font-body text-xs text-hueso"
                   >
                     Volver a Hoy
                   </Link>
-                ) : (
+                )}
+                {!chargedSummary.hadSession && (
                   <button
                     onClick={startNextRetailSale}
                     className="rounded-full bg-ciruela px-4 py-2 font-body text-xs text-hueso"
@@ -295,15 +357,39 @@ export function StaffCheckoutView({
       <TopBar title="Cobro / POS" />
       <div className="flex-1 px-8 py-6">
         <div className="mx-auto max-w-lg">
-          {isRetailOnly && (
-            <div className="mb-4 rounded-2xl border border-ciruela/15 bg-ciruela/5 px-4 py-3">
-              <p className="font-body text-xs font-medium uppercase tracking-[0.14em] text-ciruela/60">
-                Venta de mostrador
-              </p>
-              <p className="mt-1 font-body text-xs text-ciruela/50">
-                Sin sesión seleccionada — solo productos retail, sin ficha de clienta. Para
-                cobrar un facial, ábrelo desde &ldquo;Listas para cobro&rdquo; en Hoy.
-              </p>
+          {isRetailOnly && !attachedClient && (
+            <div className="mb-4 flex items-start justify-between gap-3 rounded-2xl border border-ciruela/15 bg-ciruela/5 px-4 py-3">
+              <div>
+                <p className="font-body text-xs font-medium uppercase tracking-[0.14em] text-ciruela/60">
+                  Venta de mostrador
+                </p>
+                <p className="mt-1 font-body text-xs text-ciruela/50">
+                  Sin clienta agregada — solo productos retail. Para cobrar un facial, ábrelo
+                  desde &ldquo;Listas para cobro&rdquo; en Hoy.
+                </p>
+              </div>
+              <button
+                onClick={() => setAttachModalOpen(true)}
+                className="shrink-0 rounded-full border border-ciruela px-3 py-1.5 font-body text-xs text-ciruela hover:bg-ciruela hover:text-hueso"
+              >
+                + Agregar clienta
+              </button>
+            </div>
+          )}
+          {isRetailOnly && attachedClient && (
+            <div className="mb-4 flex items-center justify-between gap-3 rounded-2xl border border-ciruela/15 bg-ciruela/5 px-4 py-3">
+              <div>
+                <p className="font-body text-xs font-medium uppercase tracking-[0.14em] text-ciruela/60">
+                  Venta de mostrador
+                </p>
+                <p className="mt-1 font-body text-sm text-ciruela">{attachedClient.name}</p>
+              </div>
+              <button
+                onClick={detachClient}
+                className="shrink-0 font-body text-xs text-ciruela/60 underline hover:text-ciruela"
+              >
+                Quitar
+              </button>
             </div>
           )}
           {session && (
@@ -352,7 +438,15 @@ export function StaffCheckoutView({
               </Card>
             </div>
           )}
-          <Card title={session ? `Ticket — ${session.clientName}` : "Venta de mostrador"}>
+          <Card
+            title={
+              session
+                ? `Ticket — ${session.clientName}`
+                : attachedClient
+                  ? `Ticket — ${attachedClient.name}`
+                  : "Venta de mostrador"
+            }
+          >
             <ul className="divide-y divide-ciruela/8 font-body text-sm text-ciruela">
               {session && (
                 <li className="flex justify-between py-2">
@@ -435,9 +529,10 @@ export function StaffCheckoutView({
                 applied={codeDiscount}
                 onChange={setCodeDiscount}
                 appointmentId={session?.appointmentId ?? null}
+                clientId={session?.clientId ?? attachedClient?.id ?? null}
                 locationName={session?.locationName ?? locationName}
                 retailItems={addedItems.map((a) => ({ sku: a.sku, qty: a.qty }))}
-                clientDiscounts={session?.clientDiscounts ?? []}
+                clientDiscounts={session?.clientDiscounts ?? attachedClient?.discounts ?? []}
               />
             )}
             {subtotal > 0 && !codeDiscount && (
@@ -445,7 +540,7 @@ export function StaffCheckoutView({
                 subtotal={subtotal}
                 thresholdPct={discountThresholdPct}
                 canApprove={canApproveDiscounts}
-                clientId={session?.clientId ?? null}
+                clientId={session?.clientId ?? attachedClient?.id ?? null}
                 value={discount}
                 onChange={setDiscount}
               />
@@ -644,6 +739,76 @@ export function StaffCheckoutView({
                 );
               })}
             </ul>
+          </div>
+        </div>
+      )}
+
+      {attachModalOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-ciruela/40 px-4"
+          onClick={closeAttachModal}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="flex max-h-[80vh] w-full max-w-sm flex-col rounded-2xl bg-hueso shadow-xl"
+          >
+            <div className="flex items-center justify-between border-b border-ciruela/10 px-5 py-4">
+              <p className="font-display text-sm text-ciruela">Agregar clienta (opcional)</p>
+              <button
+                onClick={closeAttachModal}
+                aria-label="Cerrar"
+                className="text-ciruela/50 hover:text-ciruela"
+              >
+                ×
+              </button>
+            </div>
+            <div className="px-5 pt-3">
+              <p className="font-body text-xs text-ciruela/50">
+                Para ver sus descuentos y guardar esta compra en su cuenta — déjalo en blanco
+                para una venta de mostrador sin cuenta.
+              </p>
+              <input
+                autoFocus
+                type="text"
+                value={attachSearch}
+                onChange={(e) => setAttachSearch(e.target.value)}
+                placeholder="Buscar por nombre o teléfono…"
+                className="mt-3 w-full rounded-full border border-ciruela/20 px-4 py-2 font-body text-sm text-ciruela placeholder:text-ciruela/40 focus:border-ciruela focus:outline-none"
+              />
+              {attachError && (
+                <p className="mt-2 font-body text-xs text-[#b3392f]">{attachError}</p>
+              )}
+            </div>
+            <ul className="mt-2 flex-1 divide-y divide-ciruela/8 overflow-y-auto px-5 pb-4">
+              {filteredClients.length === 0 && (
+                <li className="py-6 text-center font-body text-sm text-ciruela/40">
+                  Sin resultados.
+                </li>
+              )}
+              {filteredClients.slice(0, 50).map((c) => (
+                <li key={c.id} className="flex items-center justify-between py-3">
+                  <div>
+                    <p className="font-body text-sm text-ciruela">{c.name}</p>
+                    <p className="font-body text-xs text-ciruela/50">{c.phone}</p>
+                  </div>
+                  <button
+                    disabled={attachBusy}
+                    onClick={() => attachClient(c.id)}
+                    className="shrink-0 rounded-full border border-ciruela px-3 py-1.5 font-body text-xs text-ciruela hover:bg-ciruela hover:text-hueso disabled:opacity-50"
+                  >
+                    Agregar
+                  </button>
+                </li>
+              ))}
+            </ul>
+            <div className="border-t border-ciruela/10 px-5 py-3">
+              <button
+                onClick={closeAttachModal}
+                className="w-full rounded-full border border-ciruela/20 py-2 font-body text-xs text-ciruela/70 hover:border-ciruela hover:text-ciruela"
+              >
+                Continuar sin cuenta
+              </button>
+            </div>
           </div>
         </div>
       )}

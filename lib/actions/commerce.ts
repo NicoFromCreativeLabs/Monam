@@ -15,6 +15,7 @@ import {
 import type { Role } from "@/lib/generated/prisma/client";
 import { earnsCommission } from "@/lib/commission-policy";
 import { evaluateCodeForTicket, type AppliedCode } from "@/lib/discount-codes-server";
+import { getUsableAccountDiscounts } from "@/lib/client-discounts";
 
 const FRONT_DESK_ROLES: Role[] = ["FRONT_DESK", "OWNER", "CLINIC_MANAGER"];
 const MANAGER_ROLES: Role[] = ["OWNER", "CLINIC_MANAGER"];
@@ -78,6 +79,10 @@ export interface DiscountInput {
 
 export interface CreateSaleInput {
   appointmentId?: string | null;
+  // A client manually attached at a retail-only counter sale (no appointment)
+  // — StaffCheckoutView's "Agregar clienta" modal. Ignored when appointmentId
+  // is set: the appointment's own client is always the one of record then.
+  clientId?: string | null;
   discount?: DiscountInput | null;
   // A discount code (typed or scanned from its QR). Pre-approved by whoever created it,
   // so it skips the approval threshold; it cannot be combined with a manual discount.
@@ -103,7 +108,10 @@ function quoteError(error: string): { error: string } {
 }
 
 async function quoteSale(
-  input: Pick<CreateSaleInput, "appointmentId" | "locationName" | "retailItems" | "discount" | "discountCode">,
+  input: Pick<
+    CreateSaleInput,
+    "appointmentId" | "clientId" | "locationName" | "retailItems" | "discount" | "discountCode"
+  >,
 ) {
   const location = await prisma.location.findFirst({ where: { name: input.locationName } });
   if (!location) return quoteError("Sucursal no encontrada.");
@@ -115,6 +123,9 @@ async function quoteSale(
     if (appointment.sale) return quoteError("Esta cita ya fue cobrada.");
     if (!appointment.treatmentRecord) return quoteError("El tratamiento no se ha completado.");
   }
+  // An appointment's own client always wins — a manually-attached clientId
+  // only matters for the retail-only (no appointment) counter-sale path.
+  const resolvedClientId = appointment?.clientId ?? input.clientId ?? null;
 
   const skus = input.retailItems.filter((r) => r.qty > 0).map((r) => r.sku);
   const inventoryItems = skus.length
@@ -158,7 +169,7 @@ async function quoteSale(
   if (input.discountCode?.trim()) {
     if (input.discount) return quoteError("Usa un código o un descuento manual, no los dos.");
     const evaluated = await evaluateCodeForTicket(input.discountCode, {
-      clientId: appointment?.clientId ?? null,
+      clientId: resolvedClientId,
       servicePrice,
       addOns: (appointment?.addOns ?? []).map((a) => ({ addOnId: a.addOnId, price: a.priceMxn })),
       retail: input.retailItems
@@ -173,7 +184,7 @@ async function quoteSale(
   const totalMxn = Math.max(0, subtotal - discountMxn + depositCreditMxn);
 
   return {
-    location, appointment, itemBySku, servicePrice, subtotal, depositCreditMxn, totalMxn, discountMxn, discountPct, appliedCode,
+    location, appointment, resolvedClientId, itemBySku, servicePrice, subtotal, depositCreditMxn, totalMxn, discountMxn, discountPct, appliedCode,
   } as const;
 }
 
@@ -210,7 +221,7 @@ export async function createSaleAction(input: CreateSaleInput): Promise<CreateSa
 
   const quote = await quoteSale(input);
   if ("error" in quote) return quote;
-  const { location, appointment, itemBySku, servicePrice, subtotal, depositCreditMxn, totalMxn, discountMxn, discountPct, appliedCode } =
+  const { location, appointment, resolvedClientId, itemBySku, servicePrice, subtotal, depositCreditMxn, totalMxn, discountMxn, discountPct, appliedCode } =
     quote;
 
   if (input.discount) {
@@ -242,7 +253,7 @@ export async function createSaleAction(input: CreateSaleInput): Promise<CreateSa
       data: {
         location: { connect: { id: location.id } },
         closedBy: { connect: { id: staff.id } },
-        ...(appointment?.clientId ? { client: { connect: { id: appointment.clientId } } } : {}),
+        ...(resolvedClientId ? { client: { connect: { id: resolvedClientId } } } : {}),
         ...(appointment?.id ? { appointment: { connect: { id: appointment.id } } } : {}),
         subtotalMxn: subtotal,
         discountMxn,
@@ -395,7 +406,7 @@ export async function createSaleAction(input: CreateSaleInput): Promise<CreateSa
         data: {
           codeId: appliedCode.codeId,
           saleId: created.id,
-          clientId: appointment?.clientId ?? null,
+          clientId: resolvedClientId,
           amountMxn: discountMxn,
           redeemedByUserId: staff.id,
         },
@@ -427,7 +438,7 @@ export async function createSaleAction(input: CreateSaleInput): Promise<CreateSa
             status: "APPROVED",
             decidedAt: new Date(),
             saleId: created.id,
-            clientId: appointment?.clientId ?? null,
+            clientId: resolvedClientId,
             amountMxn: Math.ceil(discountPct),
             reason: input.discount.reason.trim(),
           },
@@ -508,7 +519,7 @@ export type StartOnlineChargeResult =
 // iOS/Android app or a Stripe card reader — it can't run in a web app.) The
 // Sale is recorded afterwards by createSaleAction once the payment is verified.
 export async function startOnlineChargeAction(
-  input: Pick<CreateSaleInput, "appointmentId" | "locationName" | "retailItems" | "discount">,
+  input: Pick<CreateSaleInput, "appointmentId" | "clientId" | "locationName" | "retailItems" | "discount">,
 ): Promise<StartOnlineChargeResult> {
   const staff = await requireStaffRole(FRONT_DESK_ROLES);
   if (!STRIPE_ENABLED) return { error: "Stripe no está configurado. Cobra en efectivo o con tarjeta." };
@@ -583,12 +594,14 @@ export type DiscountCodePreview =
 export async function previewDiscountCodeAction(input: {
   code: string;
   appointmentId?: string | null;
+  clientId?: string | null;
   locationName: string;
   retailItems: RetailLineInput[];
 }): Promise<DiscountCodePreview> {
   await requireStaffRole(FRONT_DESK_ROLES);
   const quote = await quoteSale({
     appointmentId: input.appointmentId ?? null,
+    clientId: input.clientId ?? null,
     locationName: input.locationName,
     retailItems: input.retailItems,
     discount: null,
@@ -602,6 +615,31 @@ export async function previewDiscountCodeAction(input: {
     name: quote.appliedCode.name,
     summary: quote.appliedCode.summary,
     discountMxn: quote.discountMxn,
+  };
+}
+
+// A retail-only counter sale has no appointment to read a client off — this
+// is StaffCheckoutView's "Agregar clienta" modal looking one up by id (from
+// the location's client list) so her account discounts can be shown and her
+// purchase recorded against her, same as an appointment checkout already does.
+export interface CheckoutClientInfo {
+  id: string;
+  name: string;
+  discounts: { code: string; name: string; summary: string }[];
+}
+
+export async function getCheckoutClientAction(
+  clientId: string,
+): Promise<CheckoutClientInfo | { error: string }> {
+  await requireStaffRole(FRONT_DESK_ROLES);
+  const client = await prisma.client.findUnique({ where: { id: clientId } });
+  if (!client || client.anonymizedAt) return { error: "Clienta no encontrada." };
+
+  const discounts = await getUsableAccountDiscounts(client.id);
+  return {
+    id: client.id,
+    name: client.name,
+    discounts: discounts.map((d) => ({ code: d.code, name: d.name, summary: d.summary })),
   };
 }
 

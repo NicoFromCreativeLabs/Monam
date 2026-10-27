@@ -23,6 +23,7 @@ export function CheckoutDiscountCode({
   applied,
   onChange,
   appointmentId,
+  clientId,
   locationName,
   retailItems,
   clientDiscounts = [],
@@ -31,6 +32,7 @@ export function CheckoutDiscountCode({
   applied: AppliedDiscountCode | null;
   onChange: (code: AppliedDiscountCode | null) => void;
   appointmentId: string | null;
+  clientId?: string | null;
   locationName: string;
   retailItems: RetailLineInput[];
 }) {
@@ -49,7 +51,7 @@ export function CheckoutDiscountCode({
     setBusy(true);
     setError(null);
     try {
-      const result = await previewDiscountCodeAction({ code, appointmentId, locationName, retailItems });
+      const result = await previewDiscountCodeAction({ code, appointmentId, clientId, locationName, retailItems });
       if (!result.ok) {
         setError(result.error);
         return;
@@ -65,7 +67,7 @@ export function CheckoutDiscountCode({
   }
 
   // The ticket changed (a product added or removed): work the discount out again.
-  const ticketKey = JSON.stringify([appointmentId, retailItems]);
+  const ticketKey = JSON.stringify([appointmentId, clientId, retailItems]);
   const lastKey = useRef(ticketKey);
   useEffect(() => {
     if (!applied || lastKey.current === ticketKey) {
@@ -74,7 +76,7 @@ export function CheckoutDiscountCode({
     }
     lastKey.current = ticketKey;
     let cancelled = false;
-    previewDiscountCodeAction({ code: applied.code, appointmentId, locationName, retailItems })
+    previewDiscountCodeAction({ code: applied.code, appointmentId, clientId, locationName, retailItems })
       .then((result) => {
         if (cancelled) return;
         if (result.ok) {

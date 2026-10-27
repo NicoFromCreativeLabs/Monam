@@ -78,9 +78,10 @@ export default async function StaffCheckout({
     }
   }
 
-  const [currentUser, thresholdRow] = await Promise.all([
+  const [currentUser, thresholdRow, clients] = await Promise.all([
     getCurrentAppUser(),
     prisma.setting.findUnique({ where: { key: "discount.approvalThresholdPct" } }),
+    prisma.client.findMany({ where: { anonymizedAt: null }, orderBy: { name: "asc" } }),
   ]);
   const discountThresholdPct = typeof thresholdRow?.value === "number" ? thresholdRow.value : 10;
   const canApproveDiscounts = currentUser?.role === "OWNER" || currentUser?.role === "CLINIC_MANAGER";
@@ -92,6 +93,7 @@ export default async function StaffCheckout({
       locationName="Roma Norte"
       discountThresholdPct={discountThresholdPct}
       canApproveDiscounts={canApproveDiscounts}
+      clients={clients.map((c) => ({ id: c.id, name: c.name, phone: c.phone }))}
     />
   );
 }
