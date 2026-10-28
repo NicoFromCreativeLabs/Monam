@@ -16,8 +16,11 @@ const PUBLIC_PATHS = [
   "/api/stripe/webhook",
 ];
 // /.well-known holds the Apple Pay domain-verification file (Stripe, "Payment
-// method domains"); Apple fetches it with no session.
-const PUBLIC_PREFIXES = ["/auth", "/legal", "/pagar", "/d/", "/.well-known"];
+// method domains"); Apple fetches it with no session. /api/receipts and
+// /eliminar-cuenta are reached from the welcome/receipt email by a client
+// who has no password yet — each authorizes itself with a signed token
+// (lib/signed-link-token.ts), not a Supabase session.
+const PUBLIC_PREFIXES = ["/auth", "/legal", "/pagar", "/d/", "/.well-known", "/api/receipts/", "/eliminar-cuenta"];
 
 function isPublicPath(pathname: string) {
   return PUBLIC_PATHS.includes(pathname) || PUBLIC_PREFIXES.some((p) => pathname.startsWith(p));

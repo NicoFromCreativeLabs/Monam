@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireClientOrPreview, requireStaffRole } from "@/lib/auth/dal";
+import type { Role } from "@/lib/generated/prisma/client";
 
 // ---------------------------------------------------------------------------
 // Client self-service (/my/skin-id, /my/preferences) — every action derives
@@ -173,17 +174,19 @@ export async function updateClientPreferencesAction(
 // ARCO deletion (spec §5.6) — anonymizes in place rather than hard-deleting:
 // the appointment/sale/commission history a real business needs for
 // accounting stays intact, it just stops being linkable to a real person.
-// Owner-only, not Clinic Manager — the client database being
-// un-exportable/undeletable by anyone but the Owners is a stated
-// non-negotiable. Does NOT delete the Supabase Auth user itself (a separate,
-// more irreversible operation) or the ClientPhoto storage objects (only
-// their DB rows) — both are flagged here as manual follow-up, not silently
-// skipped.
-export async function anonymizeClientAction(clientId: string) {
-  const owner = await requireStaffRole(["OWNER"]);
-
+// Does NOT delete the Supabase Auth user itself (a separate, more
+// irreversible operation — the admin-triggered path leaves this as manual
+// follow-up) or the ClientPhoto storage objects (only their DB rows).
+// Shared by the Owner-only admin action below and the unauthenticated
+// self-service one (lib/actions/self-service.ts, reached from the "elimina
+// tu cuenta" link in the welcome/receipt email) — same effect, different
+// authorization and audit trail.
+export async function anonymizeClient(
+  clientId: string,
+  actor: { userId: string | null; role: Role | null; reason: string },
+): Promise<boolean> {
   const client = await prisma.client.findUnique({ where: { id: clientId } });
-  if (!client || client.anonymizedAt) return;
+  if (!client || client.anonymizedAt) return false;
 
   await prisma.$transaction([
     prisma.clientPhoto.deleteMany({ where: { clientId } }),
@@ -192,25 +195,38 @@ export async function anonymizeClientAction(clientId: string) {
       data: {
         name: "Cliente anonimizado",
         email: null,
-        phone: `anon-${clientId}`,
+        phone: null,
         authUserId: null,
         anonymizedAt: new Date(),
       },
     }),
     prisma.auditLog.create({
       data: {
-        actorUserId: owner.id,
-        actorRole: owner.role,
+        actorUserId: actor.userId,
+        actorRole: actor.role,
         action: "ANONYMIZE",
         entityType: "Client",
         entityId: clientId,
-        reason: "Solicitud ARCO — derecho de cancelación/oposición",
+        reason: actor.reason,
       },
     }),
   ]);
 
   revalidatePath("/admin/clients");
   revalidatePath(`/admin/clients/${clientId}`);
+  return true;
+}
+
+// Owner-only, not Clinic Manager — the client database being
+// un-exportable/undeletable by anyone but the Owners is a stated
+// non-negotiable.
+export async function anonymizeClientAction(clientId: string) {
+  const owner = await requireStaffRole(["OWNER"]);
+  await anonymizeClient(clientId, {
+    userId: owner.id,
+    role: owner.role,
+    reason: "Solicitud ARCO — derecho de cancelación/oposición",
+  });
 }
 
 // Consent Center (/my/consent) — only photo-use consent is revocable by the

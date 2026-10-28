@@ -10,6 +10,8 @@ function input(overrides: Partial<Parameters<typeof buildWelcomeReceiptEmailHtml
     discountMxn: 0,
     totalMxn: 850,
     passwordSetupUrl: "https://monam.mx/auth/confirm?token_hash=abc&type=recovery&next=/auth/update-password",
+    pdfUrl: "https://monam.mx/api/receipts/sale-123/pdf?token=def",
+    deleteAccountUrl: "https://monam.mx/eliminar-cuenta?clientId=client-123&token=ghi",
     ...overrides,
   };
 }
@@ -38,6 +40,18 @@ describe("buildWelcomeReceiptEmailHtml", () => {
   it("includes the password-setup link", () => {
     const html = buildWelcomeReceiptEmailHtml(input());
     expect(html).toContain('href="https://monam.mx/auth/confirm?token_hash=abc&type=recovery&next=/auth/update-password"');
+  });
+
+  it("includes the Descargar PDF button", () => {
+    const html = buildWelcomeReceiptEmailHtml(input());
+    expect(html).toContain('href="https://monam.mx/api/receipts/sale-123/pdf?token=def"');
+    expect(html).toContain("Descargar PDF");
+  });
+
+  it("includes the delete-account link", () => {
+    const html = buildWelcomeReceiptEmailHtml(input());
+    expect(html).toContain('href="https://monam.mx/eliminar-cuenta?clientId=client-123&token=ghi"');
+    expect(html).toContain("eliminar tu cuenta y tus datos");
   });
 
   it("escapes HTML-unsafe characters in the client name and line labels", () => {

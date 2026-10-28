@@ -16,6 +16,8 @@ export interface WelcomeReceiptEmailInput {
   discountMxn: number; // positive pesos taken off, 0 if none
   totalMxn: number;
   passwordSetupUrl: string;
+  pdfUrl: string;
+  deleteAccountUrl: string;
 }
 
 function money(mxn: number): string {
@@ -77,12 +79,21 @@ export function buildWelcomeReceiptEmailHtml(input: WelcomeReceiptEmailInput): s
                 <a href="${input.passwordSetupUrl}" style="display:inline-block;background-color:#3f0215;color:#fffdfb;text-decoration:none;padding:12px 24px;border-radius:999px;font-size:14px;">
                   Crea tu contraseña
                 </a>
+                <a href="${input.pdfUrl}" style="display:inline-block;margin-left:10px;border:1px solid #3f0215;color:#3f0215;text-decoration:none;padding:11px 24px;border-radius:999px;font-size:14px;">
+                  Descargar PDF
+                </a>
               </td>
             </tr>
             <tr>
               <td style="padding-top:16px;font-size:12px;color:#3f021580;">
                 Con tu cuenta puedes ver tus citas, tus compras y tus descuentos activos en monam.mx.
                 Si no reconoces esta compra, ignora este correo.
+              </td>
+            </tr>
+            <tr>
+              <td style="padding-top:16px;border-top:1px solid #3f021515;font-size:11px;color:#3f021570;">
+                Si no quieres que guardemos tu información, puedes
+                <a href="${input.deleteAccountUrl}" style="color:#b3392f;">eliminar tu cuenta y tus datos aquí</a>.
               </td>
             </tr>
           </table>

@@ -18,8 +18,10 @@ import { evaluateCodeForTicket, type AppliedCode } from "@/lib/discount-codes-se
 import { getUsableAccountDiscounts } from "@/lib/client-discounts";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { sendEmail } from "@/lib/email/resend";
-import { buildWelcomeReceiptEmailHtml, type ReceiptLine } from "@/lib/email/receipt";
+import { buildWelcomeReceiptEmailHtml } from "@/lib/email/receipt";
 import { RECEIPT_EMAIL_ENABLED } from "@/lib/feature-flags";
+import { getReceiptData } from "@/lib/receipts";
+import { signLinkToken } from "@/lib/signed-link-token";
 
 const FRONT_DESK_ROLES: Role[] = ["FRONT_DESK", "OWNER", "CLINIC_MANAGER"];
 const MANAGER_ROLES: Role[] = ["OWNER", "CLINIC_MANAGER"];
@@ -500,7 +502,7 @@ export async function createSaleAction(input: CreateSaleInput): Promise<CreateSa
   // never surface as a checkout error. Awaited (not fire-and-forget) only so
   // ordering stays deterministic in tests/logs, not because the UI waits on it.
   if (input.notifyNewClient && resolvedClientId) {
-    await sendWelcomeReceiptEmail(resolvedClientId, sale.id, location.name).catch((e) => {
+    await sendWelcomeReceiptEmail(resolvedClientId, sale.id).catch((e) => {
       console.error("Welcome receipt email failed:", e);
     });
   }
@@ -514,43 +516,36 @@ export async function createSaleAction(input: CreateSaleInput): Promise<CreateSa
 // one email, not two). Looks the client's email up fresh here — never trusts
 // a client-supplied address — and no-ops quietly if RECEIPT_EMAIL_ENABLED is
 // off or she has no email on file.
-async function sendWelcomeReceiptEmail(clientId: string, saleId: string, locationName: string): Promise<void> {
+async function sendWelcomeReceiptEmail(clientId: string, saleId: string): Promise<void> {
   if (!RECEIPT_EMAIL_ENABLED) return;
-  const client = await prisma.client.findUnique({ where: { id: clientId } });
-  if (!client?.email) return;
-
-  const sale = await prisma.sale.findUnique({
-    where: { id: saleId },
-    include: { lineItems: { include: { protocol: true, addOn: true, product: true } } },
-  });
-  if (!sale) return;
-
-  const lines: ReceiptLine[] = sale.lineItems.map((li) => ({
-    label: li.protocol?.name ?? li.addOn?.name ?? li.product?.name ?? "Artículo",
-    priceMxn: li.priceMxn,
-  }));
+  const data = await getReceiptData(saleId);
+  if (!data?.clientEmail) return;
 
   const admin = createAdminClient();
-  const { data, error } = await admin.auth.admin.generateLink({ type: "recovery", email: client.email });
-  if (error || !data) {
+  const { data: link, error } = await admin.auth.admin.generateLink({ type: "recovery", email: data.clientEmail });
+  if (error || !link) {
     console.error("generateLink failed for welcome receipt email:", error);
     return;
   }
 
   const base = (process.env.NEXT_PUBLIC_SITE_URL || "https://monam.mx").replace(/\/+$/, "");
-  const passwordSetupUrl = `${base}/auth/confirm?token_hash=${data.properties.hashed_token}&type=recovery&next=/auth/update-password`;
+  const passwordSetupUrl = `${base}/auth/confirm?token_hash=${link.properties.hashed_token}&type=recovery&next=/auth/update-password`;
+  const pdfUrl = `${base}/api/receipts/${saleId}/pdf?token=${signLinkToken("receipt", saleId)}`;
+  const deleteAccountUrl = `${base}/eliminar-cuenta?clientId=${clientId}&token=${signLinkToken("delete-account", clientId)}`;
 
   const html = buildWelcomeReceiptEmailHtml({
-    clientName: client.name,
-    locationName,
-    dateLabel: sale.createdAt.toLocaleDateString("es-MX", { day: "numeric", month: "long", year: "numeric" }),
-    lines,
-    discountMxn: sale.discountMxn,
-    totalMxn: sale.totalMxn,
+    clientName: data.clientName,
+    locationName: data.locationName,
+    dateLabel: data.dateLabel,
+    lines: data.lines,
+    discountMxn: data.discountMxn,
+    totalMxn: data.totalMxn,
     passwordSetupUrl,
+    pdfUrl,
+    deleteAccountUrl,
   });
 
-  const result = await sendEmail({ to: client.email, subject: "Tu ticket y tu cuenta MONÂM", html });
+  const result = await sendEmail({ to: data.clientEmail, subject: "Tu ticket y tu cuenta MONÂM", html });
   if (!result.ok) console.error("sendEmail failed for welcome receipt email:", result.error);
 }
 
