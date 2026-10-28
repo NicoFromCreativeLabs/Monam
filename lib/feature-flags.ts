@@ -24,3 +24,8 @@ export const WHATSAPP_BOOKING_ENABLED = Boolean(
     process.env.WHATSAPP_PHONE_NUMBER_ID &&
     process.env.WHATSAPP_VERIFY_TOKEN,
 );
+
+// lib/email/resend.ts — a client account created at the counter (no RESEND_API_KEY
+// yet: StaffCheckoutView still creates the account and attaches the sale, it just
+// can't send the receipt/password-setup email until this is set).
+export const RECEIPT_EMAIL_ENABLED = Boolean(process.env.RESEND_API_KEY);

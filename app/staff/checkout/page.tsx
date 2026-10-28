@@ -93,7 +93,7 @@ export default async function StaffCheckout({
       locationName="Roma Norte"
       discountThresholdPct={discountThresholdPct}
       canApproveDiscounts={canApproveDiscounts}
-      clients={clients.map((c) => ({ id: c.id, name: c.name, phone: c.phone }))}
+      clients={clients.map((c) => ({ id: c.id, name: c.name, phone: c.phone ?? "" }))}
     />
   );
 }

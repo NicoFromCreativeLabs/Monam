@@ -400,7 +400,7 @@ model Client {
   id           String    @id @default(uuid())
   authUserId   String?   @unique // Supabase auth.users.id, once the client creates a Cliente-panel login (spec §8) — a record can exist (e.g. entered from a WhatsApp booking) before any login does
   name         String
-  phone        String    @unique // WhatsApp number — primary identifier, spec §5.1
+  phone        String?   @unique // WhatsApp number — primary identifier when present, spec §5.1. Optional since an email-only account created at a retail-counter checkout (StaffCheckoutView's "Agregar clienta") has no phone yet — Postgres allows multiple NULLs under a unique constraint, so this stays a real uniqueness guarantee for every client who does have one.
   email        String?
   createdAt    DateTime  @default(now())
   anonymizedAt DateTime? // ARCO deletion: PII nulled, row + relations kept (spec §5.6)

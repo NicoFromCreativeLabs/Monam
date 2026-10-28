@@ -357,7 +357,7 @@ export async function findClientByPhone(phone: string) {
   const candidates = await prisma.client.findMany({
     where: { anonymizedAt: null, phone: { contains: suffix.slice(-7) } },
   });
-  return candidates.find((c) => last10Digits(c.phone) === suffix) ?? null;
+  return candidates.find((c) => c.phone && last10Digits(c.phone) === suffix) ?? null;
 }
 
 export async function findOrCreateClientByPhone(phone: string, name: string) {

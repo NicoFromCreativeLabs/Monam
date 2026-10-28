@@ -8,7 +8,7 @@ import { createManualAppointmentAction } from "@/lib/actions/booking";
 export interface BookableClient {
   id: string;
   name: string;
-  phone: string;
+  phone: string | null;
 }
 
 // Front Desk / Owner / Clinic Manager entering a booking taken by phone,
@@ -57,7 +57,7 @@ export function NewAppointmentModal({
   }
   const filtered = query.trim()
     ? clients.filter(
-        (c) => c.name.toLowerCase().includes(query.toLowerCase()) || c.phone.includes(query),
+        (c) => c.name.toLowerCase().includes(query.toLowerCase()) || (c.phone ?? "").includes(query),
       )
     : clients;
 
@@ -160,7 +160,7 @@ export function NewAppointmentModal({
                         }}
                         className="block w-full px-3 py-2 text-left font-body text-xs text-ciruela hover:bg-ciruela/5"
                       >
-                        {c.name} <span className="text-ciruela/40">· {c.phone}</span>
+                        {c.name} <span className="text-ciruela/40">· {c.phone ?? "Sin teléfono"}</span>
                       </button>
                     ))
                   )}

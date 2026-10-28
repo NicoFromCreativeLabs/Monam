@@ -51,7 +51,7 @@ export default async function AdminClientDetail({
 
   const data: AdminClientDetailData = {
     id: client.id,
-    contact: { name: client.name, phone: client.phone, email: client.email ?? "" },
+    contact: { name: client.name, phone: client.phone ?? "", email: client.email ?? "" },
     skinId: {
       skinType: client.skinId?.skinType ?? "",
       allergies: client.skinId?.allergies.join(", ") ?? "",

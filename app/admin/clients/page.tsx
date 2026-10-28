@@ -20,7 +20,7 @@ export default async function AdminClients() {
   const rows: AdminClientRow[] = clients.map((c) => ({
     id: c.id,
     name: c.name,
-    phone: c.phone,
+    phone: c.phone ?? "",
     skinType: c.skinId?.skinType ?? "",
     allergies: c.skinId?.allergies.join(", ") ?? "",
   }));

@@ -9,6 +9,7 @@ import { CFDI_ENABLED } from "@/lib/feature-flags";
 import {
   cancelOnlineChargeAction,
   checkOnlineChargeAction,
+  createCheckoutClientAction,
   createSaleAction,
   getCheckoutClientAction,
   startOnlineChargeAction,
@@ -116,15 +117,23 @@ export function StaffCheckoutView({
   // first time this screen renders with no session — "opcional", so it's
   // just as valid to skip it and keep a clientless walk-in sale.
   const [attachedClient, setAttachedClient] = useState<AttachedClient | null>(null);
+  // Set only when attachedClient was just created from the "no la
+  // encontramos" sub-form (not an existing clienta found by search) — tells
+  // chargeSale to ask createSaleAction to send her the welcome/receipt email.
+  const [newlyCreatedClientId, setNewlyCreatedClientId] = useState<string | null>(null);
   const [attachModalOpen, setAttachModalOpen] = useState(isRetailOnly);
   const [attachSearch, setAttachSearch] = useState("");
   const [attachBusy, setAttachBusy] = useState(false);
   const [attachError, setAttachError] = useState<string | null>(null);
+  // null = showing the search list; an object = showing the "crear cuenta
+  // nueva" sub-form instead, seeded from whatever was typed in the search box.
+  const [newClientForm, setNewClientForm] = useState<{ name: string; email: string; phone: string } | null>(null);
 
   function closeAttachModal() {
     setAttachModalOpen(false);
     setAttachSearch("");
     setAttachError(null);
+    setNewClientForm(null);
   }
 
   function attachClient(clientId: string) {
@@ -142,8 +151,32 @@ export function StaffCheckoutView({
     });
   }
 
+  function openNewClientForm() {
+    const looksLikeAName = /[a-zA-Z]/.test(attachSearch);
+    setAttachError(null);
+    setNewClientForm({ name: looksLikeAName ? attachSearch : "", email: "", phone: "" });
+  }
+
+  function createNewClient() {
+    if (!newClientForm) return;
+    setAttachBusy(true);
+    setAttachError(null);
+    startTransition(async () => {
+      const result = await createCheckoutClientAction(newClientForm);
+      setAttachBusy(false);
+      if ("error" in result) {
+        setAttachError(result.error);
+        return;
+      }
+      setAttachedClient(result);
+      setNewlyCreatedClientId(result.id);
+      closeAttachModal();
+    });
+  }
+
   function detachClient() {
     setAttachedClient(null);
+    setNewlyCreatedClientId(null);
   }
 
   const filteredClients = clients.filter(
@@ -201,6 +234,7 @@ export function StaffCheckoutView({
       discount,
       discountCode: codeDiscount?.code ?? null,
       reAddedAfterRemovalSkus: [],
+      notifyNewClient: !!attachedClient && attachedClient.id === newlyCreatedClientId,
     };
     startTransition(async () => {
       if (paymentMethod === "ONLINE") {
@@ -762,53 +796,116 @@ export function StaffCheckoutView({
                 ×
               </button>
             </div>
-            <div className="px-5 pt-3">
-              <p className="font-body text-xs text-ciruela/50">
-                Para ver sus descuentos y guardar esta compra en su cuenta — déjalo en blanco
-                para una venta de mostrador sin cuenta.
-              </p>
-              <input
-                autoFocus
-                type="text"
-                value={attachSearch}
-                onChange={(e) => setAttachSearch(e.target.value)}
-                placeholder="Buscar por nombre o teléfono…"
-                className="mt-3 w-full rounded-full border border-ciruela/20 px-4 py-2 font-body text-sm text-ciruela placeholder:text-ciruela/40 focus:border-ciruela focus:outline-none"
-              />
-              {attachError && (
-                <p className="mt-2 font-body text-xs text-[#b3392f]">{attachError}</p>
-              )}
-            </div>
-            <ul className="mt-2 flex-1 divide-y divide-ciruela/8 overflow-y-auto px-5 pb-4">
-              {filteredClients.length === 0 && (
-                <li className="py-6 text-center font-body text-sm text-ciruela/40">
-                  Sin resultados.
-                </li>
-              )}
-              {filteredClients.slice(0, 50).map((c) => (
-                <li key={c.id} className="flex items-center justify-between py-3">
-                  <div>
-                    <p className="font-body text-sm text-ciruela">{c.name}</p>
-                    <p className="font-body text-xs text-ciruela/50">{c.phone}</p>
-                  </div>
+            {newClientForm ? (
+              <>
+                <div className="space-y-3 px-5 pt-3">
+                  <p className="font-body text-xs text-ciruela/50">
+                    Le creamos una cuenta: le llega un correo con su ticket y un enlace para que
+                    cree su contraseña.
+                  </p>
+                  <input
+                    autoFocus
+                    type="text"
+                    value={newClientForm.name}
+                    onChange={(e) => setNewClientForm((f) => (f ? { ...f, name: e.target.value } : f))}
+                    placeholder="Nombre"
+                    className="w-full rounded-full border border-ciruela/20 px-4 py-2 font-body text-sm text-ciruela placeholder:text-ciruela/40 focus:border-ciruela focus:outline-none"
+                  />
+                  <input
+                    type="email"
+                    value={newClientForm.email}
+                    onChange={(e) => setNewClientForm((f) => (f ? { ...f, email: e.target.value } : f))}
+                    placeholder="Correo"
+                    className="w-full rounded-full border border-ciruela/20 px-4 py-2 font-body text-sm text-ciruela placeholder:text-ciruela/40 focus:border-ciruela focus:outline-none"
+                  />
+                  <input
+                    type="tel"
+                    value={newClientForm.phone}
+                    onChange={(e) => setNewClientForm((f) => (f ? { ...f, phone: e.target.value } : f))}
+                    placeholder="Teléfono (opcional)"
+                    className="w-full rounded-full border border-ciruela/20 px-4 py-2 font-body text-sm text-ciruela placeholder:text-ciruela/40 focus:border-ciruela focus:outline-none"
+                  />
+                  {attachError && (
+                    <p className="font-body text-xs text-[#b3392f]">{attachError}</p>
+                  )}
+                </div>
+                <div className="flex-1" />
+                <div className="flex gap-2 border-t border-ciruela/10 px-5 py-3">
                   <button
-                    disabled={attachBusy}
-                    onClick={() => attachClient(c.id)}
-                    className="shrink-0 rounded-full border border-ciruela px-3 py-1.5 font-body text-xs text-ciruela hover:bg-ciruela hover:text-hueso disabled:opacity-50"
+                    onClick={() => {
+                      setNewClientForm(null);
+                      setAttachError(null);
+                    }}
+                    className="flex-1 rounded-full border border-ciruela/20 py-2 font-body text-xs text-ciruela/70 hover:border-ciruela hover:text-ciruela"
                   >
-                    Agregar
+                    Atrás
                   </button>
-                </li>
-              ))}
-            </ul>
-            <div className="border-t border-ciruela/10 px-5 py-3">
-              <button
-                onClick={closeAttachModal}
-                className="w-full rounded-full border border-ciruela/20 py-2 font-body text-xs text-ciruela/70 hover:border-ciruela hover:text-ciruela"
-              >
-                Continuar sin cuenta
-              </button>
-            </div>
+                  <button
+                    disabled={attachBusy || !newClientForm.name.trim() || !newClientForm.email.trim()}
+                    onClick={createNewClient}
+                    className="flex-1 rounded-full bg-ciruela py-2 font-body text-xs text-hueso disabled:opacity-50"
+                  >
+                    {attachBusy ? "Creando…" : "Crear y agregar"}
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="px-5 pt-3">
+                  <p className="font-body text-xs text-ciruela/50">
+                    Para ver sus descuentos y guardar esta compra en su cuenta — déjalo en blanco
+                    para una venta de mostrador sin cuenta.
+                  </p>
+                  <input
+                    autoFocus
+                    type="text"
+                    value={attachSearch}
+                    onChange={(e) => setAttachSearch(e.target.value)}
+                    placeholder="Buscar por nombre o teléfono…"
+                    className="mt-3 w-full rounded-full border border-ciruela/20 px-4 py-2 font-body text-sm text-ciruela placeholder:text-ciruela/40 focus:border-ciruela focus:outline-none"
+                  />
+                  {attachError && (
+                    <p className="mt-2 font-body text-xs text-[#b3392f]">{attachError}</p>
+                  )}
+                </div>
+                <ul className="mt-2 flex-1 divide-y divide-ciruela/8 overflow-y-auto px-5 pb-4">
+                  {filteredClients.length === 0 && (
+                    <li className="py-6 text-center">
+                      <p className="font-body text-sm text-ciruela/40">Sin resultados.</p>
+                      <button
+                        onClick={openNewClientForm}
+                        className="mt-3 rounded-full border border-ciruela px-4 py-1.5 font-body text-xs text-ciruela hover:bg-ciruela hover:text-hueso"
+                      >
+                        + Crear cuenta nueva
+                      </button>
+                    </li>
+                  )}
+                  {filteredClients.slice(0, 50).map((c) => (
+                    <li key={c.id} className="flex items-center justify-between py-3">
+                      <div>
+                        <p className="font-body text-sm text-ciruela">{c.name}</p>
+                        <p className="font-body text-xs text-ciruela/50">{c.phone}</p>
+                      </div>
+                      <button
+                        disabled={attachBusy}
+                        onClick={() => attachClient(c.id)}
+                        className="shrink-0 rounded-full border border-ciruela px-3 py-1.5 font-body text-xs text-ciruela hover:bg-ciruela hover:text-hueso disabled:opacity-50"
+                      >
+                        Agregar
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+                <div className="border-t border-ciruela/10 px-5 py-3">
+                  <button
+                    onClick={closeAttachModal}
+                    className="w-full rounded-full border border-ciruela/20 py-2 font-body text-xs text-ciruela/70 hover:border-ciruela hover:text-ciruela"
+                  >
+                    Continuar sin cuenta
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}

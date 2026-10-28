@@ -16,6 +16,10 @@ import type { Role } from "@/lib/generated/prisma/client";
 import { earnsCommission } from "@/lib/commission-policy";
 import { evaluateCodeForTicket, type AppliedCode } from "@/lib/discount-codes-server";
 import { getUsableAccountDiscounts } from "@/lib/client-discounts";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { sendEmail } from "@/lib/email/resend";
+import { buildWelcomeReceiptEmailHtml, type ReceiptLine } from "@/lib/email/receipt";
+import { RECEIPT_EMAIL_ENABLED } from "@/lib/feature-flags";
 
 const FRONT_DESK_ROLES: Role[] = ["FRONT_DESK", "OWNER", "CLINIC_MANAGER"];
 const MANAGER_ROLES: Role[] = ["OWNER", "CLINIC_MANAGER"];
@@ -92,6 +96,12 @@ export interface CreateSaleInput {
   reAddedAfterRemovalSkus: string[]; // re-added after the recommendation was removed — commission goes to whoever closes the sale, not the original tagger
   paymentMethod: "CASH" | "CARD" | "ONLINE";
   stripePaymentId?: string; // required for ONLINE — the succeeded PaymentIntent from startOnlineChargeAction
+  // True only when clientId is an account StaffCheckoutView just created in
+  // this same checkout (createCheckoutClientAction) — sends the welcome/
+  // receipt/password-setup email once the sale below closes. The recipient
+  // email always comes from the Client row looked up server-side by
+  // clientId, never from this flag or any other client-supplied value.
+  notifyNewClient?: boolean;
 }
 
 export type CreateSaleResult = { error: string } | { saleId: string; totalMxn: number };
@@ -485,7 +495,63 @@ export async function createSaleAction(input: CreateSaleInput): Promise<CreateSa
   }
 
   revalidateCheckout();
+
+  // Best-effort — the sale above already succeeded; a broken email must
+  // never surface as a checkout error. Awaited (not fire-and-forget) only so
+  // ordering stays deterministic in tests/logs, not because the UI waits on it.
+  if (input.notifyNewClient && resolvedClientId) {
+    await sendWelcomeReceiptEmail(resolvedClientId, sale.id, location.name).catch((e) => {
+      console.error("Welcome receipt email failed:", e);
+    });
+  }
+
   return { saleId: sale.id, totalMxn };
+}
+
+// The email for a client StaffCheckoutView just created at the counter
+// (createCheckoutClientAction): her first sale's ticket, folded into the
+// same message as her account-setup link (see lib/email/receipt.ts for why
+// one email, not two). Looks the client's email up fresh here — never trusts
+// a client-supplied address — and no-ops quietly if RECEIPT_EMAIL_ENABLED is
+// off or she has no email on file.
+async function sendWelcomeReceiptEmail(clientId: string, saleId: string, locationName: string): Promise<void> {
+  if (!RECEIPT_EMAIL_ENABLED) return;
+  const client = await prisma.client.findUnique({ where: { id: clientId } });
+  if (!client?.email) return;
+
+  const sale = await prisma.sale.findUnique({
+    where: { id: saleId },
+    include: { lineItems: { include: { protocol: true, addOn: true, product: true } } },
+  });
+  if (!sale) return;
+
+  const lines: ReceiptLine[] = sale.lineItems.map((li) => ({
+    label: li.protocol?.name ?? li.addOn?.name ?? li.product?.name ?? "Artículo",
+    priceMxn: li.priceMxn,
+  }));
+
+  const admin = createAdminClient();
+  const { data, error } = await admin.auth.admin.generateLink({ type: "recovery", email: client.email });
+  if (error || !data) {
+    console.error("generateLink failed for welcome receipt email:", error);
+    return;
+  }
+
+  const base = (process.env.NEXT_PUBLIC_SITE_URL || "https://monam.mx").replace(/\/+$/, "");
+  const passwordSetupUrl = `${base}/auth/confirm?token_hash=${data.properties.hashed_token}&type=recovery&next=/auth/update-password`;
+
+  const html = buildWelcomeReceiptEmailHtml({
+    clientName: client.name,
+    locationName,
+    dateLabel: sale.createdAt.toLocaleDateString("es-MX", { day: "numeric", month: "long", year: "numeric" }),
+    lines,
+    discountMxn: sale.discountMxn,
+    totalMxn: sale.totalMxn,
+    passwordSetupUrl,
+  });
+
+  const result = await sendEmail({ to: client.email, subject: "Tu ticket y tu cuenta MONÂM", html });
+  if (!result.ok) console.error("sendEmail failed for welcome receipt email:", result.error);
 }
 
 async function verifyOnlinePayment(
@@ -641,6 +707,82 @@ export async function getCheckoutClientAction(
     name: client.name,
     discounts: discounts.map((d) => ({ code: d.code, name: d.name, summary: d.summary })),
   };
+}
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+export interface CreateCheckoutClientInput {
+  name: string;
+  email: string;
+  phone?: string; // optional — StaffCheckoutView's "no la encontramos" sub-form, email-only is fine
+}
+
+// "No la encontramos" in the Agregar clienta modal: creates a real Client +
+// a Supabase Auth user with no password yet (same pattern as inviteStaffAction),
+// so the purchase about to be rung up can be attached to a real account
+// instead of staying untraceable. Front Desk never sets or sees a password —
+// createSaleAction sends the account-setup link (folded into the receipt
+// email) once the sale closes, see notifyNewClient below.
+export async function createCheckoutClientAction(
+  input: CreateCheckoutClientInput,
+): Promise<CheckoutClientInfo | { error: string }> {
+  await requireStaffRole(FRONT_DESK_ROLES);
+
+  const name = input.name.trim();
+  const email = input.email.trim().toLowerCase();
+  const phoneDigits = (input.phone ?? "").trim();
+  if (!name) return { error: "Escribe su nombre." };
+  if (!EMAIL_RE.test(email)) return { error: "Escribe un correo válido." };
+  if (phoneDigits && phoneDigits.replace(/\D/g, "").length < 10) {
+    return { error: "El teléfono debe tener al menos 10 dígitos (o déjalo en blanco)." };
+  }
+
+  const existingByEmail = await prisma.client.findFirst({ where: { email, anonymizedAt: null } });
+  if (existingByEmail) return { error: "Ya existe una cuenta con este correo. Búscala por nombre o teléfono." };
+  if (phoneDigits) {
+    const existingByPhone = await prisma.client.findUnique({ where: { phone: phoneDigits } });
+    if (existingByPhone) return { error: "Ya existe una cuenta con este teléfono. Búscala por nombre o teléfono." };
+  }
+
+  const admin = createAdminClient();
+  let userId = await findAuthUserIdByEmail(admin, email);
+  if (userId) {
+    const alreadyClient = await prisma.client.findFirst({ where: { authUserId: userId } });
+    if (alreadyClient) return { error: "Ya existe una cuenta con este correo. Búscala por nombre o teléfono." };
+    // Email belongs to a login with no Client row yet (e.g. staff-only) — reuse it.
+  } else {
+    const { data, error } = await admin.auth.admin.createUser({
+      email,
+      email_confirm: true,
+      user_metadata: { name },
+    });
+    if (error || !data.user) return { error: error?.message ?? "No se pudo crear la cuenta." };
+    userId = data.user.id;
+  }
+
+  const client = await prisma.client.create({
+    data: { authUserId: userId, name, email, phone: phoneDigits || null },
+  });
+
+  return { id: client.id, name: client.name, discounts: [] };
+}
+
+// Supabase has no get-user-by-email on the admin API, so page through
+// listUsers — same approach as inviteStaffAction (lib/actions/staff.ts),
+// duplicated locally rather than shared since it's a few lines either way.
+async function findAuthUserIdByEmail(
+  admin: ReturnType<typeof createAdminClient>,
+  email: string,
+): Promise<string | null> {
+  const perPage = 200;
+  for (let page = 1; page <= 50; page++) {
+    const { data, error } = await admin.auth.admin.listUsers({ page, perPage });
+    if (error) return null;
+    const match = data.users.find((u) => u.email?.toLowerCase() === email);
+    if (match) return match.id;
+    if (data.users.length < perPage) return null;
+  }
+  return null;
 }
 
 // ---------------------------------------------------------------------------

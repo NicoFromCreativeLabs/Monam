@@ -33,7 +33,7 @@ export default async function StaffClientProfile({
       const detail: StaffClientDetail = {
         id: client.id,
         name: client.name,
-        phone: client.phone,
+        phone: client.phone ?? "",
         allergies: client.skinId?.allergies ?? [],
         skinType: client.skinId?.skinType ?? "",
         visitObjective: client.skinId?.visitObjective ?? "",
@@ -57,7 +57,7 @@ export default async function StaffClientProfile({
     where: { anonymizedAt: null },
     orderBy: { name: "asc" },
   });
-  const listing: StaffClientListing[] = clients.map((c) => ({ id: c.id, name: c.name, phone: c.phone }));
+  const listing: StaffClientListing[] = clients.map((c) => ({ id: c.id, name: c.name, phone: c.phone ?? "" }));
 
   return <StaffClientsView listing={listing} detail={null} />;
 }
