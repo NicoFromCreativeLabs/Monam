@@ -1,10 +1,19 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import { revalidatePath, updateTag } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireStaffRole } from "@/lib/auth/dal";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { Role } from "@/lib/generated/prisma/client";
+import { CATALOG_CACHE_TAG } from "@/lib/catalog-cache";
+
+// The staff roster is part of the cached getCatalogData (lib/catalog-cache.ts),
+// shared by every route — every write below also busts that tag so an
+// invite/edit/status change/delete/archive shows up immediately instead of
+// waiting for its 5-minute safety-net revalidation.
+function revalidateRoster() {
+  updateTag(CATALOG_CACHE_TAG);
+}
 
 const ROLE_FROM_LABEL: Record<string, Role> = {
   Admin: "OWNER",
@@ -117,6 +126,7 @@ export async function inviteStaffAction(input: InviteStaffInput): Promise<Invite
   }
 
   revalidatePath("/admin/staff");
+  revalidateRoster();
   return { userId, existingAccount };
 }
 
@@ -143,6 +153,7 @@ export async function updateStaffAction(userId: string, input: UpdateStaffInput)
   }
 
   revalidatePath("/admin/staff");
+  revalidateRoster();
 }
 
 export async function toggleStaffStatusAction(userId: string) {
@@ -152,6 +163,7 @@ export async function toggleStaffStatusAction(userId: string) {
   const nextStatus = user.status === "INACTIVE" ? "ACTIVE" : "INACTIVE";
   await prisma.appUser.update({ where: { id: userId }, data: { status: nextStatus } });
   revalidatePath("/admin/staff");
+  revalidateRoster();
 }
 
 // `canArchive`: the delete was refused because of their history, so the
@@ -209,6 +221,7 @@ export async function deleteStaffAction(userId: string): Promise<DeleteStaffResu
   }
 
   revalidatePath("/admin/staff");
+  revalidateRoster();
   return { ok: true };
 }
 
@@ -230,6 +243,7 @@ export async function archiveStaffAction(userId: string): Promise<DeleteStaffRes
 
   await prisma.appUser.update({ where: { id: userId }, data: { status: "INACTIVE", archivedAt: new Date() } });
   revalidatePath("/admin/staff");
+  revalidateRoster();
   return { ok: true };
 }
 

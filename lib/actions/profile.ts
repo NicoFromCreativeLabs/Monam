@@ -1,9 +1,10 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import { revalidatePath, updateTag } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireClientOrPreview, requireStaffRole } from "@/lib/auth/dal";
 import { createClient } from "@/lib/supabase/server";
+import { CATALOG_CACHE_TAG } from "@/lib/catalog-cache";
 
 // "Mi perfil" for all three panels. The caller's own row is always derived
 // from the session (never a caller-supplied id), and `kind` picks which
@@ -27,6 +28,9 @@ export async function updateOwnProfileAction(
     await prisma.appUser.update({ where: { id: appUser.id }, data: { name } });
     revalidatePath("/admin", "layout");
     revalidatePath("/staff", "layout");
+    // The staff roster (used by StaffRosterProvider) is part of the cached
+    // getCatalogData — a name change here previously wouldn't show up there.
+    updateTag(CATALOG_CACHE_TAG);
     return {};
   }
 

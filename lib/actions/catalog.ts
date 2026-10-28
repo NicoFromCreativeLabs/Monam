@@ -1,8 +1,9 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import { revalidatePath, updateTag } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireStaffRole } from "@/lib/auth/dal";
+import { CATALOG_CACHE_TAG } from "@/lib/catalog-cache";
 
 // Editing the location/protocol menu is Owner/Clinic Manager territory —
 // same boundary Configuración already implies by only being in the Admin
@@ -12,10 +13,12 @@ async function requireCatalogEditor() {
 }
 
 function revalidateCatalog() {
-  // The actual fetch lives in the root layout (app/layout.tsx), which wraps
-  // every route including the static marketing homepage — revalidate that
-  // too, not just the three panels, so a Location/Protocol edit can't leave
-  // a stale cached copy anywhere in the tree.
+  // The actual fetch lives behind getCatalogData (lib/catalog-cache.ts),
+  // cached and shared by every route including the static marketing
+  // homepage — revalidate the tag it's stored under, not just the three
+  // panels' paths, so a Location/Protocol edit can't leave a stale cached
+  // copy anywhere in the tree.
+  updateTag(CATALOG_CACHE_TAG);
   revalidatePath("/", "layout");
 }
 

@@ -14,11 +14,16 @@ import { getOpenAlerts } from "@/lib/alerts";
 // numbers read near-zero until real usage accumulates. Requiere acción and
 // the day's agenda read real ApprovalRequest/Alert/Appointment rows too.
 export default async function AdminPanelPage() {
-  // Anyone who left their shift open without checking out becomes an alert below.
-  await flagForgottenShifts();
-  const locations = await prisma.location.findMany({ orderBy: { createdAt: "asc" } });
+  // flagForgottenShifts only needs to finish before getOpenAlerts below (it
+  // writes the Alert rows that read), not before the location list — so it
+  // runs alongside that query instead of blocking the whole page first.
+  const [locations] = await Promise.all([
+    prisma.location.findMany({ orderBy: { createdAt: "asc" } }),
+    flagForgottenShifts(),
+  ]);
+  const romaNorte = locations.find((l) => l.name === "Roma Norte");
 
-  const [snapshot, pendingApprovals, alerts, romaNorte] = await Promise.all([
+  const [snapshot, pendingApprovals, alerts, todayAppointments] = await Promise.all([
     getReportingSnapshotAction(locations.map((l) => l.name), "Mes en curso", "Mes anterior"),
     prisma.approvalRequest.findMany({
       where: { status: "PENDING" },
@@ -26,10 +31,8 @@ export default async function AdminPanelPage() {
       orderBy: { createdAt: "desc" },
     }),
     getOpenAlerts(),
-    prisma.location.findFirst({ where: { name: "Roma Norte" } }),
+    romaNorte ? getTodayAppointments(romaNorte.id) : Promise.resolve([]),
   ]);
-
-  const todayAppointments = romaNorte ? await getTodayAppointments(romaNorte.id) : [];
 
   return (
     <AdminPanelView

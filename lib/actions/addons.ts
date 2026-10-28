@@ -1,8 +1,9 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import { revalidatePath, updateTag } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireStaffRole } from "@/lib/auth/dal";
+import { CATALOG_CACHE_TAG } from "@/lib/catalog-cache";
 
 // Add-ons menu editing (Configuración → Add-ons). Owner/Clinic Manager only,
 // enforced here and not by hiding the buttons. `availableOn` is a list of
@@ -40,8 +41,9 @@ async function protocolIds(names: string[]): Promise<string[]> {
 }
 
 function revalidate() {
-  // The add-on list is seeded in the root layout (app/layout.tsx), which
-  // wraps every route — same reason catalog.ts revalidates the whole layout.
+  // The add-on list is served from the cached getCatalogData (lib/catalog-cache.ts),
+  // shared by every route — same reason catalog.ts revalidates this tag.
+  updateTag(CATALOG_CACHE_TAG);
   revalidatePath("/", "layout");
 }
 

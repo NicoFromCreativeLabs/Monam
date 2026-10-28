@@ -1,8 +1,9 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import { revalidatePath, updateTag } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireStaffRole } from "@/lib/auth/dal";
+import { CATALOG_CACHE_TAG } from "@/lib/catalog-cache";
 
 async function requireSettingsEditor() {
   return requireStaffRole(["OWNER", "CLINIC_MANAGER"]);
@@ -63,8 +64,10 @@ export async function updateBusinessRulesAction(patch: BusinessRulesInput) {
   }
 
   revalidatePath("/admin/settings");
-  // The deposit rules by appointment type are also seeded from the root
-  // layout (used by /my/book), so refresh that too.
+  // Commission rates, anomaly thresholds and fee percentages are also served
+  // from the cached getCatalogData (used by /my/book and every panel), so
+  // refresh that too.
+  updateTag(CATALOG_CACHE_TAG);
   revalidatePath("/", "layout");
 }
 
@@ -90,6 +93,11 @@ export async function updateOperationalSettingsAction(patch: OperationalSettings
   if (patch.addonBufferMinutes !== undefined) await setSetting("booking.addonBufferMinutes", patch.addonBufferMinutes);
 
   revalidatePath("/admin/settings");
+  // depositRequiredSignature/Targeted are part of the cached getCatalogData
+  // (used by /my/book) — this previously never revalidated it, so a deposit
+  // rule change wouldn't show up until something else happened to bust the
+  // cache (or, before caching existed, by accident every request).
+  updateTag(CATALOG_CACHE_TAG);
 }
 
 export async function updateKpiTargetAction(kpi: string, targetValue: number, targetUnit: string, vigenciaYear: number) {
