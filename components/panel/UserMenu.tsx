@@ -9,11 +9,16 @@ export function UserMenu({
   userRole,
   profileHref,
   links = [],
+  mobileExtra,
 }: {
   userName: string;
   userRole: string;
   profileHref: string;
   links?: { label: string; href: string }[];
+  // Controls (view/location switchers) that TopBar hides below the
+  // min-[700px] breakpoint instead of rendering in the bar itself — shown
+  // here instead so they're still reachable on mobile, not just dropped.
+  mobileExtra?: React.ReactNode;
 }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -59,6 +64,9 @@ export function UserMenu({
             <p className="font-body text-xs text-ciruela">{userName}</p>
             <p className="font-body text-[11px] text-ciruela/50">{userRole}</p>
           </div>
+          {mobileExtra && (
+            <div className="space-y-2 border-b border-ciruela/10 px-3 py-2 min-[700px]:hidden">{mobileExtra}</div>
+          )}
           <button
             role="menuitem"
             onClick={() => {

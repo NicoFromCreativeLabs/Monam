@@ -41,7 +41,21 @@ export function TopBar({
         <div className="hidden min-[700px]:block">
           <LocationSwitcher multiple={allowBothLocations} />
         </div>
-        <UserMenu userName={currentUser.name} userRole={currentUser.roleLabel} profileHref={profileHref} />
+        <UserMenu
+          userName={currentUser.name}
+          userRole={currentUser.roleLabel}
+          profileHref={profileHref}
+          mobileExtra={
+            <>
+              <div className="[&>select]:w-full">
+                <ViewSwitcher />
+              </div>
+              <div className="[&>div>button]:w-full">
+                <LocationSwitcher multiple={allowBothLocations} />
+              </div>
+            </>
+          }
+        />
       </div>
     </header>
   );
