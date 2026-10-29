@@ -41,6 +41,7 @@ export default async function StaffInventory() {
     sku: i.product.sku,
     product: i.product.name,
     brand: i.product.brand ?? undefined,
+    category: i.product.category ?? undefined,
     location: i.location.name,
     qty: i.qty,
     par: i.par,

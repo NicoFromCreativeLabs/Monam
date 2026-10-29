@@ -111,6 +111,42 @@ export async function updateKpiTargetAction(kpi: string, targetValue: number, ta
   revalidatePath("/admin");
 }
 
+export interface TerminalSettingsInput {
+  enabled?: boolean;
+  bridgeUrl?: string; // local HTTP bridge on the shop's LAN — see terminal-bridge/README.md
+  terminalIp?: string; // PAX A910S IP on the local network
+  terminalPort?: number; // Redsys ECR-POS TCP port the terminal listens on (ask BBVA to confirm once ECR mode is activated)
+  fuc?: string; // Redsys merchant code (Código de comercio) BBVA assigns
+  terminalId?: string; // Redsys terminal code (Código de terminal)
+}
+
+// Each location has its own physical terminal on its own LAN (own IP, own
+// bridge instance), so the config is per-location, not one global row —
+// opening a second store must not require re-wiring the first one's PAX
+// A910S. Keyed the same way the rest of this codebase looks locations up
+// (by name, e.g. prisma.location.findFirst({ where: { name } })), not id.
+function terminalSettingKey(locationName: string) {
+  return `terminal.redsysEcr:${locationName}`;
+}
+
+// Configuración → Terminal de cobro. Front Desk never sees these — only
+// the bridge connection details the staff tablet needs to reach the PAX
+// A910S over the shop's LAN (see lib/terminal/redsys-ecr.ts for why this
+// can't go through the Next.js server). Stored as one JSON blob per
+// location since each location's fields are always read/written together,
+// unlike the per-key Setting rows above.
+export async function updateTerminalSettingsAction(locationName: string, patch: TerminalSettingsInput) {
+  await requireSettingsEditor();
+
+  const key = terminalSettingKey(locationName);
+  const current = await prisma.setting.findUnique({ where: { key } });
+  const currentValue = (current?.value as TerminalSettingsInput | undefined) ?? {};
+  await setSetting(key, { ...currentValue, ...patch });
+
+  revalidatePath("/admin/settings");
+  updateTag(CATALOG_CACHE_TAG);
+}
+
 // Configuración → Permisos por rol. Owner only. The stored value is run
 // through normalizePermissionRows, which drops anything invalid and keeps the
 // Admin column locked. This is the reference matrix — it does not (yet) change

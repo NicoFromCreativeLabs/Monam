@@ -25,6 +25,7 @@ export interface RetailInventoryRow {
   sku: string;
   product: string;
   brand: string;
+  category: string;
   location: string;
   qty: number;
   par: number;
@@ -37,6 +38,7 @@ export interface BackbarInventoryRow {
   sku: string;
   product: string;
   brand: string;
+  category: string;
   location: string;
   qty: number; // sealed containers in stock
   par: number;
@@ -54,6 +56,7 @@ export interface WarehouseInventoryRow {
   sku: string;
   product: string;
   brand: string;
+  category: string;
   location: string;
   qty: number;
   par: number;
@@ -108,6 +111,7 @@ interface EditDraft {
   originalLedger: LedgerName;
   product: string;
   brand: string;
+  category: string;
   location: string;
   ledger: LedgerName;
   qty: string;
@@ -125,6 +129,7 @@ interface EditDraft {
 const emptyNewProduct = {
   name: "",
   brand: "",
+  category: "",
   location: "",
   ledgers: ["Retail"] as LedgerName[],
   retailSku: "",
@@ -213,6 +218,7 @@ export function AdminInventoryView({
   const [editModal, setEditModal] = useState<EditDraft | null>(null);
   const [confirmingRemove, setConfirmingRemove] = useState(false);
   const [restockOnly, setRestockOnly] = useState(false);
+  const [categoryFilter, setCategoryFilter] = useState("");
   const [addMode, setAddMode] = useState<"closed" | "choose" | "manual" | "upload">("closed");
   const addProductOpen = addMode === "manual";
   const [csvError, setCsvError] = useState<string | null>(null);
@@ -237,9 +243,16 @@ export function AdminInventoryView({
   const backbarByLocation = initialBackbar.filter((i) => selectedNames.includes(i.location));
   const warehouseByLocation = initialWarehouse.filter((i) => selectedNames.includes(i.location));
 
-  const retail = retailByLocation.filter((i) => !restockOnly || i.qty < i.par);
-  const backbar = backbarByLocation.filter((i) => !restockOnly || i.qty < i.par);
-  const warehouse = warehouseByLocation.filter((i) => !restockOnly || i.qty < i.par);
+  const categories = Array.from(
+    new Set([...initialRetail, ...initialBackbar, ...initialWarehouse].map((i) => i.category).filter(Boolean)),
+  ).sort((a, b) => a.localeCompare(b, "es"));
+
+  const matchesFilters = (i: { qty: number; par: number; category: string }) =>
+    (!restockOnly || i.qty < i.par) && (!categoryFilter || i.category === categoryFilter);
+
+  const retail = retailByLocation.filter(matchesFilters);
+  const backbar = backbarByLocation.filter(matchesFilters);
+  const warehouse = warehouseByLocation.filter(matchesFilters);
 
   const retailLow = retailByLocation.filter((i) => i.qty < i.par).length;
   const backbarLow = backbarByLocation.filter((i) => i.qty < i.par).length;
@@ -260,6 +273,7 @@ export function AdminInventoryView({
       originalLedger: ledger,
       product: item.product,
       brand: item.brand,
+      category: item.category,
       location: item.location,
       ledger,
       qty: String(item.qty),
@@ -306,7 +320,7 @@ export function AdminInventoryView({
 
   function saveEditModal() {
     if (!editModal) return;
-    const { id, ledger, originalLedger, qty, par, price, cost, expiresOn, contentMl, scope, paoDays, originalQty } = editModal;
+    const { id, ledger, originalLedger, qty, par, price, cost, expiresOn, contentMl, scope, paoDays, originalQty, category } = editModal;
     const qtyNum = Number(qty) || 0;
     const parNum = Number(par) || 0;
     const qtyDelta = qtyNum - originalQty;
@@ -326,6 +340,7 @@ export function AdminInventoryView({
         paoDays: ledger === "Backbar" ? Number(paoDays) || undefined : undefined,
         sku: editModal.sku,
         brand: editModal.brand,
+        category,
       });
       if ("error" in result) {
         setEditModal((m) => (m ? { ...m, error: result.error } : m));
@@ -361,6 +376,7 @@ export function AdminInventoryView({
         await receiveInventoryAction({
           productName: newProduct.name.trim(),
           brand: newProduct.brand.trim() || undefined,
+          category: newProduct.category.trim() || undefined,
           sku: newProduct.retailSku.trim() || `SKU-${Date.now()}`,
           ledger: "RETAIL",
           locationName: newProduct.location,
@@ -375,6 +391,7 @@ export function AdminInventoryView({
         await receiveInventoryAction({
           productName: newProduct.name.trim(),
           brand: newProduct.brand.trim() || undefined,
+          category: newProduct.category.trim() || undefined,
           sku: newProduct.backbarSku.trim() || `SKU-${Date.now()}-B`,
           ledger: "BACKBAR",
           locationName: newProduct.location,
@@ -390,6 +407,7 @@ export function AdminInventoryView({
         await receiveInventoryAction({
           productName: newProduct.name.trim(),
           brand: newProduct.brand.trim() || undefined,
+          category: newProduct.category.trim() || undefined,
           sku: newProduct.warehouseSku.trim() || `SKU-${Date.now()}-W`,
           ledger: "WAREHOUSE",
           locationName: newProduct.location,
@@ -476,6 +494,18 @@ export function AdminInventoryView({
             ))}
           </div>
           <div className="flex flex-wrap items-center gap-2">
+            <select
+              value={categoryFilter}
+              onChange={(e) => setCategoryFilter(e.target.value)}
+              className="rounded-full border border-ciruela/20 bg-hueso px-3 py-1.5 font-body text-xs text-ciruela focus:outline-none focus:ring-1 focus:ring-ciruela/40"
+            >
+              <option value="">Todas las categorías</option>
+              {categories.map((c) => (
+                <option key={c} value={c}>
+                  {c}
+                </option>
+              ))}
+            </select>
             <button
               onClick={() => setRestockOnly((v) => !v)}
               aria-pressed={restockOnly}
@@ -552,6 +582,23 @@ export function AdminInventoryView({
                     placeholder="p. ej. Anua"
                     className="w-full rounded-lg border border-ciruela/20 bg-hueso px-3 py-2 font-body text-sm text-ciruela placeholder:text-ciruela/40 focus:outline-none focus:ring-1 focus:ring-ciruela/40"
                   />
+                </div>
+                <div>
+                  <label className="mb-1 block font-body text-xs uppercase tracking-[0.14em] text-ciruela/50">
+                    Categoría
+                  </label>
+                  <input
+                    value={newProduct.category}
+                    onChange={(e) => setNewProduct((f) => ({ ...f, category: e.target.value }))}
+                    placeholder="p. ej. Tónicos"
+                    className="w-full rounded-lg border border-ciruela/20 bg-hueso px-3 py-2 font-body text-sm text-ciruela placeholder:text-ciruela/40 focus:outline-none focus:ring-1 focus:ring-ciruela/40"
+                    list="inventory-categories"
+                  />
+                  <datalist id="inventory-categories">
+                    {categories.map((c) => (
+                      <option key={c} value={c} />
+                    ))}
+                  </datalist>
                 </div>
                 <div>
                   <label className="mb-1 block font-body text-xs uppercase tracking-[0.14em] text-ciruela/50">
@@ -680,6 +727,7 @@ export function AdminInventoryView({
                   <SortTh label="SKU" col="sku" sortCol={sortCol} sortDir={sortDir} onSort={toggleSort} className="pb-2" />
                   <SortTh label="Producto" col="product" sortCol={sortCol} sortDir={sortDir} onSort={toggleSort} className="pb-2" />
                   <SortTh label="Marca" col="brand" sortCol={sortCol} sortDir={sortDir} onSort={toggleSort} className="pb-2 pr-4" />
+                  <SortTh label="Categoría" col="category" sortCol={sortCol} sortDir={sortDir} onSort={toggleSort} className="pb-2 pr-4" />
                   <SortTh label="Ledger" col="ledger" sortCol={sortCol} sortDir={sortDir} onSort={toggleSort} className="pb-2" />
                   <SortTh label="Ubicación" col="location" sortCol={sortCol} sortDir={sortDir} onSort={toggleSort} className="pb-2 pr-6" />
                   <th className="pb-2 pr-6">Caducidad</th>
@@ -704,6 +752,7 @@ export function AdminInventoryView({
                       <td className="py-3 text-ciruela/50">{item.sku}</td>
                       <td className="py-3">{item.product}</td>
                       <td className="py-3 pr-4 text-ciruela/60">{item.brand || "—"}</td>
+                      <td className="py-3 pr-4 text-ciruela/60">{item.category || "—"}</td>
                       <td className="py-3">
                         <Badge tone={LEDGER_TONE[item.ledger]}>{LEDGER_LABEL[item.ledger]}</Badge>
                       </td>
@@ -745,6 +794,7 @@ export function AdminInventoryView({
                   <SortTh label="SKU" col="sku" sortCol={sortCol} sortDir={sortDir} onSort={toggleSort} className="pb-2" />
                   <SortTh label="Producto" col="product" sortCol={sortCol} sortDir={sortDir} onSort={toggleSort} className="pb-2" />
                   <SortTh label="Marca" col="brand" sortCol={sortCol} sortDir={sortDir} onSort={toggleSort} className="pb-2 pr-4" />
+                  <SortTh label="Categoría" col="category" sortCol={sortCol} sortDir={sortDir} onSort={toggleSort} className="pb-2 pr-4" />
                   <SortTh label="Ubicación" col="location" sortCol={sortCol} sortDir={sortDir} onSort={toggleSort} className="pb-2 pr-6" />
                   <SortTh label="Cant." col="qty" sortCol={sortCol} sortDir={sortDir} onSort={toggleSort} className="pb-2 pr-3 text-right" />
                   <SortTh label="Par" col="par" sortCol={sortCol} sortDir={sortDir} onSort={toggleSort} className="pb-2 pr-6 text-right" />
@@ -761,6 +811,7 @@ export function AdminInventoryView({
                       <td className="py-3 text-ciruela/50">{item.sku}</td>
                       <td className="py-3">{item.product}</td>
                       <td className="py-3 pr-4 text-ciruela/60">{item.brand || "—"}</td>
+                      <td className="py-3 pr-4 text-ciruela/60">{item.category || "—"}</td>
                       <td className="py-3 pr-6 text-ciruela/60">{item.location}</td>
                       <td className="py-3 pr-3 text-right">{item.qty}</td>
                       <td className="py-3 pr-6 text-right text-ciruela/50">{item.par}</td>
@@ -798,6 +849,7 @@ export function AdminInventoryView({
                   <SortTh label="SKU" col="sku" sortCol={sortCol} sortDir={sortDir} onSort={toggleSort} className="pb-2" />
                   <SortTh label="Producto" col="product" sortCol={sortCol} sortDir={sortDir} onSort={toggleSort} className="pb-2" />
                   <SortTh label="Marca" col="brand" sortCol={sortCol} sortDir={sortDir} onSort={toggleSort} className="pb-2 pr-4" />
+                  <SortTh label="Categoría" col="category" sortCol={sortCol} sortDir={sortDir} onSort={toggleSort} className="pb-2 pr-4" />
                   <SortTh label="Ubicación" col="location" sortCol={sortCol} sortDir={sortDir} onSort={toggleSort} className="pb-2 pr-6" />
                   <SortTh label="Cant." col="qty" sortCol={sortCol} sortDir={sortDir} onSort={toggleSort} className="pb-2 pr-3 text-right" />
                   <SortTh label="Par" col="par" sortCol={sortCol} sortDir={sortDir} onSort={toggleSort} className="pb-2 pr-6 text-right" />
@@ -817,6 +869,7 @@ export function AdminInventoryView({
                       <td className="py-3 text-ciruela/50">{item.sku}</td>
                       <td className="py-3">{item.product}</td>
                       <td className="py-3 pr-4 text-ciruela/60">{item.brand || "—"}</td>
+                      <td className="py-3 pr-4 text-ciruela/60">{item.category || "—"}</td>
                       <td className="py-3 pr-6 text-ciruela/60">{item.location}</td>
                       <td className="py-3 pr-3 text-right">{item.qty}</td>
                       <td className="py-3 pr-6 text-right text-ciruela/50">{item.par}</td>
@@ -863,6 +916,7 @@ export function AdminInventoryView({
                   <SortTh label="SKU" col="sku" sortCol={sortCol} sortDir={sortDir} onSort={toggleSort} className="pb-2" />
                   <SortTh label="Producto" col="product" sortCol={sortCol} sortDir={sortDir} onSort={toggleSort} className="pb-2" />
                   <SortTh label="Marca" col="brand" sortCol={sortCol} sortDir={sortDir} onSort={toggleSort} className="pb-2 pr-4" />
+                  <SortTh label="Categoría" col="category" sortCol={sortCol} sortDir={sortDir} onSort={toggleSort} className="pb-2 pr-4" />
                   <SortTh label="Ubicación" col="location" sortCol={sortCol} sortDir={sortDir} onSort={toggleSort} className="pb-2 pr-6" />
                   <SortTh label="Cant." col="qty" sortCol={sortCol} sortDir={sortDir} onSort={toggleSort} className="pb-2 pr-3 text-right" />
                   <SortTh label="Par" col="par" sortCol={sortCol} sortDir={sortDir} onSort={toggleSort} className="pb-2 pr-6 text-right" />
@@ -879,6 +933,7 @@ export function AdminInventoryView({
                       <td className="py-3 text-ciruela/50">{item.sku}</td>
                       <td className="py-3">{item.product}</td>
                       <td className="py-3 pr-4 text-ciruela/60">{item.brand || "—"}</td>
+                      <td className="py-3 pr-4 text-ciruela/60">{item.category || "—"}</td>
                       <td className="py-3 pr-6 text-ciruela/60">{item.location}</td>
                       <td className="py-3 pr-3 text-right">{item.qty}</td>
                       <td className="py-3 pr-6 text-right text-ciruela/50">{item.par}</td>
@@ -970,6 +1025,11 @@ export function AdminInventoryView({
                 label="Marca"
                 value={editModal.brand}
                 onChange={(v) => setEditModal((m) => (m ? { ...m, brand: v } : m))}
+              />
+              <TextInput
+                label="Categoría"
+                value={editModal.category}
+                onChange={(v) => setEditModal((m) => (m ? { ...m, category: v } : m))}
               />
             </div>
 

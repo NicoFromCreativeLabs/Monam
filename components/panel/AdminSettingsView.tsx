@@ -23,6 +23,7 @@ import {
 import { useAddOns, useAddOnActions, type AddOnRecord } from "@/components/panel/AddOnsContext";
 import { AddOnEditor, EMPTY_ADD_ON } from "@/components/panel/AddOnEditor";
 import { useBusinessRules } from "@/components/panel/BusinessRulesContext";
+import { useTerminalSettings, type TerminalSettings } from "@/components/panel/TerminalSettingsContext";
 import {
   updateOperationalSettingsAction,
   updateKpiTargetAction,
@@ -130,6 +131,11 @@ export function AdminSettingsView({
 
   const [rules, setRules] = useState(initialOperationalSettings);
   const { rules: commissionRules, updateRules: setCommissionRules } = useBusinessRules();
+  const { getSettings: getTerminalSettings, updateSettings: updateTerminalSettingsFor } = useTerminalSettings();
+  const [terminalLocationName, setTerminalLocationName] = useState(locations[0]?.name ?? "");
+  const terminalSettings = getTerminalSettings(terminalLocationName);
+  const setTerminalSettings = (patch: Partial<TerminalSettings>) =>
+    updateTerminalSettingsFor(terminalLocationName, patch);
   const [kpiTargets, setKpiTargets] = useState(initialKpiTargets);
   const [permissionRows, setPermissionRows] = useState<PermissionRow[]>(initialPermissionRows);
   const [permissionsMessage, setPermissionsMessage] = useState<{ ok: boolean; text: string } | null>(null);
@@ -983,6 +989,106 @@ export function AdminSettingsView({
                   />
                   MXN
                 </span>
+              </dd>
+            </div>
+          </dl>
+        </Card>
+
+        <Card title="Terminal de cobro (PAX A910S / Redsys)">
+          <p className="mb-4 font-body text-xs text-ciruela/50">
+            Conecta el botón &quot;Tarjeta (terminal BBVA)&quot; del cobro con la terminal física vía el
+            protocolo ECR de Redsys. Necesita que BBVA active el modo ECR en la terminal y que el puente
+            local esté corriendo en la misma red (ver <code>terminal-bridge/README.md</code>). Mientras
+            falte algún dato, el cobro con tarjeta sigue siendo manual. Cada sucursal tiene su propia
+            terminal física — configura cada una por separado.
+          </p>
+          {locations.length > 1 && (
+            <div className="mb-4 flex items-center gap-2 font-body text-xs text-ciruela">
+              <span className="text-ciruela/50">Sucursal</span>
+              <select
+                value={terminalLocationName}
+                onChange={(e) => setTerminalLocationName(e.target.value)}
+                className="rounded-lg border border-ciruela/20 bg-hueso px-3 py-1.5 font-body text-sm text-ciruela"
+              >
+                {locations.map((l) => (
+                  <option key={l.id} value={l.name}>
+                    {l.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+          <dl className="grid grid-cols-1 gap-4 min-[700px]:grid-cols-2">
+            <div className="flex items-center justify-between border-b border-ciruela/8 pb-2 font-body text-sm text-ciruela min-[700px]:col-span-2">
+              <dt>Activar cobro automático por terminal</dt>
+              <dd>
+                <label className="inline-flex items-center gap-2 text-ciruela/60">
+                  <input
+                    type="checkbox"
+                    checked={terminalSettings.enabled}
+                    onChange={(e) => setTerminalSettings({ enabled: e.target.checked })}
+                    className="h-4 w-4 accent-ciruela"
+                  />
+                  {terminalSettings.enabled ? "Activado" : "Desactivado (cobro manual)"}
+                </label>
+              </dd>
+            </div>
+            <div className="flex items-center justify-between border-b border-ciruela/8 pb-2 font-body text-sm text-ciruela">
+              <dt>URL del puente local</dt>
+              <dd>
+                <input
+                  type="text"
+                  placeholder="http://192.168.1.50:4321"
+                  value={terminalSettings.bridgeUrl}
+                  onChange={(e) => setTerminalSettings({ bridgeUrl: e.target.value })}
+                  className="w-48 rounded border border-ciruela/25 bg-hueso px-1.5 py-1 text-right font-body text-sm text-ciruela focus:outline-none focus:ring-1 focus:ring-ciruela/40"
+                />
+              </dd>
+            </div>
+            <div className="flex items-center justify-between border-b border-ciruela/8 pb-2 font-body text-sm text-ciruela">
+              <dt>IP de la terminal</dt>
+              <dd>
+                <input
+                  type="text"
+                  placeholder="192.168.1.60"
+                  value={terminalSettings.terminalIp}
+                  onChange={(e) => setTerminalSettings({ terminalIp: e.target.value })}
+                  className="w-40 rounded border border-ciruela/25 bg-hueso px-1.5 py-1 text-right font-body text-sm text-ciruela focus:outline-none focus:ring-1 focus:ring-ciruela/40"
+                />
+              </dd>
+            </div>
+            <div className="flex items-center justify-between border-b border-ciruela/8 pb-2 font-body text-sm text-ciruela">
+              <dt>Puerto ECR de la terminal</dt>
+              <dd>
+                <input
+                  type="number"
+                  min={0}
+                  value={terminalSettings.terminalPort || ""}
+                  onChange={(e) => setTerminalSettings({ terminalPort: Number(e.target.value) || 0 })}
+                  className="w-24 rounded border border-ciruela/25 bg-hueso px-1.5 py-1 text-right font-body text-sm text-ciruela focus:outline-none focus:ring-1 focus:ring-ciruela/40"
+                />
+              </dd>
+            </div>
+            <div className="flex items-center justify-between border-b border-ciruela/8 pb-2 font-body text-sm text-ciruela">
+              <dt>FUC (código de comercio Redsys)</dt>
+              <dd>
+                <input
+                  type="text"
+                  value={terminalSettings.fuc}
+                  onChange={(e) => setTerminalSettings({ fuc: e.target.value })}
+                  className="w-40 rounded border border-ciruela/25 bg-hueso px-1.5 py-1 text-right font-body text-sm text-ciruela focus:outline-none focus:ring-1 focus:ring-ciruela/40"
+                />
+              </dd>
+            </div>
+            <div className="flex items-center justify-between font-body text-sm text-ciruela">
+              <dt>Código de terminal Redsys</dt>
+              <dd>
+                <input
+                  type="text"
+                  value={terminalSettings.terminalId}
+                  onChange={(e) => setTerminalSettings({ terminalId: e.target.value })}
+                  className="w-40 rounded border border-ciruela/25 bg-hueso px-1.5 py-1 text-right font-body text-sm text-ciruela focus:outline-none focus:ring-1 focus:ring-ciruela/40"
+                />
               </dd>
             </div>
           </dl>

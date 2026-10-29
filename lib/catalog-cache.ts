@@ -5,6 +5,11 @@ import type { LocationRecord } from "@/components/panel/LocationsContext";
 import type { ProtocolRecord } from "@/components/panel/ProtocolsContext";
 import type { AddOnRecord } from "@/components/panel/AddOnsContext";
 import type { BusinessRules } from "@/components/panel/BusinessRulesContext";
+import {
+  EMPTY_TERMINAL_SETTINGS,
+  type TerminalSettings,
+  type TerminalSettingsByLocation,
+} from "@/components/panel/TerminalSettingsContext";
 import type { StaffMember } from "@/lib/mock-data";
 import { TIER_DEPOSIT_SETTING_KEYS, parseTierDepositRules } from "@/lib/deposit-rules";
 
@@ -38,24 +43,27 @@ export interface CatalogData {
   protocols: ProtocolRecord[];
   addOns: AddOnRecord[];
   businessRules: BusinessRules;
+  terminalSettingsByLocation: TerminalSettingsByLocation;
   roster: StaffMember[];
 }
 
 async function loadCatalogData(): Promise<CatalogData> {
-  const [locations, protocols, addOns, commissionRules, anomalySettings, staff] = await Promise.all([
-    prisma.location.findMany({ include: { rooms: true }, orderBy: { createdAt: "asc" } }),
-    prisma.protocol.findMany({ where: { isActive: true }, include: { addOns: { include: { addOn: true } } } }),
-    prisma.addOn.findMany({ include: { protocols: { include: { protocol: true } } } }),
-    prisma.commissionRule.findMany({ where: { calcType: "PERCENTAGE", role: null } }),
-    prisma.setting.findMany({
-      where: {
-        key: {
-          in: ["anomaly.discountThresholdPct", "anomaly.refundThresholdMxn", "pnl.terminalFeePct", "pnl.stripeFeePct", "pnl.stripeFixedFeeMxn", ...TIER_DEPOSIT_SETTING_KEYS],
+  const [locations, protocols, addOns, commissionRules, anomalySettings, terminalSettingRows, staff] =
+    await Promise.all([
+      prisma.location.findMany({ include: { rooms: true }, orderBy: { createdAt: "asc" } }),
+      prisma.protocol.findMany({ where: { isActive: true }, include: { addOns: { include: { addOn: true } } } }),
+      prisma.addOn.findMany({ include: { protocols: { include: { protocol: true } } } }),
+      prisma.commissionRule.findMany({ where: { calcType: "PERCENTAGE", role: null } }),
+      prisma.setting.findMany({
+        where: {
+          key: {
+            in: ["anomaly.discountThresholdPct", "anomaly.refundThresholdMxn", "pnl.terminalFeePct", "pnl.stripeFeePct", "pnl.stripeFixedFeeMxn", ...TIER_DEPOSIT_SETTING_KEYS],
+          },
         },
-      },
-    }),
-    prisma.appUser.findMany({ where: { archivedAt: null }, include: { locationAssignments: { include: { location: true } } }, orderBy: { name: "asc" } }),
-  ]);
+      }),
+      prisma.setting.findMany({ where: { key: { startsWith: "terminal.redsysEcr:" } } }),
+      prisma.appUser.findMany({ where: { archivedAt: null }, include: { locationAssignments: { include: { location: true } } }, orderBy: { name: "asc" } }),
+    ]);
 
   const locationRecords: LocationRecord[] = locations.map((l) => ({
     id: l.id,
@@ -116,7 +124,21 @@ async function loadCatalogData(): Promise<CatalogData> {
     };
   });
 
-  return { locations: locationRecords, protocols: protocolRecords, addOns: addOnRecords, businessRules, roster };
+  const terminalSettingsByLocation: TerminalSettingsByLocation = Object.fromEntries(
+    terminalSettingRows.map((row) => [
+      row.key.slice("terminal.redsysEcr:".length),
+      { ...EMPTY_TERMINAL_SETTINGS, ...(row.value as Partial<TerminalSettings>) },
+    ]),
+  );
+
+  return {
+    locations: locationRecords,
+    protocols: protocolRecords,
+    addOns: addOnRecords,
+    businessRules,
+    terminalSettingsByLocation,
+    roster,
+  };
 }
 
 export const getCatalogData = unstable_cache(loadCatalogData, ["root-catalog-data"], {

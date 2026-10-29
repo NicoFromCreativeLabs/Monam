@@ -582,6 +582,7 @@ model Product {
   sku      String  @unique
   name     String
   brand    String? // e.g. "Anua", "Beauty of Joseon", "SKIN1004"
+  category String? // free-text product category, e.g. "Tónicos", "Serums" — shown and filterable in inventory
   ledger   Ledger // structural never-merge rule, spec §5.3 — a backbar-only line simply never gets a RETAIL row
   isActive Boolean @default(true)
 

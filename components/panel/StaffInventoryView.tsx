@@ -15,6 +15,7 @@ export interface InventoryRow {
   sku: string;
   product: string;
   brand?: string;
+  category?: string;
   location: string;
   qty: number;
   par: number;
@@ -53,26 +54,113 @@ export function StaffInventoryView({
     inventorySheet("Warehouse", here(warehouse), opts),
   ];
 
+  const retailHere = retail.filter((i) => i.location === identity.location);
+  const backbarHere = backbar.filter((i) => i.location === identity.location);
+  const warehouseHere = warehouse.filter((i) => i.location === identity.location);
+
+  const categories = Array.from(
+    new Set([...retailHere, ...backbarHere, ...warehouseHere].map((i) => i.category).filter((c): c is string => !!c)),
+  ).sort((a, b) => a.localeCompare(b, "es"));
+
+  const [categoryFilter, setCategoryFilter] = useState("");
+  const [search, setSearch] = useState("");
+  const [lowStockOnly, setLowStockOnly] = useState(false);
+
+  const matches = (item: InventoryRow) => {
+    if (categoryFilter && item.category !== categoryFilter) return false;
+    if (lowStockOnly && item.qty >= item.par) return false;
+    if (search.trim()) {
+      const q = search.trim().toLowerCase();
+      const haystack = `${item.product} ${item.sku} ${item.brand ?? ""}`.toLowerCase();
+      if (!haystack.includes(q)) return false;
+    }
+    return true;
+  };
+
   return (
     <>
       <TopBar title="Inventario" />
       <div className="flex-1 space-y-6 px-8 py-6">
         <ExcelCard location={identity.location} sheets={sheets} />
-        <InventoryCard
-          title={`Piso — ${identity.location}`}
-          items={retail.filter((i) => i.location === identity.location)}
+        <InventoryFilters
+          categories={categories}
+          categoryFilter={categoryFilter}
+          onCategoryFilterChange={setCategoryFilter}
+          search={search}
+          onSearchChange={setSearch}
+          lowStockOnly={lowStockOnly}
+          onLowStockOnlyChange={setLowStockOnly}
         />
-        <InventoryCard
-          title={`Backbar — ${identity.location}`}
-          items={backbar.filter((i) => i.location === identity.location)}
-          showPao
-        />
-        <InventoryCard
-          title={`Warehouse — ${identity.location}`}
-          items={warehouse.filter((i) => i.location === identity.location)}
-        />
+        <InventoryCard title={`Piso — ${identity.location}`} items={retailHere.filter(matches)} />
+        <InventoryCard title={`Backbar — ${identity.location}`} items={backbarHere.filter(matches)} showPao />
+        <InventoryCard title={`Warehouse — ${identity.location}`} items={warehouseHere.filter(matches)} />
       </div>
     </>
+  );
+}
+
+function InventoryFilters({
+  categories,
+  categoryFilter,
+  onCategoryFilterChange,
+  search,
+  onSearchChange,
+  lowStockOnly,
+  onLowStockOnlyChange,
+}: {
+  categories: string[];
+  categoryFilter: string;
+  onCategoryFilterChange: (v: string) => void;
+  search: string;
+  onSearchChange: (v: string) => void;
+  lowStockOnly: boolean;
+  onLowStockOnlyChange: (v: boolean) => void;
+}) {
+  return (
+    <Card title="Filtros">
+      <div className="flex flex-wrap items-center gap-3">
+        <input
+          type="text"
+          value={search}
+          onChange={(e) => onSearchChange(e.target.value)}
+          placeholder="Buscar producto, SKU o marca…"
+          className="w-56 rounded-lg border border-ciruela/20 bg-hueso px-3 py-1.5 font-body text-sm text-ciruela placeholder:text-ciruela/40 focus:outline-none focus:ring-1 focus:ring-ciruela/40"
+        />
+        <select
+          value={categoryFilter}
+          onChange={(e) => onCategoryFilterChange(e.target.value)}
+          className="rounded-lg border border-ciruela/20 bg-hueso px-3 py-1.5 font-body text-sm text-ciruela focus:outline-none focus:ring-1 focus:ring-ciruela/40"
+        >
+          <option value="">Todas las categorías</option>
+          {categories.map((c) => (
+            <option key={c} value={c}>
+              {c}
+            </option>
+          ))}
+        </select>
+        <button
+          onClick={() => onLowStockOnlyChange(!lowStockOnly)}
+          aria-pressed={lowStockOnly}
+          className={`rounded-full border px-3 py-1.5 font-body text-xs ${
+            lowStockOnly ? "border-crepe bg-crepe/40 text-ciruela" : "border-ciruela/20 text-ciruela hover:bg-ciruela/5"
+          }`}
+        >
+          {lowStockOnly ? "✓ " : ""}Solo bajo par
+        </button>
+        {(categoryFilter || search || lowStockOnly) && (
+          <button
+            onClick={() => {
+              onCategoryFilterChange("");
+              onSearchChange("");
+              onLowStockOnlyChange(false);
+            }}
+            className="font-body text-xs text-ciruela/50 underline"
+          >
+            Limpiar filtros
+          </button>
+        )}
+      </div>
+    </Card>
   );
 }
 
@@ -212,6 +300,7 @@ function InventoryCard({
                 <p>{item.product}</p>
                 <p className="text-xs text-ciruela/50">
                   {item.brand ? `${item.brand} · ` : ""}SKU {item.sku} · Par {item.par}
+                  {item.category ? ` · ${item.category}` : ""}
                   {item.expiresOn ? ` · Vence ${item.expiresOn}` : ""}
                   {showPao && item.pao ? ` · Abierto ${item.opensOn} · PAO ${item.pao}` : ""}
                 </p>

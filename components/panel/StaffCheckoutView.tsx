@@ -18,6 +18,8 @@ import {
 } from "@/lib/actions/commerce";
 import { CheckoutDiscount } from "@/components/panel/CheckoutDiscount";
 import { CheckoutDiscountCode, type AppliedDiscountCode } from "@/components/panel/CheckoutDiscountCode";
+import { useTerminalSettings } from "@/components/panel/TerminalSettingsContext";
+import { chargeViaTerminal } from "@/lib/terminal/bridge-client";
 
 export interface CheckoutRetailItem {
   sku: string;
@@ -97,6 +99,18 @@ export function StaffCheckoutView({
   const [charged, setCharged] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<"CASH" | "CARD" | "ONLINE">("CASH");
   const [checkoutError, setCheckoutError] = useState<string | null>(null);
+  const { getSettings: getTerminalSettings } = useTerminalSettings();
+  const terminalSettings = getTerminalSettings(session?.locationName ?? locationName);
+  // true only once settings has every field the bridge needs — otherwise
+  // "Tarjeta (terminal BBVA)" stays the manual flow it always was.
+  const terminalReady =
+    terminalSettings.enabled &&
+    !!terminalSettings.bridgeUrl &&
+    !!terminalSettings.terminalIp &&
+    !!terminalSettings.terminalPort &&
+    !!terminalSettings.fuc &&
+    !!terminalSettings.terminalId;
+  const [terminalCharging, setTerminalCharging] = useState(false);
   // "En línea (Stripe)": a Checkout link shown as a QR the client pays from
   // their own phone. saleInput is a snapshot of the ticket at the moment the
   // link was created, so the sale recorded after payment matches what was
@@ -250,6 +264,27 @@ export function StaffCheckoutView({
         });
         return;
       }
+      if (paymentMethod === "CARD" && terminalReady) {
+        setTerminalCharging(true);
+        const ticketId = session?.appointmentId ?? `mostrador-${Date.now()}`;
+        const charge = await chargeViaTerminal(
+          {
+            bridgeUrl: terminalSettings.bridgeUrl,
+            terminalIp: terminalSettings.terminalIp,
+            terminalPort: terminalSettings.terminalPort,
+            fuc: terminalSettings.fuc,
+            terminalId: terminalSettings.terminalId,
+          },
+          total,
+          ticketId,
+        );
+        setTerminalCharging(false);
+        if (!charge.approved) {
+          setCheckoutError(charge.message);
+          return;
+        }
+      }
+
       const result = await createSaleAction({ ...base, paymentMethod });
       if ("error" in result) {
         setCheckoutError(result.error);
@@ -616,6 +651,11 @@ export function StaffCheckoutView({
                 Solicitar factura (CFDI)
               </label>
             )}
+            {paymentMethod === "CARD" && !terminalReady && (
+              <p className="mt-4 font-body text-xs text-ciruela/40">
+                Terminal no conectada — el cobro se registra manualmente. Configúrala en Ajustes → Terminal de cobro.
+              </p>
+            )}
             {checkoutError && (
               <p className="mt-4 rounded-lg bg-[#b3392f]/10 px-3 py-2 font-body text-xs text-[#b3392f]">
                 {checkoutError}
@@ -623,18 +663,20 @@ export function StaffCheckoutView({
             )}
             <button
               onClick={chargeSale}
-              disabled={total === 0 || isPending || !!onlineCharge}
+              disabled={total === 0 || isPending || terminalCharging || !!onlineCharge}
               className="mt-6 w-full rounded-full bg-ciruela px-5 py-3 font-body text-sm text-hueso disabled:cursor-not-allowed disabled:opacity-40"
             >
-              {isPending
-                ? paymentMethod === "ONLINE"
-                  ? "Generando link…"
-                  : "Cobrando…"
-                : paymentMethod === "ONLINE"
-                  ? "Generar cobro con Stripe"
-                  : session
-                    ? "Cobrar y reagendar"
-                    : "Cobrar"}
+              {terminalCharging
+                ? "Esperando terminal…"
+                : isPending
+                  ? paymentMethod === "ONLINE"
+                    ? "Generando link…"
+                    : "Cobrando…"
+                  : paymentMethod === "ONLINE"
+                    ? "Generar cobro con Stripe"
+                    : session
+                      ? "Cobrar y reagendar"
+                      : "Cobrar"}
             </button>
           </Card>
         </div>

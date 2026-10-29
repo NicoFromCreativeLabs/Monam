@@ -7,6 +7,7 @@ import { ProtocolsProvider } from "@/components/panel/ProtocolsContext";
 import { AddOnsProvider } from "@/components/panel/AddOnsContext";
 import { StaffRosterProvider } from "@/components/panel/StaffRosterContext";
 import { BusinessRulesProvider } from "@/components/panel/BusinessRulesContext";
+import { TerminalSettingsProvider } from "@/components/panel/TerminalSettingsContext";
 import { LoadingCurtain } from "@/components/LoadingCurtain";
 import { getCatalogData } from "@/lib/catalog-cache";
 import "./globals.css";
@@ -75,6 +76,7 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
     protocols: initialProtocols,
     addOns: initialAddOns,
     businessRules: initialBusinessRules,
+    terminalSettingsByLocation: initialTerminalSettingsByLocation,
     roster: initialRoster,
   } = await getCatalogData();
 
@@ -91,7 +93,11 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
               <ProtocolsProvider initialProtocols={initialProtocols}>
                 <AddOnsProvider addOns={initialAddOns}>
                   <StaffRosterProvider initialRoster={initialRoster}>
-                    <BusinessRulesProvider initialRules={initialBusinessRules}>{children}</BusinessRulesProvider>
+                    <BusinessRulesProvider initialRules={initialBusinessRules}>
+                      <TerminalSettingsProvider initialSettingsByLocation={initialTerminalSettingsByLocation}>
+                        {children}
+                      </TerminalSettingsProvider>
+                    </BusinessRulesProvider>
                   </StaffRosterProvider>
                 </AddOnsProvider>
               </ProtocolsProvider>

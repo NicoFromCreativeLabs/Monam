@@ -1,0 +1,10 @@
+{
+  "name": "monam-terminal-bridge",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Local HTTP-to-TCP bridge from the staff checkout browser to the PAX A910S Redsys ECR-POS terminal. Runs on the shop LAN, separate from the Next.js app/deploy.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  }
+}
