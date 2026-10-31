@@ -953,6 +953,22 @@ async function executeRefund(
   return { ok: true, viaStripe: false };
 }
 
+// "Abrir reclamo" from the sales-list detail modal — a client complaint tied
+// to a sale that isn't (yet, or ever) a refund request. Lands in Control's
+// Anomalías list like every other AnomalyFlag, so it gets the same
+// open/resolve workflow instead of a parallel one.
+export async function openSaleClaimAction(saleId: string, reason: string): Promise<{ error?: string }> {
+  await requireStaffRole(FRONT_DESK_ROLES);
+  const trimmed = reason.trim();
+  if (trimmed.length < 3) return { error: "Describe el reclamo." };
+  const sale = await prisma.sale.findUnique({ where: { id: saleId } });
+  if (!sale) return { error: "Venta no encontrada." };
+  await createAnomalyFlag("Reclamo de clienta", trimmed, saleId);
+  revalidatePath("/admin/control");
+  revalidatePath("/admin");
+  return {};
+}
+
 export type RefundResult =
   | { error: string }
   | { status: "PENDING" }
