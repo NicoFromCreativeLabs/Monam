@@ -9,8 +9,12 @@ import {
   getIngresoHoraEsteticista,
   getRebookingPct,
   getRetention90dPct,
+  getVentasDetail,
+  getWeeklyRevenueTrend,
   type Period,
   type CompareTo,
+  type VentasDetail,
+  type VentasWeeklyPoint,
 } from "@/lib/reporting";
 import type { PnlBreakdown } from "@/lib/pnl-math";
 import { getAdjustedPnl, type PnlAdjustState } from "@/lib/pnl-adjustments";
@@ -31,6 +35,9 @@ export interface ReportingSnapshot {
   rates: ReportingRates;
   ratesBaseline: ReportingRates | null;
   kpiTargets: Record<string, { value: number; unit: string }>;
+  ventas: VentasDetail;
+  ventasBaseline: VentasDetail["nivel2"] | null;
+  ventasWeeklyTrend: VentasWeeklyPoint[];
 }
 
 async function computeRates(locationIds: string[], range: { start: Date; end: Date }): Promise<ReportingRates> {
@@ -59,19 +66,23 @@ export async function getReportingSnapshotAction(
   const locationIds = locations.map((l) => l.id);
 
   const range = periodRange(period);
-  const [{ pnl, state: pnlState }, rates, kpiTargetRows] = await Promise.all([
+  const [{ pnl, state: pnlState }, rates, kpiTargetRows, ventas, ventasWeeklyTrend] = await Promise.all([
     getAdjustedPnl(locationIds, range),
     computeRates(locationIds, range),
     prisma.kpiTarget.findMany(),
+    getVentasDetail(locationIds, range),
+    getWeeklyRevenueTrend(locationIds),
   ]);
 
   let pnlBaseline: PnlBreakdown | null = null;
   let ratesBaseline: ReportingRates | null = null;
+  let ventasBaseline: VentasDetail["nivel2"] | null = null;
   if (compareTo !== "Objetivo") {
     const baselineRange = compareRange(compareTo, period);
-    [pnlBaseline, ratesBaseline] = await Promise.all([
+    [pnlBaseline, ratesBaseline, ventasBaseline] = await Promise.all([
       getAdjustedPnl(locationIds, baselineRange).then((r) => r.pnl),
       computeRates(locationIds, baselineRange),
+      getVentasDetail(locationIds, baselineRange).then((v) => v.nivel2),
     ]);
   }
 
@@ -86,5 +97,5 @@ export async function getReportingSnapshotAction(
   const kpiTargets: Record<string, { value: number; unit: string }> = {};
   for (const k of kpiTargetRows) kpiTargets[k.kpi] = { value: k.targetValue, unit: k.targetUnit };
 
-  return { pnl, pnlState, pnlBaseline, pnlMesAnterior, rates, ratesBaseline, kpiTargets };
+  return { pnl, pnlState, pnlBaseline, pnlMesAnterior, rates, ratesBaseline, kpiTargets, ventas, ventasBaseline, ventasWeeklyTrend };
 }

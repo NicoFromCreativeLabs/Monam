@@ -213,3 +213,139 @@ export async function getRebookingPct(): Promise<number | null> {
 export async function getRetention90dPct(): Promise<number | null> {
   return null;
 }
+
+// ---------------------------------------------------------------------------
+// Análisis · Ventas detail — revenue by category, 8-week trend, and
+// protocol-level revenue/margin, plus the Nivel 2 mix/ticket KPIs. All real
+// Sale/SaleLineItem aggregation (replacing the mocked category/trend/
+// protocol cards and nivel2 KPIs that used to live on this page).
+// ---------------------------------------------------------------------------
+
+export interface VentasCategoryRevenue {
+  category: string;
+  amount: number;
+}
+export interface VentasWeeklyPoint {
+  week: string;
+  revenue: number;
+}
+export interface VentasProtocolRow {
+  protocol: string;
+  tier: string;
+  timesPerformed: number;
+  revenue: number;
+  cost: number;
+}
+export interface VentasNivel2 {
+  servicioPct: number;
+  retailPct: number;
+  paquetesPct: number;
+  addOnsPct: number;
+  targetedPct: number;
+  signaturePct: number;
+  descuentosPct: number;
+  ticketPorVisita: number | null;
+}
+export interface VentasDetail {
+  revenueByCategory: VentasCategoryRevenue[];
+  protocolPerformance: VentasProtocolRow[];
+  nivel2: VentasNivel2;
+}
+
+export async function getVentasDetail(locationIds: string[], range: DateRange): Promise<VentasDetail> {
+  const empty: VentasDetail = {
+    revenueByCategory: [
+      { category: "Servicios — Targeted", amount: 0 },
+      { category: "Servicios — Signature", amount: 0 },
+      { category: "Retail", amount: 0 },
+      { category: "Paquetes", amount: 0 },
+    ],
+    protocolPerformance: [],
+    nivel2: {
+      servicioPct: 0, retailPct: 0, paquetesPct: 0, addOnsPct: 0,
+      targetedPct: 0, signaturePct: 0, descuentosPct: 0, ticketPorVisita: null,
+    },
+  };
+  if (locationIds.length === 0) return empty;
+
+  const saleWhere = { locationId: { in: locationIds }, createdAt: { gte: range.start, lt: range.end } };
+  const [lineItems, sales] = await Promise.all([
+    prisma.saleLineItem.findMany({ where: { sale: saleWhere }, include: { protocol: true } }),
+    prisma.sale.findMany({ where: saleWhere }),
+  ]);
+
+  const serviciosTargeted = lineItems
+    .filter((l) => l.type === "SERVICE" && l.protocol?.tier === "TARGETED")
+    .reduce((s, l) => s + l.priceMxn, 0);
+  const serviciosSignature = lineItems
+    .filter((l) => l.type === "SERVICE" && l.protocol?.tier === "SIGNATURE")
+    .reduce((s, l) => s + l.priceMxn, 0);
+  const addOns = lineItems.filter((l) => l.type === "ADD_ON").reduce((s, l) => s + l.priceMxn, 0);
+  const retail = lineItems.filter((l) => l.type === "RETAIL").reduce((s, l) => s + l.priceMxn, 0);
+  const paquetes = lineItems.filter((l) => l.type === "PACKAGE").reduce((s, l) => s + l.priceMxn, 0);
+
+  const revenueByCategory: VentasCategoryRevenue[] = [
+    { category: "Servicios — Targeted", amount: serviciosTargeted },
+    { category: "Servicios — Signature", amount: serviciosSignature },
+    { category: "Retail", amount: retail },
+    { category: "Paquetes", amount: paquetes },
+  ];
+
+  const byProtocol = new Map<string, VentasProtocolRow>();
+  for (const li of lineItems) {
+    if (li.type !== "SERVICE" || !li.protocol) continue;
+    const row = byProtocol.get(li.protocol.id) ?? {
+      protocol: li.protocol.name,
+      tier: li.protocol.tier === "TARGETED" ? "Targeted" : "Signature",
+      timesPerformed: 0,
+      revenue: 0,
+      cost: 0,
+    };
+    row.timesPerformed += 1;
+    row.revenue += li.priceMxn;
+    row.cost += li.protocol.costMxn;
+    byProtocol.set(li.protocol.id, row);
+  }
+  const protocolPerformance = [...byProtocol.values()].sort((a, b) => b.revenue - a.revenue);
+
+  const servicio = serviciosTargeted + serviciosSignature;
+  const mezclaTotal = servicio + retail + paquetes + addOns;
+  const descuentos = sales.reduce((s, sale) => s + sale.discountMxn, 0);
+  const subtotalBruto = sales.reduce((s, sale) => s + sale.subtotalMxn, 0);
+  const ticketPorVisita = sales.length
+    ? Math.round(sales.reduce((s, sale) => s + sale.totalMxn, 0) / sales.length)
+    : null;
+
+  const nivel2: VentasNivel2 = {
+    servicioPct: mezclaTotal ? Math.round((servicio / mezclaTotal) * 100) : 0,
+    retailPct: mezclaTotal ? Math.round((retail / mezclaTotal) * 100) : 0,
+    paquetesPct: mezclaTotal ? Math.round((paquetes / mezclaTotal) * 100) : 0,
+    addOnsPct: mezclaTotal ? Math.round((addOns / mezclaTotal) * 100) : 0,
+    targetedPct: servicio ? Math.round((serviciosTargeted / servicio) * 100) : 0,
+    signaturePct: servicio ? Math.round((serviciosSignature / servicio) * 100) : 0,
+    descuentosPct: subtotalBruto ? Math.round((descuentos / subtotalBruto) * 1000) / 10 : 0,
+    ticketPorVisita,
+  };
+
+  return { revenueByCategory, protocolPerformance, nivel2 };
+}
+
+// Weekly revenue trend always covers the 8 most recent calendar weeks ending
+// today, independent of the Periodo filter (matching the card's own "últimas
+// 8 semanas" title) — a single query bucketed in JS rather than 8 round trips.
+export async function getWeeklyRevenueTrend(locationIds: string[]): Promise<VentasWeeklyPoint[]> {
+  if (locationIds.length === 0) return Array.from({ length: 8 }, (_, i) => ({ week: `Sem ${i + 1}`, revenue: 0 }));
+  const now = new Date();
+  const start = new Date(now.getTime() - 8 * 7 * 24 * 60 * 60 * 1000);
+  const sales = await prisma.sale.findMany({
+    where: { locationId: { in: locationIds }, createdAt: { gte: start, lt: now } },
+    select: { totalMxn: true, createdAt: true },
+  });
+  const buckets = Array.from({ length: 8 }, () => 0);
+  const weekMs = 7 * 24 * 60 * 60 * 1000;
+  for (const s of sales) {
+    const idx = Math.min(7, Math.floor((s.createdAt.getTime() - start.getTime()) / weekMs));
+    buckets[idx] += s.totalMxn;
+  }
+  return buckets.map((revenue, i) => ({ week: `Sem ${i + 1}`, revenue }));
+}
