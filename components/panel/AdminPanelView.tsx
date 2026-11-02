@@ -9,7 +9,7 @@ import { KpiCard } from "@/components/panel/KpiCard";
 import { useLocations } from "@/components/panel/LocationsContext";
 import { usePeriod } from "@/components/panel/PeriodContext";
 import { useCompare } from "@/components/panel/CompareContext";
-import { PANEL_KPIS, PANEL_TODAY_VS_LASTWEEK } from "@/lib/mock-data";
+import { PANEL_KPIS } from "@/lib/mock-data";
 import { getReportingSnapshotAction, type ReportingSnapshot } from "@/lib/actions/reporting";
 import { decideApprovalAction } from "@/lib/actions/commerce";
 import { ingresoNetoFromBreakdown, ebitda, pctOfIngresoNeto } from "@/lib/pnl-math";
@@ -340,10 +340,6 @@ export function AdminPanelView({
             </Card>
 
             <Card title="Hoy vs. mismo día semana pasada">
-              <p className="mb-3 font-body text-xs text-ciruela/40">
-                Cifras de ejemplo — no hay suficiente historial real para comparar contra la
-                semana pasada todavía.
-              </p>
               <table className="w-full font-body text-sm text-ciruela">
                 <thead>
                   <tr className="text-left text-xs uppercase tracking-wide text-ciruela/40">
@@ -353,7 +349,7 @@ export function AdminPanelView({
                   </tr>
                 </thead>
                 <tbody>
-                  {PANEL_TODAY_VS_LASTWEEK.map((row) => (
+                  {snapshot.dayOverDay.map((row) => (
                     <tr key={row.label} className="border-t border-ciruela/8">
                       <td className="py-2.5">{row.label}</td>
                       <td className="py-2.5 text-right">{row.today}</td>

@@ -652,3 +652,62 @@ export async function getEquipoCommissions(locationIds: string[], range: DateRan
   }
   return [...byUser.values()].sort((a, b) => b.total - a.total);
 }
+
+// ---------------------------------------------------------------------------
+// Panel · "Hoy vs. mismo día semana pasada" — always today vs. exactly 7
+// days ago, independent of the Periodo filter (same reasoning as
+// getWeeklyRevenueTrend above: the card's own title fixes its window).
+// ---------------------------------------------------------------------------
+
+export interface DayComparisonRow {
+  label: string;
+  today: string;
+  lastWeek: string;
+}
+
+async function getDaySnapshot(locationIds: string[], dayStart: Date) {
+  const dayEnd = new Date(dayStart.getTime() + 24 * 60 * 60 * 1000);
+  const [sales, appointments, retailUnits, pendingAppointments] = await Promise.all([
+    prisma.sale.findMany({ where: { locationId: { in: locationIds }, createdAt: { gte: dayStart, lt: dayEnd } }, select: { totalMxn: true } }),
+    prisma.appointment.findMany({
+      where: { locationId: { in: locationIds }, startAt: { gte: dayStart, lt: dayEnd }, status: { notIn: ["CANCELLED"] } },
+      select: { status: true },
+    }),
+    prisma.saleLineItem.count({ where: { type: "RETAIL", sale: { locationId: { in: locationIds }, createdAt: { gte: dayStart, lt: dayEnd } } } }),
+    // Mirrors getPendingCheckouts (lib/appointments.ts): a COMPLETED
+    // treatment with no Sale row yet is still owed.
+    prisma.appointment.findMany({
+      where: { locationId: { in: locationIds }, status: "COMPLETED", startAt: { gte: dayStart, lt: dayEnd }, sale: null },
+      include: { protocol: true },
+    }),
+  ]);
+  return {
+    ingreso: sales.reduce((s, x) => s + x.totalMxn, 0),
+    citas: appointments.length,
+    noShows: appointments.filter((a) => a.status === "NO_SHOW").length,
+    retailUnits,
+    cobrosPendientes: pendingAppointments.reduce((s, a) => s + (a.protocol?.priceMxn ?? 0), 0),
+  };
+}
+
+export async function getDayOverDayComparison(locationIds: string[]): Promise<DayComparisonRow[]> {
+  const row = (label: string, today: string, lastWeek: string): DayComparisonRow => ({ label, today, lastWeek });
+  if (locationIds.length === 0) {
+    return [
+      row("Ingreso del día", "$0 MXN", "$0 MXN"),
+      row("Citas / no-shows", "0 / 0", "0 / 0"),
+      row("Ventas retail (unidades)", "0 uds", "0 uds"),
+      row("Cobros pendientes", "$0 MXN", "$0 MXN"),
+    ];
+  }
+  const now = new Date();
+  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const lastWeekStart = new Date(todayStart.getTime() - 7 * 24 * 60 * 60 * 1000);
+  const [today, lastWeek] = await Promise.all([getDaySnapshot(locationIds, todayStart), getDaySnapshot(locationIds, lastWeekStart)]);
+  return [
+    row("Ingreso del día", `$${today.ingreso.toLocaleString()} MXN`, `$${lastWeek.ingreso.toLocaleString()} MXN`),
+    row("Citas / no-shows", `${today.citas} / ${today.noShows}`, `${lastWeek.citas} / ${lastWeek.noShows}`),
+    row("Ventas retail (unidades)", `${today.retailUnits} uds`, `${lastWeek.retailUnits} uds`),
+    row("Cobros pendientes", `$${today.cobrosPendientes.toLocaleString()} MXN`, `$${lastWeek.cobrosPendientes.toLocaleString()} MXN`),
+  ];
+}

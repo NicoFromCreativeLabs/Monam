@@ -19,6 +19,7 @@ import {
   getClientasDetail,
   getRetailDetail,
   getEquipoCommissions,
+  getDayOverDayComparison,
   type Period,
   type CompareTo,
   type VentasDetail,
@@ -28,6 +29,7 @@ import {
   type ClientasDetail,
   type RetailDetail,
   type EquipoCommissionRow,
+  type DayComparisonRow,
 } from "@/lib/reporting";
 import type { PnlBreakdown } from "@/lib/pnl-math";
 import { getAdjustedPnl, type PnlAdjustState } from "@/lib/pnl-adjustments";
@@ -61,6 +63,7 @@ export interface ReportingSnapshot {
   retail: RetailDetail;
   retailBaseline: RetailDetail | null;
   equipoCommissions: EquipoCommissionRow[];
+  dayOverDay: DayComparisonRow[];
 }
 
 async function computeRates(locationIds: string[], range: { start: Date; end: Date }): Promise<ReportingRates> {
@@ -95,7 +98,7 @@ export async function getReportingSnapshotAction(
   const range = periodRange(period);
   const [
     { pnl, state: pnlState }, rates, kpiTargetRows, ventas, ventasWeeklyTrend,
-    roomOccupancyNext7Days, estheticianOccupancyThisWeek, clientas, retail, equipoCommissions,
+    roomOccupancyNext7Days, estheticianOccupancyThisWeek, clientas, retail, equipoCommissions, dayOverDay,
   ] = await Promise.all([
     getAdjustedPnl(locationIds, range),
     computeRates(locationIds, range),
@@ -107,6 +110,7 @@ export async function getReportingSnapshotAction(
     getClientasDetail(locationIds, range),
     getRetailDetail(locationIds, range),
     getEquipoCommissions(locationIds, range),
+    getDayOverDayComparison(locationIds),
   ]);
 
   let pnlBaseline: PnlBreakdown | null = null;
@@ -139,6 +143,6 @@ export async function getReportingSnapshotAction(
   return {
     pnl, pnlState, pnlBaseline, pnlMesAnterior, rates, ratesBaseline, kpiTargets,
     ventas, ventasBaseline, ventasWeeklyTrend, roomOccupancyNext7Days, estheticianOccupancyThisWeek,
-    clientas, clientasBaseline, retail, retailBaseline, equipoCommissions,
+    clientas, clientasBaseline, retail, retailBaseline, equipoCommissions, dayOverDay,
   };
 }
