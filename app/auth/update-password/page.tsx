@@ -17,6 +17,11 @@ export default async function UpdatePasswordPage({
   const { code } = await searchParams;
   if (code) {
     const supabase = await createClient();
+    // Same cross-account risk as /auth/confirm (see its comment): a shared
+    // browser's existing session must be cleared before exchanging this
+    // link's code, or a leftover session fragment can win and the password
+    // set on the next page ends up changing the WRONG account.
+    await supabase.auth.signOut({ scope: "local" });
     await supabase.auth.exchangeCodeForSession(code);
   }
 

@@ -96,6 +96,9 @@ export async function updatePassword(_prevState: ActionState, formData: FormData
   const supabase = await createClient();
   const { error } = await supabase.auth.updateUser({ password });
   if (error) {
+    if (error.code === "same_password") {
+      return { error: "La nueva contraseña debe ser distinta a la anterior." };
+    }
     return { error: "No se pudo actualizar la contraseña. Intenta de nuevo." };
   }
 
@@ -158,6 +161,14 @@ export async function signUpClient(_prevState: ActionState, formData: FormData):
   }
   if (!data.user) {
     return { error: "No se pudo crear la cuenta. Intenta de nuevo." };
+  }
+  // Supabase returns a 200 with a user object that has no identities (rather
+  // than an error) when the email is already registered — anti-enumeration
+  // behavior. Treating that fake user as real would create a Client row
+  // whose authUserId points to nothing, permanently locking the real owner
+  // of that email out of their account.
+  if (!data.user.identities || data.user.identities.length === 0) {
+    return { error: "Ya existe una cuenta con este correo." };
   }
 
   const client = await prisma.client.create({

@@ -21,6 +21,17 @@ export async function GET(request: NextRequest) {
 
   if (token_hash && type) {
     const supabase = await createClient();
+    // A shared/kiosk browser can already hold a session for someone else
+    // (e.g. the owner signed in at the front desk) when a different
+    // person's invite/reset link is opened on it. verifyOtp() is supposed
+    // to replace that with a session for the link's own user, but Supabase
+    // SSR's chunked session cookies don't always fully overwrite a prior
+    // session's cookie set — leftover fragments can let the OLD identity
+    // win on the next read, so whoever submits the password-update form
+    // right after ends up changing the PREVIOUS user's password instead of
+    // their own. Clearing any existing session first removes that
+    // leftover state, so verifyOtp's cookies are the only ones present.
+    await supabase.auth.signOut({ scope: "local" });
     const { error } = await supabase.auth.verifyOtp({ type, token_hash });
     if (!error) {
       redirect(next);
