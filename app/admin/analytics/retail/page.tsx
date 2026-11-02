@@ -8,30 +8,18 @@ import { KpiCard } from "@/components/panel/KpiCard";
 import { useLocations } from "@/components/panel/LocationsContext";
 import { usePeriod } from "@/components/panel/PeriodContext";
 import { useCompare } from "@/components/panel/CompareContext";
-import { ANALYTICS_RETAIL, RETAIL_INVENTORY } from "@/lib/mock-data";
+import { ANALYTICS_RETAIL } from "@/lib/mock-data";
 import { COMPARE_TO_LABEL } from "@/lib/analytics";
 import { getReportingSnapshotAction, type ReportingSnapshot } from "@/lib/actions/reporting";
 import { ingresoNetoFromBreakdown, formatRealDelta } from "@/lib/pnl-math";
 
-// Análisis → Retail. Nivel 1 + Nivel 2 per spec. "% del ingreso que es
-// retail" and "Attach retail" are two of the client's three thesis KPIs
-// ("el servicio es adquisición y el retail es el motor"). Margin/inventory
-// detail below folds in what used to live on /admin/financials.
-//
-// Nivel 1, servicio-margin, and retail COGS all read the real reporting
-// snapshot (same lib/reporting.ts source as Panel/P&L). Catalog-level
-// retail margin (price vs. cost per SKU, not transactional) still reads
-// RETAIL_INVENTORY — a separate, smaller gap from the Inventario real-data
-// pass, not wired here.
+// Análisis → Retail. Nivel 1 + Nivel 2 + the margin/inventory detail below
+// all read the real reporting snapshot now (lib/reporting.ts —
+// getRetailDetail). ANALYTICS_RETAIL is only read for label/info copy.
 export default function AnalyticsRetail() {
   const { selectedNames } = useLocations();
   const { period } = usePeriod();
   const { compareTo } = useCompare();
-
-  const retailInventory = RETAIL_INVENTORY.filter((i) => selectedNames.includes(i.location));
-  const retailMargin =
-    retailInventory.reduce((sum, p) => sum + (p.price - p.cost), 0) /
-    retailInventory.reduce((sum, p) => sum + p.price, 0);
 
   const [snapshot, setSnapshot] = useState<ReportingSnapshot | null>(null);
 
@@ -49,13 +37,70 @@ export default function AnalyticsRetail() {
   const netoBaseline = snapshot?.pnlBaseline ? ingresoNetoFromBreakdown(snapshot.pnlBaseline) : 0;
   const pctIngresoRetailBaseline =
     snapshot?.pnlBaseline && netoBaseline ? Math.round((snapshot.pnlBaseline.retail / netoBaseline) * 100) : null;
+  const compareLabel = COMPARE_TO_LABEL[compareTo];
   // No real KpiTarget exists for "% del ingreso que es retail" specifically
   // — "Attach retail (≤ 7 días)" measures something different (% of
   // tickets with a retail line, not % of revenue). Left without an
   // Objetivo rather than borrowing a target that means something else.
   const pctTarget: number | null = null;
   const pctProgressPct = 0;
-  const pctDelta = formatRealDelta(snapshot ? pctIngresoRetail : null, pctIngresoRetailBaseline, COMPARE_TO_LABEL[compareTo], "pts");
+  const pctDelta = formatRealDelta(snapshot ? pctIngresoRetail : null, pctIngresoRetailBaseline, compareLabel, "pts");
+
+  const r = snapshot?.retail ?? null;
+  const rb = snapshot?.retailBaseline ?? null;
+  const attachDelta = formatRealDelta(snapshot?.rates.attachRetail ?? null, snapshot?.ratesBaseline?.attachRetail ?? null, compareLabel, "pts");
+  const conversionDelta = formatRealDelta(r?.conversionProtocoloProducto ?? null, rb?.conversionProtocoloProducto ?? null, compareLabel, "pts");
+  const unidadesDelta = formatRealDelta(r?.unidadesPorTicket ?? null, rb?.unidadesPorTicket ?? null, compareLabel, "pts");
+  const sellThroughDelta = formatRealDelta(r?.sellThroughPct ?? null, rb?.sellThroughPct ?? null, compareLabel, "pts");
+
+  const nivel2Cards = r
+    ? [
+        {
+          id: "attach-retail-2",
+          label: ANALYTICS_RETAIL.nivel2[0].label,
+          info: ANALYTICS_RETAIL.nivel2[0].info,
+          value: snapshot?.rates.attachRetail !== null && snapshot?.rates.attachRetail !== undefined ? `${snapshot.rates.attachRetail}%` : "Sin datos",
+          deltaLabel: attachDelta.label,
+          deltaTone: attachDelta.tone,
+          target: "Objetivo 40%",
+          progressPct: snapshot?.rates.attachRetail ? Math.min(100, Math.round((snapshot.rates.attachRetail / 40) * 100)) : 0,
+          semaphore: ("yellow" as const),
+        },
+        {
+          id: "conversion-protocolo-producto",
+          label: ANALYTICS_RETAIL.nivel2[1].label,
+          info: ANALYTICS_RETAIL.nivel2[1].info,
+          value: r.conversionProtocoloProducto !== null ? `${r.conversionProtocoloProducto}%` : "Sin datos",
+          deltaLabel: conversionDelta.label,
+          deltaTone: conversionDelta.tone,
+          target: "Objetivo 45%",
+          progressPct: r.conversionProtocoloProducto !== null ? Math.min(100, Math.round((r.conversionProtocoloProducto / 45) * 100)) : 0,
+          semaphore: ("yellow" as const),
+        },
+        {
+          id: "unidades-ticket",
+          label: ANALYTICS_RETAIL.nivel2[2].label,
+          info: ANALYTICS_RETAIL.nivel2[2].info,
+          value: r.unidadesPorTicket !== null ? `${r.unidadesPorTicket} uds` : "Sin datos",
+          deltaLabel: unidadesDelta.label,
+          deltaTone: unidadesDelta.tone,
+          target: "Objetivo 1.6",
+          progressPct: r.unidadesPorTicket !== null ? Math.min(100, Math.round((r.unidadesPorTicket / 1.6) * 100)) : 0,
+          semaphore: ("yellow" as const),
+        },
+        {
+          id: "sell-through-sku",
+          label: ANALYTICS_RETAIL.nivel2[3].label,
+          info: ANALYTICS_RETAIL.nivel2[3].info,
+          value: r.sellThroughPct !== null ? `${r.sellThroughPct}%` : "Sin datos",
+          deltaLabel: sellThroughDelta.label,
+          deltaTone: sellThroughDelta.tone,
+          target: "Objetivo 70%",
+          progressPct: r.sellThroughPct !== null ? Math.min(100, Math.round((r.sellThroughPct / 70) * 100)) : 0,
+          semaphore: ("yellow" as const),
+        },
+      ]
+    : [];
 
   return (
     <>
@@ -74,7 +119,7 @@ export default function AnalyticsRetail() {
         />
 
         <div className="grid grid-cols-1 gap-4 min-[700px]:grid-cols-2 min-[1200px]:grid-cols-4">
-          {ANALYTICS_RETAIL.nivel2.map((k) => (
+          {nivel2Cards.map((k) => (
             <KpiCard
               key={k.id}
               size="sm"
@@ -104,10 +149,10 @@ export default function AnalyticsRetail() {
             <div>
               <div className="mb-1 flex justify-between font-body text-xs text-ciruela/60">
                 <span>Retail</span>
-                <span>{Math.round(retailMargin * 100)}%</span>
+                <span>{r?.retailMarginPct !== null && r?.retailMarginPct !== undefined ? `${r.retailMarginPct}%` : "Sin datos"}</span>
               </div>
               <div className="h-2 rounded-full bg-ciruela/8">
-                <div className="h-2 rounded-full bg-crepe" style={{ width: `${retailMargin * 100}%` }} />
+                <div className="h-2 rounded-full bg-crepe" style={{ width: `${r?.retailMarginPct ?? 0}%` }} />
               </div>
             </div>
           </div>
@@ -121,14 +166,8 @@ export default function AnalyticsRetail() {
             </div>
           </dl>
           <div className="mt-4 grid grid-cols-2 gap-4">
-            <StatTile
-              label="Margen bruto retail"
-              value={`${Math.round(retailMargin * 100)}%`}
-            />
-            <StatTile
-              label="SKUs con inventario"
-              value={`${retailInventory.length}`}
-            />
+            <StatTile label="Margen bruto retail" value={r?.retailMarginPct !== null && r?.retailMarginPct !== undefined ? `${r.retailMarginPct}%` : "Sin datos"} />
+            <StatTile label="SKUs con inventario" value={`${r?.skusConInventario ?? 0}`} />
           </div>
         </Card>
       </div>

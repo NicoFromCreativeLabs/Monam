@@ -9,12 +9,25 @@ import {
   getIngresoHoraEsteticista,
   getRebookingPct,
   getRetention90dPct,
+  getNoShowPct,
+  getCancellationWithin24hPct,
+  getDeadHoursPerWeek,
+  getRoomOccupancyNext7Days,
+  getEstheticianOccupancyThisWeek,
   getVentasDetail,
   getWeeklyRevenueTrend,
+  getClientasDetail,
+  getRetailDetail,
+  getEquipoCommissions,
   type Period,
   type CompareTo,
   type VentasDetail,
   type VentasWeeklyPoint,
+  type RoomOccupancyDay,
+  type EstheticianOccupancy,
+  type ClientasDetail,
+  type RetailDetail,
+  type EquipoCommissionRow,
 } from "@/lib/reporting";
 import type { PnlBreakdown } from "@/lib/pnl-math";
 import { getAdjustedPnl, type PnlAdjustState } from "@/lib/pnl-adjustments";
@@ -25,6 +38,9 @@ export interface ReportingRates {
   ingresoHoraEsteticista: number | null;
   rebooking: number | null;
   retencion90d: number | null;
+  noShow: number | null;
+  cancellationWithin24h: number | null;
+  deadHoursPerWeek: number | null;
 }
 
 export interface ReportingSnapshot {
@@ -38,17 +54,28 @@ export interface ReportingSnapshot {
   ventas: VentasDetail;
   ventasBaseline: VentasDetail["nivel2"] | null;
   ventasWeeklyTrend: VentasWeeklyPoint[];
+  roomOccupancyNext7Days: RoomOccupancyDay[];
+  estheticianOccupancyThisWeek: EstheticianOccupancy[];
+  clientas: ClientasDetail;
+  clientasBaseline: ClientasDetail | null;
+  retail: RetailDetail;
+  retailBaseline: RetailDetail | null;
+  equipoCommissions: EquipoCommissionRow[];
 }
 
 async function computeRates(locationIds: string[], range: { start: Date; end: Date }): Promise<ReportingRates> {
-  const [ocupacion, attachRetail, ingresoHoraEsteticista, rebooking, retencion90d] = await Promise.all([
-    getOccupancyPct(locationIds, range),
-    getAttachRetailPct(locationIds, range),
-    getIngresoHoraEsteticista(locationIds, range),
-    getRebookingPct(),
-    getRetention90dPct(),
-  ]);
-  return { ocupacion, attachRetail, ingresoHoraEsteticista, rebooking, retencion90d };
+  const [ocupacion, attachRetail, ingresoHoraEsteticista, rebooking, retencion90d, noShow, cancellationWithin24h, deadHoursPerWeek] =
+    await Promise.all([
+      getOccupancyPct(locationIds, range),
+      getAttachRetailPct(locationIds, range),
+      getIngresoHoraEsteticista(locationIds, range),
+      getRebookingPct(),
+      getRetention90dPct(),
+      getNoShowPct(locationIds, range),
+      getCancellationWithin24hPct(),
+      getDeadHoursPerWeek(locationIds, range),
+    ]);
+  return { ocupacion, attachRetail, ingresoHoraEsteticista, rebooking, retencion90d, noShow, cancellationWithin24h, deadHoursPerWeek };
 }
 
 // Single real-data snapshot every reporting page (Panel, the 5 Análisis
@@ -66,23 +93,35 @@ export async function getReportingSnapshotAction(
   const locationIds = locations.map((l) => l.id);
 
   const range = periodRange(period);
-  const [{ pnl, state: pnlState }, rates, kpiTargetRows, ventas, ventasWeeklyTrend] = await Promise.all([
+  const [
+    { pnl, state: pnlState }, rates, kpiTargetRows, ventas, ventasWeeklyTrend,
+    roomOccupancyNext7Days, estheticianOccupancyThisWeek, clientas, retail, equipoCommissions,
+  ] = await Promise.all([
     getAdjustedPnl(locationIds, range),
     computeRates(locationIds, range),
     prisma.kpiTarget.findMany(),
     getVentasDetail(locationIds, range),
     getWeeklyRevenueTrend(locationIds),
+    getRoomOccupancyNext7Days(locationIds),
+    getEstheticianOccupancyThisWeek(locationIds),
+    getClientasDetail(locationIds, range),
+    getRetailDetail(locationIds, range),
+    getEquipoCommissions(locationIds, range),
   ]);
 
   let pnlBaseline: PnlBreakdown | null = null;
   let ratesBaseline: ReportingRates | null = null;
   let ventasBaseline: VentasDetail["nivel2"] | null = null;
+  let clientasBaseline: ClientasDetail | null = null;
+  let retailBaseline: RetailDetail | null = null;
   if (compareTo !== "Objetivo") {
     const baselineRange = compareRange(compareTo, period);
-    [pnlBaseline, ratesBaseline, ventasBaseline] = await Promise.all([
+    [pnlBaseline, ratesBaseline, ventasBaseline, clientasBaseline, retailBaseline] = await Promise.all([
       getAdjustedPnl(locationIds, baselineRange).then((r) => r.pnl),
       computeRates(locationIds, baselineRange),
       getVentasDetail(locationIds, baselineRange).then((v) => v.nivel2),
+      getClientasDetail(locationIds, baselineRange),
+      getRetailDetail(locationIds, baselineRange),
     ]);
   }
 
@@ -97,5 +136,9 @@ export async function getReportingSnapshotAction(
   const kpiTargets: Record<string, { value: number; unit: string }> = {};
   for (const k of kpiTargetRows) kpiTargets[k.kpi] = { value: k.targetValue, unit: k.targetUnit };
 
-  return { pnl, pnlState, pnlBaseline, pnlMesAnterior, rates, ratesBaseline, kpiTargets, ventas, ventasBaseline, ventasWeeklyTrend };
+  return {
+    pnl, pnlState, pnlBaseline, pnlMesAnterior, rates, ratesBaseline, kpiTargets,
+    ventas, ventasBaseline, ventasWeeklyTrend, roomOccupancyNext7Days, estheticianOccupancyThisWeek,
+    clientas, clientasBaseline, retail, retailBaseline, equipoCommissions,
+  };
 }

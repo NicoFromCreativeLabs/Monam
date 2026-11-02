@@ -57,7 +57,10 @@ export function formatRealDelta(
   if (diff === 0) return { label: `Sin cambio vs. ${compareLabel}`, tone: "neutral" };
   const tone = diff > 0 ? "positive" : "negative";
   const arrow = diff > 0 ? "▲" : "▼";
-  const abs = Math.abs(diff);
+  // Rounded to 1 decimal for display — callers that diff two already-rounded
+  // values (e.g. 1.3 − (-0.1)) can otherwise hit float noise like
+  // 1.4000000000000001.
+  const abs = Math.round(Math.abs(diff) * 10) / 10;
   if (unit === "$") return { label: `${arrow} ${abs.toLocaleString()} MXN vs. ${compareLabel}`, tone };
   if (unit === "pts") return { label: `${arrow} ${abs} ${abs === 1 ? "pt" : "pts"} vs. ${compareLabel}`, tone };
   return { label: `${arrow} ${abs}% vs. ${compareLabel}`, tone };
